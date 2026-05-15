@@ -1,0 +1,79 @@
+# ===========================
+# SECRETS & CREDENTIALS
+# ===========================
+# Azure / GCP credentials — KHÔNG BAO GIỜ commit
+.env
+service/.env
+service/testvertex.json
+sanitize_notebooks.py
+service/*-key.json
+service/*-sa.json
+**/*.json.key
+**/sa-key.json
+
+# ===========================
+# DATA — thông tin nội bộ công ty
+# ===========================
+Input/
+Output/
+Check_Point/
+work/
+service/work/
+Keyword/
+service/Keyword/
+Model/
+service/logs/
+
+# ===========================
+# NOTEBOOKS — có thể chứa credentials hardcode
+# ===========================
+*.ipynb
+
+# ===========================
+# PYTHON
+# ===========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+env/
+.Python
+
+# ===========================
+# OS & Editor
+# ===========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===========================
+# LOGS & TEMP
+# ===========================
+*.log
+*.tmp
+*.bak
+
+# ===========================
+# TOOL CONFIGS
+# ===========================
+.agent/
+.codex/
+
+# ===========================
+# INTERNAL TOOLING
+# ===========================
+openspec/
+CLAUDE.md
+
+# ===========================
+# MISC DATA AT ROOT
+# ===========================
+kw_map.json
