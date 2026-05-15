@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: dms-feedback-watcher
     restart: unless-stopped
+    command: python -m dms
     env_file:
       - .env
     environment:
@@ -14,13 +15,9 @@ services:
       - GCP_SERVICE_ACCOUNT_JSON=/app/data/sa-key.json
       - GOOGLE_APPLICATION_CREDENTIALS=/app/data/sa-key.json
     volumes:
-      # Reference data (read-only) — bundled inside service/
       - ./Keyword:/app/data/Keyword:ro
-      # GCP Service Account key (read-only)
       - ./testvertex.json:/app/data/sa-key.json:ro
-      # Working directory (read-write, persists checkpoint + seen_files)
       - ./work:/app/data/work
-      # Log directory (read-write, persists logs across restarts)
       - ./logs:/app/data/logs
     logging:
       driver: "json-file"

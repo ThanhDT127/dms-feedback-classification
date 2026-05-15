@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dms-feedback-classifier"
+version = "0.1.0"
+description = "SharePoint polling service for DMS feedback classification"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "msal>=1.28.0",
+  "requests>=2.31.0",
+  "google-genai>=1.0.0",
+  "google-generativeai>=0.8.0",
+  "pandas>=2.1.0",
+  "openpyxl>=3.1.0",
+  "rank-bm25>=0.2.2",
+  "unidecode>=1.3.0",
+  "rapidfuzz>=3.0.0",
+  "python-dotenv>=1.0.0",
+  "tqdm>=4.65.0",
+  "numpy>=1.24.0",
+  "pydantic>=2.7.0",
+  "pydantic-settings>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "ruff>=0.6.0",
+  "mypy>=1.10.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+files = ["src/dms"]

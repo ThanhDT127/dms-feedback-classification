@@ -1,163 +1,140 @@
-"""
-setup_deployment.py — Script khởi tạo môi trường khi deploy lên máy ảo mới.
+"""Initialize directories and seed seen_files for a fresh deployment."""
 
-Chức năng:
-  1. Đánh dấu tất cả file hiện có trên SharePoint Input/ là 'done'
-     → Service sẽ chỉ xử lý file MỚI được upload sau khi deploy
-  2. Tạo thư mục work/ cần thiết
-  3. Kiểm tra các file cấu hình bắt buộc
+from __future__ import annotations
 
-Chạy DUY NHẤT 1 LẦN khi deploy lên máy ảo mới:
-  python scripts/setup_deployment.py
-
-Nếu muốn xử lý lại toàn bộ file cũ, thêm flag:
-  python scripts/setup_deployment.py --process-all
-"""
-import sys, os, json, argparse
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-sys.path.insert(0, ".")
-
-from dotenv import load_dotenv
-load_dotenv()
-
+import argparse
+import json
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
-from config import (
-    WORK_DIR, SEEN_FILES_PATH, KEYWORD_DIR, DATA_DIR,
-    DF_PRODUCTS_PATH, GCP_SERVICE_ACCOUNT_JSON, logger
+
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, "src")
+
+from dms.auth import AuthProvider
+from dms.http_client import create_session
+from dms.settings import get_settings
+from dms.sharepoint import SharePointClient
+
+settings = get_settings()
+sharepoint = SharePointClient(
+    auth=AuthProvider(settings),
+    settings=settings,
+    session=create_session(default_timeout=settings.http_timeout_seconds),
 )
 
 
 def check_required_files():
-    """Kiểm tra các file bắt buộc phải có trước khi chạy service."""
-    print("\n📋 Checking required files...")
+    print("\nChecking required files...")
     errors = []
-
     checks = [
-        (".env", Path(".env"), "File cấu hình môi trường"),
-        ("Service Account JSON", Path(GCP_SERVICE_ACCOUNT_JSON) if GCP_SERVICE_ACCOUNT_JSON else None, "GCP credentials"),
-        ("Product Catalog", DF_PRODUCTS_PATH, "Catalog sản phẩm cho RAG"),
+        (".env", Path(".env")),
+        (
+            "Service Account JSON",
+            Path(settings.gcp_service_account_json) if settings.gcp_service_account_json else None,
+        ),
+        ("Product Catalog", settings.df_products_path),
     ]
-
-    for name, path, desc in checks:
+    for name, path in checks:
         if path is None:
-            print(f"  ⚠️  {name}: GCP_SERVICE_ACCOUNT_JSON chưa được cấu hình trong .env")
+            print(f"  {name}: not configured")
             errors.append(name)
         elif path.exists():
             size_kb = path.stat().st_size // 1024
-            print(f"  ✅ {name}: {path} ({size_kb} KB)")
+            print(f"  OK {name}: {path} ({size_kb} KB)")
         else:
-            print(f"  ❌ {name}: {path} — KHÔNG TÌM THẤY")
+            print(f"  MISSING {name}: {path}")
             errors.append(name)
-
     return errors
 
 
 def create_work_dirs():
-    """Tạo các thư mục làm việc cần thiết."""
-    print("\n📁 Creating work directories...")
-    dirs = [
-        WORK_DIR,
-        WORK_DIR / "input",
-        WORK_DIR / "output",
-        WORK_DIR / "checkpoint",
-    ]
-    for d in dirs:
-        d.mkdir(parents=True, exist_ok=True)
-        print(f"  ✅ {d}")
+    print("\nCreating work directories...")
+    for directory in (
+        settings.work_dir,
+        settings.work_dir / "input",
+        settings.work_dir / "output",
+        settings.work_dir / "checkpoint",
+    ):
+        directory.mkdir(parents=True, exist_ok=True)
+        print(f"  OK {directory}")
 
 
 def seed_seen_files(process_all: bool = False):
-    """Đánh dấu file cũ là done (hoặc bỏ qua nếu --process-all)."""
-    from sharepoint import list_input_files
-
-    print("\n☁️  Connecting to SharePoint...")
+    print("\nConnecting to SharePoint...")
     try:
-        files = list_input_files()
-    except Exception as e:
-        print(f"  ❌ Cannot connect to SharePoint: {e}")
+        files = sharepoint.list_files()
+    except Exception as exc:
+        print(f"  Cannot connect to SharePoint: {exc}")
         return False
 
     print(f"  Found {len(files)} file(s) in Input/")
 
     if process_all:
-        print("  ℹ️  --process-all flag set → NOT seeding seen_files (will process everything)")
-        # Tạo file trống
-        SEEN_FILES_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(SEEN_FILES_PATH, "w", encoding="utf-8") as f:
-            json.dump({}, f)
-        print(f"  ✅ Empty seen_files.json created at {SEEN_FILES_PATH}")
+        settings.seen_files_path.parent.mkdir(parents=True, exist_ok=True)
+        settings.seen_files_path.write_text("{}", encoding="utf-8")
+        print(f"  Empty seen_files.json created at {settings.seen_files_path}")
         return True
 
-    # Load existing seen (nếu có)
     existing_seen = {}
-    if SEEN_FILES_PATH.exists():
-        with open(SEEN_FILES_PATH, "r", encoding="utf-8") as f:
-            existing_seen = json.load(f)
-        print(f"  ℹ️  Found existing seen_files.json ({len(existing_seen)} entries)")
+    if settings.seen_files_path.exists():
+        existing_seen = json.loads(settings.seen_files_path.read_text(encoding="utf-8"))
+        print(f"  Found existing seen_files.json ({len(existing_seen)} entries)")
 
-    # Đánh dấu tất cả file hiện tại là done
     seen = dict(existing_seen)
     newly_seeded = 0
-    for f in files:
-        if f["id"] not in seen:
-            seen[f["id"]] = {
-                "name": f["name"],
+    for file_info in files:
+        if file_info["id"] not in seen:
+            seen[file_info["id"]] = {
+                "name": file_info["name"],
                 "status": "done",
                 "processed_at": datetime.now().isoformat(),
                 "note": "pre-seeded on deployment",
             }
             newly_seeded += 1
 
-    SEEN_FILES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(SEEN_FILES_PATH, "w", encoding="utf-8") as f:
-        json.dump(seen, f, ensure_ascii=False, indent=2)
-
-    done_count = sum(1 for v in seen.values() if v.get("status") == "done")
-    print(f"  ✅ Saved seen_files.json: {len(seen)} entries ({done_count} done, {newly_seeded} newly seeded)")
-    print(f"  📍 Location: {SEEN_FILES_PATH}")
-    print(f"\n  Service sẽ chỉ xử lý file được upload SAU thời điểm này.")
+    settings.seen_files_path.parent.mkdir(parents=True, exist_ok=True)
+    settings.seen_files_path.write_text(
+        json.dumps(seen, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    done_count = sum(1 for value in seen.values() if value.get("status") == "done")
+    print(
+        f"  Saved seen_files.json: {len(seen)} entries "
+        f"({done_count} done, {newly_seeded} newly seeded)"
+    )
+    print(f"  Location: {settings.seen_files_path}")
     return True
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Setup deployment — seed seen_files and verify environment"
-    )
+    parser = argparse.ArgumentParser(description="Setup deployment and seed seen_files")
     parser.add_argument(
         "--process-all",
         action="store_true",
-        help="Không seed seen_files → xử lý toàn bộ file cũ (dùng khi muốn reprocess)"
+        help="Do not seed seen_files; process all existing files",
     )
     args = parser.parse_args()
 
     print("=" * 60)
-    print("DMS Feedback Classification — Deployment Setup")
+    print("DMS Feedback Classification - Deployment Setup")
     print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
-    # Step 1: Check required files
     errors = check_required_files()
     if errors:
-        print(f"\n❌ Missing required files: {errors}")
-        print("   Fix these before running the service!")
+        print(f"\nMissing required files: {errors}")
         sys.exit(1)
 
-    # Step 2: Create work directories
     create_work_dirs()
-
-    # Step 3: Seed seen_files.json
     ok = seed_seen_files(process_all=args.process_all)
     if not ok:
-        print("\n⚠️  SharePoint seeding failed — service will process ALL files on first run")
+        print("\nSharePoint seeding failed - service may process all files on first run")
 
     print("\n" + "=" * 60)
-    print("✅ Setup complete! Ready to run:")
-    print("   Docker: docker-compose up -d")
-    print("   Local:  python watcher.py")
+    print("Setup complete! Ready to run:")
+    print("  Docker: docker-compose up -d")
+    print("  Local:  python -m dms")
     print("=" * 60)
-
-
-if __name__ == "__main__":
-    main()
