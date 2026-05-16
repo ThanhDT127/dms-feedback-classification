@@ -70,17 +70,22 @@ class SharePointClient:
             )
         return self._folder_ids[folder_name]
 
-    def list_files(self) -> list[dict]:
-        input_folder_id = self.get_folder_id(self.settings.sp_input_folder)
-        url = self._drive_url(f"items/{input_folder_id}/children")
+    def list_folder_items(self, folder_name: str) -> list[dict]:
+        folder_id = self.get_folder_id(folder_name)
+        url = self._drive_url(f"items/{folder_id}/children")
         response = self.session.get(url, headers=self.auth.get_headers())
-        self._raise_for_error(response, "Cannot list Input folder")
+        self._raise_for_error(response, f"Cannot list folder {folder_name}")
         data = response.json()
         if "error" in data:
-            raise SharePointError(f"Cannot list Input folder: {data['error']['message']}")
+            raise SharePointError(
+                f"Cannot list folder {folder_name}: {data['error']['message']}"
+            )
+        return list(data.get("value", []))
 
+    def list_files(self) -> list[dict]:
+        data = self.list_folder_items(self.settings.sp_input_folder)
         files = []
-        for item in data.get("value", []):
+        for item in data:
             name = item.get("name", "")
             if "file" in item and name.lower().endswith(".xlsx"):
                 files.append(
@@ -89,6 +94,7 @@ class SharePointClient:
                         "name": name,
                         "size": item.get("size", 0),
                         "lastModifiedDateTime": item.get("lastModifiedDateTime", ""),
+                        "eTag": item.get("eTag", ""),
                     }
                 )
         logger.info("Found %d .xlsx file(s) in Input/", len(files))

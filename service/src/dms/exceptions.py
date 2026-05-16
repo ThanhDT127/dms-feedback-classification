@@ -27,3 +27,7 @@ class PipelineError(DMSError):
 
 class ModelArtifactError(DMSError):
     """Raised when local baseline-model artifacts are missing or invalid."""
+
+
+class ConfigAssetSyncError(DMSError):
+    """Raised when SharePoint-backed config asset synchronization fails."""

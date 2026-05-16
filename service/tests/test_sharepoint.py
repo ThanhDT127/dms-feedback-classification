@@ -63,7 +63,7 @@ def test_list_files_download_and_upload(settings, mock_auth_provider, tmp_path: 
     client = SharePointClient(mock_auth_provider, settings, session)
 
     files = client.list_files()
-    assert files == [{"id": "1", "name": "a.xlsx", "size": 5, "lastModifiedDateTime": ""}]
+    assert files == [{"id": "1", "name": "a.xlsx", "size": 5, "lastModifiedDateTime": "", "eTag": ""}]
     local = client.download_file("1", tmp_path / "a.xlsx")
     assert local.exists()
 

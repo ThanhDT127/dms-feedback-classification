@@ -142,11 +142,11 @@ class RAGProductMatcher:
         self.bm25_raw = BM25Okapi([p.split() for p in self.models_raw])
         self.bm25_nodau = BM25Okapi([p.split() for p in self.models_nodau])
 
-        xl = pd.ExcelFile(products_path)
-        sheet_l2 = _find_sheet(xl, [r"loc.*lan.*2", r"loc.*2"])
-        sheet_l3 = _find_sheet(xl, [r"loc.*lan.*3", r"loc.*3"])
-        df_l2 = pd.read_excel(xl, sheet_l2) if sheet_l2 else None
-        df_l3 = pd.read_excel(xl, sheet_l3) if sheet_l3 else None
+        with pd.ExcelFile(products_path) as xl:
+            sheet_l2 = _find_sheet(xl, [r"loc.*lan.*2", r"loc.*2"])
+            sheet_l3 = _find_sheet(xl, [r"loc.*lan.*3", r"loc.*3"])
+            df_l2 = pd.read_excel(xl, sheet_l2) if sheet_l2 else None
+            df_l3 = pd.read_excel(xl, sheet_l3) if sheet_l3 else None
         self.rules_l2 = _compile_rules_l2(df_l2)
         self.rules_l3 = _compile_rules_l3(df_l3)
 

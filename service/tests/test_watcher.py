@@ -26,10 +26,13 @@ class FakeSharePoint:
 
 
 class FakePipeline:
-    def __init__(self, should_fail=False):
+    def __init__(self, should_fail=False, label="base"):
         self.should_fail = should_fail
+        self.label = label
+        self.calls = []
 
     def run_pipeline(self, input_path, output_path, ckpt_path):
+        self.calls.append(self.label)
         if self.should_fail:
             raise RuntimeError("boom")
         output_path.write_text("out", encoding="utf-8")
@@ -49,7 +52,38 @@ class FakeNotifications:
         self.error.append((file_name, error_msg, retry_count, max_retries))
 
 
-def make_watcher(settings, files, should_fail=False):
+class FakeSyncResult:
+    def __init__(self, reload_required=False, downloaded_assets=None, errors=None):
+        self.reload_required = reload_required
+        self.downloaded_assets = downloaded_assets or []
+        self.errors = errors or []
+        self.changed_assets = list(self.downloaded_assets)
+        self.checked_at = "2026-05-16T10:00:00"
+
+    def as_health_dict(self):
+        return {
+            "checked_at": self.checked_at,
+            "reload_required": self.reload_required,
+            "changed_assets": self.changed_assets,
+            "downloaded_assets": self.downloaded_assets,
+            "errors": self.errors,
+        }
+
+
+class FakeConfigSync:
+    def __init__(self, results=None, error=None):
+        self.results = list(results or [])
+        self.error = error
+
+    def sync(self):
+        if self.error is not None:
+            raise self.error
+        if self.results:
+            return self.results.pop(0)
+        return FakeSyncResult()
+
+
+def make_watcher(settings, files, should_fail=False, config_sync=None, runner_factory=None):
     settings.ensure_runtime_dirs()
     metrics = MetricsCollector(settings.metrics_path)
     return Watcher(
@@ -58,6 +92,8 @@ def make_watcher(settings, files, should_fail=False):
         notification_service=FakeNotifications(),
         metrics=metrics,
         settings=settings,
+        config_asset_sync=config_sync,
+        runner_factory=runner_factory,
     )
 
 
@@ -77,3 +113,48 @@ def test_watcher_marks_retry_and_terminal_failure(settings):
     assert watcher.poll_once(seen) == 0
     assert watcher.poll_once(seen) == 0
     assert seen["1"]["status"] == "failed"
+
+
+def test_watcher_reloads_runner_after_asset_sync(settings):
+    runs = []
+
+    def runner_factory():
+        label = f"reload-{len(runs) + 1}"
+        runs.append(label)
+        return FakePipeline(label=label)
+
+    sync = FakeConfigSync(results=[FakeSyncResult(reload_required=True, downloaded_assets=["keyword/kw_map.json"])])
+    watcher = Watcher(
+        sharepoint_client=FakeSharePoint([{"id": "1", "name": "a.xlsx"}]),
+        pipeline_runner=FakePipeline(label="initial"),
+        notification_service=FakeNotifications(),
+        metrics=MetricsCollector(settings.metrics_path),
+        settings=settings,
+        config_asset_sync=sync,
+        runner_factory=runner_factory,
+    )
+    settings.ensure_runtime_dirs()
+
+    seen = {}
+    processed = watcher.poll_once(seen)
+    assert processed == 1
+    assert watcher.pipeline_runner.label == "reload-1"
+
+
+def test_watcher_keeps_current_runner_when_sync_fails(settings):
+    current = FakePipeline(label="stable")
+    watcher = Watcher(
+        sharepoint_client=FakeSharePoint([{"id": "1", "name": "a.xlsx"}]),
+        pipeline_runner=current,
+        notification_service=FakeNotifications(),
+        metrics=MetricsCollector(settings.metrics_path),
+        settings=settings,
+        config_asset_sync=FakeConfigSync(error=RuntimeError("sync boom")),
+        runner_factory=lambda: FakePipeline(label="should-not-reload"),
+    )
+    settings.ensure_runtime_dirs()
+
+    seen = {}
+    processed = watcher.poll_once(seen)
+    assert processed == 1
+    assert watcher.pipeline_runner is current

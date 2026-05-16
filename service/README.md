@@ -43,3 +43,21 @@ From `service/`, the compose file expects:
 - `./logs` mounted read-write
 
 If `Model/` is missing or incomplete, startup fails fast with a model-artifact error.
+
+## SharePoint-backed asset sync
+
+The watcher can also pull tracked `Keyword/` and `Model/` files from SharePoint automatically.
+
+- it checks SharePoint metadata before each polling cycle
+- it only downloads tracked assets when the remote version changed
+- it validates model artifacts as a bundle before activating them
+- it reloads matcher/classifier dependencies only between cycles
+- if a later sync fails, it keeps using the last known good local snapshot
+
+Relevant settings:
+
+- `ENABLE_SHAREPOINT_CONFIG_SYNC=true`
+- `SHAREPOINT_KEYWORD_FOLDER=Keyword`
+- `SHAREPOINT_MODEL_FOLDER=Model`
+
+Sync state is stored in `work/config_assets_state.json`.
