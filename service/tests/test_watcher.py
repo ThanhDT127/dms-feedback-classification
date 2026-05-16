@@ -103,6 +103,9 @@ def test_watcher_marks_success_and_skips_done(settings):
     processed = watcher.poll_once(seen)
     assert processed == 1
     assert seen["1"]["status"] == "done"
+    assert not (settings.work_dir / "input" / "a.xlsx").exists()
+    assert not (settings.work_dir / "output" / "a_output.xlsx").exists()
+    assert not (settings.work_dir / "checkpoint" / "a.json").exists()
 
 
 def test_watcher_marks_retry_and_terminal_failure(settings):
