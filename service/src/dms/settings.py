@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     rate_gap_sec: float = 4.0
     bm25_min_score: float = 5.0
     http_timeout_seconds: float = 30.0
+    enable_sharepoint_config_sync: bool = Field(True, alias="ENABLE_SHAREPOINT_CONFIG_SYNC")
 
     data_dir: Path = Field(default_factory=lambda: SERVICE_DIR, alias="DATA_DIR")
     keyword_dir_override: Path | None = Field(default=None, alias="KEYWORD_DIR")
@@ -63,6 +64,8 @@ class Settings(BaseSettings):
     sp_input_folder: str = "Input"
     sp_output_folder: str = "Output"
     sp_checkpoint_folder: str = "Check_Point"
+    sp_keyword_folder: str = Field("Keyword", alias="SHAREPOINT_KEYWORD_FOLDER")
+    sp_model_folder: str = Field("Model", alias="SHAREPOINT_MODEL_FOLDER")
 
     @model_validator(mode="after")
     def validate_required_fields(self) -> Settings:
@@ -124,6 +127,22 @@ class Settings(BaseSettings):
         return self.work_dir / "metrics.json"
 
     @property
+    def config_assets_state_path(self) -> Path:
+        return self.work_dir / "config_assets_state.json"
+
+    @property
+    def config_assets_cache_dir(self) -> Path:
+        return self.work_dir / "config_assets"
+
+    @property
+    def active_keyword_dir(self) -> Path:
+        return self.config_assets_cache_dir / "active" / "Keyword"
+
+    @property
+    def active_model_dir(self) -> Path:
+        return self.config_assets_cache_dir / "active" / "Model"
+
+    @property
     def tfidf_word_path(self) -> Path:
         return self.model_dir / "tfidf_word.pkl"
 
@@ -170,6 +189,7 @@ class Settings(BaseSettings):
         """Create runtime directories used by the service."""
         self.work_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.config_assets_cache_dir.mkdir(parents=True, exist_ok=True)
         (self.work_dir / "input").mkdir(parents=True, exist_ok=True)
         (self.work_dir / "output").mkdir(parents=True, exist_ok=True)
         (self.work_dir / "checkpoint").mkdir(parents=True, exist_ok=True)

@@ -9,6 +9,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
+from .config_assets import ConfigAssetSyncService
 from .metrics import MetricsCollector
 from .notification import NotificationService
 from .pipeline.runner import PipelineRunner
@@ -29,12 +30,17 @@ class Watcher:
         notification_service: NotificationService,
         metrics: MetricsCollector,
         settings: Settings,
+        runner_factory=None,
+        config_asset_sync: ConfigAssetSyncService | None = None,
     ) -> None:
         self.sharepoint_client = sharepoint_client
         self.pipeline_runner = pipeline_runner
         self.notification_service = notification_service
         self.metrics = metrics
         self.settings = settings
+        self.runner_factory = runner_factory
+        self.config_asset_sync = config_asset_sync
+        self._last_sync_health: dict = {}
 
     def _load_seen(self) -> dict:
         if self.settings.seen_files_path.exists():
@@ -53,14 +59,45 @@ class Watcher:
 
     def _update_health(self, cycle: int = 0, queue_size: int = 0) -> None:
         self.settings.health_file.parent.mkdir(parents=True, exist_ok=True)
+        payload = self.metrics.get_health_data(cycle=cycle, queue_size=queue_size)
+        if self._last_sync_health:
+            payload["config_assets"] = self._last_sync_health
         self.settings.health_file.write_text(
-            json.dumps(
-                self.metrics.get_health_data(cycle=cycle, queue_size=queue_size),
-                ensure_ascii=False,
-                indent=2,
-            ),
+            json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    def _sync_config_assets(self) -> None:
+        if self.config_asset_sync is None:
+            return
+        try:
+            result = self.config_asset_sync.sync()
+        except Exception as exc:
+            logger.warning("Config asset sync failed; keeping current snapshot: %s", exc)
+            self._last_sync_health = {
+                "checked_at": datetime.now().isoformat(timespec="seconds"),
+                "reload_required": False,
+                "changed_assets": [],
+                "downloaded_assets": [],
+                "errors": [str(exc)],
+            }
+            return
+
+        self._last_sync_health = result.as_health_dict()
+        if result.downloaded_assets:
+            logger.info(
+                "Config asset sync downloaded %d asset(s): %s",
+                len(result.downloaded_assets),
+                ", ".join(result.downloaded_assets),
+            )
+        if result.errors:
+            for message in result.errors:
+                logger.warning("%s", message)
+        if result.reload_required:
+            if self.runner_factory is None:
+                raise RuntimeError("Config asset reload requested but no runner factory is configured")
+            self.pipeline_runner = self.runner_factory()
+            logger.info("Reloaded pipeline dependencies from refreshed config assets")
 
     def _write_daily_summary(self, date_str: str) -> None:
         summary = self.metrics.get_daily_summary()
@@ -160,6 +197,7 @@ class Watcher:
             return False
 
     def poll_once(self, seen: dict) -> int:
+        self._sync_config_assets()
         try:
             remote_files = self.sharepoint_client.list_files()
         except Exception as exc:
