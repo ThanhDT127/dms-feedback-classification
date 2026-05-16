@@ -7,7 +7,8 @@ WORKDIR /app
 COPY pyproject.toml README.md requirements.txt ./
 COPY src/ ./src/
 
-RUN pip install --no-cache-dir . \
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && python -m pip install --no-cache-dir . \
     && python -c "import dms"
 
 HEALTHCHECK --interval=60s --timeout=5s --start-period=30s --retries=3 \
