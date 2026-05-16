@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     http_timeout_seconds: float = 30.0
 
     data_dir: Path = Field(default_factory=lambda: SERVICE_DIR, alias="DATA_DIR")
+    keyword_dir_override: Path | None = Field(default=None, alias="KEYWORD_DIR")
+    model_dir_override: Path | None = Field(default=None, alias="MODEL_DIR")
     work_dir: Path = Field(default_factory=lambda: SERVICE_DIR / "work", alias="WORK_DIR")
     log_dir: Path = Field(default_factory=lambda: SERVICE_DIR / "logs", alias="LOG_DIR")
 
@@ -95,11 +97,11 @@ class Settings(BaseSettings):
 
     @property
     def keyword_dir(self) -> Path:
-        return self.data_dir / "Keyword"
+        return self.keyword_dir_override or (self.data_dir / "Keyword")
 
     @property
     def model_dir(self) -> Path:
-        return self.data_dir / "Model"
+        return self.model_dir_override or (self.data_dir / "Model")
 
     @property
     def kw_map_path(self) -> Path:
@@ -120,6 +122,40 @@ class Settings(BaseSettings):
     @property
     def metrics_path(self) -> Path:
         return self.work_dir / "metrics.json"
+
+    @property
+    def tfidf_word_path(self) -> Path:
+        return self.model_dir / "tfidf_word.pkl"
+
+    @property
+    def tfidf_char_path(self) -> Path:
+        return self.model_dir / "tfidf_char.pkl"
+
+    @property
+    def ovr_logreg_path(self) -> Path:
+        return self.model_dir / "ovr_logreg.pkl"
+
+    @property
+    def best_thresholds_path(self) -> Path:
+        return self.model_dir / "best_thresholds.json"
+
+    @property
+    def label_cols_path(self) -> Path:
+        return self.model_dir / "label_cols.json"
+
+    @property
+    def keyword_minors_path(self) -> Path:
+        return self.model_dir / "keyword_minors.json"
+
+    @property
+    def required_model_artifact_paths(self) -> dict[str, Path]:
+        return {
+            "tfidf_word.pkl": self.tfidf_word_path,
+            "tfidf_char.pkl": self.tfidf_char_path,
+            "ovr_logreg.pkl": self.ovr_logreg_path,
+            "best_thresholds.json": self.best_thresholds_path,
+            "label_cols.json": self.label_cols_path,
+        }
 
     @property
     def notification_recipients(self) -> list[str]:

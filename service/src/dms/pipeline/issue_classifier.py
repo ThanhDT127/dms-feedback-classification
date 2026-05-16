@@ -1,4 +1,4 @@
-"""Issue classification with Gemini and post-processing guardrails."""
+"""LLM refiner for notebook-style preliminary issue labels."""
 
 from __future__ import annotations
 
@@ -17,12 +17,12 @@ logger = logging.getLogger("dms-watcher")
 
 
 def canon(s: str) -> str:
-    """Normalize string for brand comparison."""
+    """Normalize text for brand and keyword comparison."""
     if not s:
         return ""
-    s2 = unidecode(str(s)).lower()
-    s2 = re.sub(r"[^a-z0-9\s]+", " ", s2)
-    return re.sub(r"\s+", " ", s2).strip()
+    text = unidecode(str(s)).lower()
+    text = re.sub(r"[^a-z0-9\s]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 MINOR_ORDER = [
@@ -74,7 +74,6 @@ MINOR_TO_MAJOR = {
 }
 
 COMP_ALLOWED = ["Hãng", "Hoạt động", "CTKM, giá, cơ chế", "TT SP"]
-
 RD_BRAND_ALIASES = {
     "rang dong",
     "r d",
@@ -84,25 +83,13 @@ RD_BRAND_ALIASES = {
     "rang dong company",
     "ra ng dong",
 }
-
-NULL_BRAND_ALIASES = {
-    "",
-    "rong",
-    "ro ng",
-    "none",
-    "null",
-    "n a",
-    "na",
-    "khong",
-    "kh ong",
-    "empty",
-}
+NULL_BRAND_ALIASES = {"", "rong", "ro ng", "none", "null", "n a", "na", "khong", "kh ong", "empty"}
 
 ISSUE_RULES = {
     "C1": "Không bịa brand, sản phẩm, hoặc nhãn ngoài danh sách hợp lệ",
     "C2": "Nếu brand là hãng khác Rạng Đông thì chỉ được giữ 4 nhãn cạnh tranh",
     "C3": "Nếu brand là Rạng Đông hoặc không có brand rõ ràng thì phải tắt 4 nhãn cạnh tranh",
-    "C4": "Website chỉ khi có bằng chứng rõ về web, app, portal, login, chấm, lỗi chức năng",
+    "C4": "Website chỉ khi có bằng chứng rõ về web, app, portal, login, chậm, lỗi chức năng",
     "C5": "Tin trung lập chỉ khi câu trung tính, không khen, không chê, không đề nghị",
     "C6": "Nếu vừa có tín hiệu tích cực vừa tiêu cực thì sentiment phải là Tiêu cực",
     "C7": "Mỗi item xử lý độc lập, không suy luận chéo sang item khác",
@@ -140,7 +127,7 @@ LABEL_GUIDE = dedent(
     - Hàng giả: nghi ngờ hoặc phản ánh hàng giả, hàng nhái.
 
     6) Website
-    - Website: vấn đề web/app/portal/login/chấm/lỗi chức năng.
+    - Website: vấn đề web/app/portal/login/chậm/lỗi chức năng.
 
     7) Đối thủ cạnh tranh
     - Hãng: có nhắc hãng khác Rạng Đông.
@@ -153,32 +140,33 @@ LABEL_GUIDE = dedent(
     """
 ).strip()
 
-ISSUE_JSON_SCHEMA = dedent(
+REFINER_JSON_SCHEMA = dedent(
     """
     {
-      "final_minors": ["<các minor cuối cùng>"],
+      "final_minors": ["<các minor cuối>"],
       "sentiment": "Tích cực" | "Tiêu cực" | "",
-      "brand": "<hãng đối thủ nếu có, ngược lại để rỗng>",
+      "brand": "<giữ brand_prelim hoặc ''>",
       "decision_log": [
-        {"minor": "nhãn", "action": "ADD|KEEP|REMOVE", "why": "lý do ngắn"}
+        {"minor": "nhãn", "action": "ADD|KEEP|REMOVE", "why": "lý do ngắn gọn"}
       ]
     }
     """
 ).strip()
 
-ISSUE_PROMPT_HDR = dedent(
+REFINER_PROMPT_HDR = dedent(
     f"""
-    Bạn là bộ phân loại phản hồi marketing. Với mỗi item, hãy phân loại trực tiếp issue labels cuối cùng.
-
-    Đầu vào mỗi item chỉ có:
-    - text: câu phản hồi gốc
+    Bạn là bộ soát và sửa nhãn issue. Mỗi item xử lý độc lập gồm:
+    - text: câu gốc
+    - prelim_minors: nhãn sơ bộ có thể thiếu hoặc thừa
+    - brand_prelim: brand phát hiện, có thể rỗng
+    - sent_prelim: "Tích cực" | "Tiêu cực" | ""
 
     Nhiệm vụ bắt buộc:
-    1) Chọn final_minors từ đúng danh sách nhãn hợp lệ.
-    2) Chọn sentiment là "Tích cực", "Tiêu cực", hoặc rỗng.
-    3) Chỉ điền brand khi câu nói rõ về hãng cạnh tranh khác Rạng Đông.
-    4) Không bịa nhãn, không bịa brand, không suy luận vượt quá bằng chứng trong câu.
-    5) Trả về decision_log ngắn gọn cho các nhãn được thêm, giữ, hoặc loại.
+    1) Sửa nhãn: bỏ nhãn sai, thêm nhãn còn thiếu nếu có bằng chứng chắc chắn.
+    2) Trả về decision_log ngắn gọn cho mỗi nhãn được thêm, giữ, hoặc bỏ.
+    3) Giữ brand đúng bằng brand_prelim, không bịa brand mới.
+    4) Chuẩn hoá sentiment theo C6.
+    5) Không tạo nhãn ngoài danh sách hợp lệ, không suy luận chéo item.
 
     QUY TẮC:
     {ISSUE_RULES_JSON}
@@ -190,20 +178,24 @@ ISSUE_PROMPT_HDR = dedent(
     {MINOR_ORDER_JSON}
 
     ĐẦU RA MỖI ITEM:
-    {ISSUE_JSON_SCHEMA}
+    {REFINER_JSON_SCHEMA}
 
-    KHÔNG thêm text ngoài JSON. Mỗi item đúng 1 dòng JSON theo đúng thứ tự input.
+    KHÔNG thêm text ngoài JSON. Mỗi item đúng 1 dòng JSON.
     """
 ).strip()
 
 
-def _inside_code_fence(s: str) -> str:
-    match = re.search(r"```(?:json)?\s*(.*?)```", s, flags=re.S | re.I)
-    return match.group(1).strip() if match else s
+def _prelim_true_minors(prelim: dict[str, bool]) -> list[str]:
+    return [minor for minor, enabled in prelim.items() if enabled and minor in MINOR_ORDER]
 
 
-def _wrap_objects_to_array(s: str) -> str:
-    wrapped = re.sub(r"}\s*{", "},{", s.strip())
+def _inside_code_fence(text: str) -> str:
+    match = re.search(r"```(?:json)?\s*(.*?)```", text, flags=re.S | re.I)
+    return match.group(1).strip() if match else text
+
+
+def _wrap_objects_to_array(text: str) -> str:
+    wrapped = re.sub(r"}\s*{", "},{", text.strip())
     if not wrapped.startswith("["):
         wrapped = "[" + wrapped
     if not wrapped.endswith("]"):
@@ -211,9 +203,9 @@ def _wrap_objects_to_array(s: str) -> str:
     return wrapped
 
 
-def _safe_json_loads(s: str):
+def _safe_json_loads(text: str):
     try:
-        return json.loads(s)
+        return json.loads(text)
     except Exception:
         return None
 
@@ -230,19 +222,19 @@ def _extract_json_anywhere(raw: str, expected_n: int):
         if isinstance(arr, list):
             return arr
     out = []
-    for line in [ln for ln in text.splitlines() if ln.strip()]:
+    for line in [line for line in text.splitlines() if line.strip()]:
         match = re.search(r"\{.*\}", line.strip())
         if not match:
             continue
-        one = _safe_json_loads(match.group(0))
-        if isinstance(one, dict):
-            out.append(one)
+        item = _safe_json_loads(match.group(0))
+        if isinstance(item, dict):
+            out.append(item)
     return out or None
 
 
 def _normalize_decision_log(log):
     norm = []
-    for item in (log or []):
+    for item in log or []:
         if isinstance(item, dict):
             minor = (item.get("minor") or "").strip()
             action = (item.get("action") or "").strip().upper()
@@ -256,14 +248,20 @@ def _normalize_decision_log(log):
     return norm
 
 
-def normalize_issue_output(parsed: dict) -> dict:
-    """Apply guardrails and normalization to LLM output."""
-    finals = [m for m in (parsed.get("final_minors") or []) if m in MINOR_ORDER]
-    sentiment = (parsed.get("sentiment") or "").strip()
+def normalize_issue_output(
+    parsed: dict,
+    *,
+    brand_fallback: str = "",
+    sentiment_fallback: str = "",
+    prelim_minors: list[str] | None = None,
+) -> dict:
+    """Normalize raw LLM output while preserving notebook business rules."""
+    finals = [minor for minor in (parsed.get("final_minors") or []) if minor in MINOR_ORDER]
+    sentiment = (parsed.get("sentiment") or sentiment_fallback or "").strip()
     if sentiment not in ("Tích cực", "Tiêu cực", ""):
         sentiment = ""
 
-    brand_raw = (parsed.get("brand") or "").strip()
+    brand_raw = (parsed.get("brand") or brand_fallback or "").strip()
     brand_can = canon(brand_raw)
     if brand_can in NULL_BRAND_ALIASES:
         brand_raw = ""
@@ -271,13 +269,16 @@ def normalize_issue_output(parsed: dict) -> dict:
     is_competitor = bool(brand_can and brand_can not in RD_BRAND_ALIASES)
 
     if is_competitor:
-        finals = [m for m in finals if m in COMP_ALLOWED]
+        finals = [minor for minor in finals if minor in COMP_ALLOWED]
         if "Hãng" not in finals:
             finals = ["Hãng"] + finals
         brand_out = brand_raw
     else:
-        finals = [m for m in finals if m not in COMP_ALLOWED]
+        finals = [minor for minor in finals if minor not in COMP_ALLOWED]
         brand_out = ""
+
+    if prelim_minors is not None and not finals:
+        finals = [minor for minor in prelim_minors if minor in MINOR_ORDER]
 
     return {
         "final_minors": finals,
@@ -288,17 +289,33 @@ def normalize_issue_output(parsed: dict) -> dict:
 
 
 class IssueClassifier:
-    """Classify feedback issues using Gemini plus guardrails."""
+    """Refine preliminary issue labels using Gemini with notebook guardrails."""
 
     def __init__(self, gemini: GeminiClient, settings: Settings) -> None:
         self.gemini = gemini
         self.settings = settings
 
     @staticmethod
-    def _build_issue_items(texts: list[str]) -> str:
-        return "\n".join(json.dumps({"text": t}, ensure_ascii=False) for t in texts)
+    def _build_refiner_items(
+        texts: list[str],
+        prelim_minors_list: list[list[str]],
+        brands: list[str],
+        sents: list[str],
+    ) -> str:
+        return "\n".join(
+            json.dumps(
+                {
+                    "text": text,
+                    "prelim_minors": prelim_minors,
+                    "brand_prelim": brand or "",
+                    "sent_prelim": sent or "",
+                },
+                ensure_ascii=False,
+            )
+            for text, prelim_minors, brand, sent in zip(texts, prelim_minors_list, brands, sents, strict=False)
+        )
 
-    def _llm_json_call_issue(self, prompt: str) -> str:
+    def _llm_json_call_refiner(self, prompt: str) -> str:
         last_err: Exception | None = None
         for attempt in range(1, self.settings.max_retry + 1):
             try:
@@ -310,36 +327,59 @@ class IssueClassifier:
                 except Exception as fallback_exc:
                     last_err = fallback_exc
                     if attempt == self.settings.max_retry:
-                        logger.error(
-                            "Issue classifier fail (attempt %d): %s",
-                            attempt,
-                            last_err,
-                        )
+                        logger.error("Issue refiner fail (attempt %d): %s", attempt, last_err)
                         return ""
                     time.sleep(self.settings.base_wait * attempt)
         return ""
 
-    def classify_batch(self, texts: list[str], debug: bool = False) -> list[dict]:
-        payload = self._build_issue_items(texts)
+    def refine_batch(
+        self,
+        texts: list[str],
+        prelim_dicts: list[dict[str, bool]],
+        brands: list[str],
+        sents: list[str],
+        debug: bool = False,
+    ) -> list[dict]:
+        prelim_minors_list = [_prelim_true_minors(prelim) for prelim in prelim_dicts]
+        payload = self._build_refiner_items(texts, prelim_minors_list, brands, sents)
         prompt = (
-            f"{ISSUE_PROMPT_HDR}\n\n"
+            f"{REFINER_PROMPT_HDR}\n\n"
             f"DỮ LIỆU (mỗi dòng là 1 JSON):\n{payload}\n\n"
             f"Trả về đúng {len(texts)} dòng JSON theo thứ tự."
         )
-        raw = self._llm_json_call_issue(prompt)
+        raw = self._llm_json_call_refiner(prompt)
         if debug:
             preview = raw[:800] + ("..." if len(raw) > 800 else "")
-            logger.debug("RAW issue classifier: %s", preview or "∅")
+            logger.debug("RAW issue refiner: %s", preview or "∅")
 
         arr = _extract_json_anywhere(raw, expected_n=len(texts))
         if not isinstance(arr, list) or len(arr) == 0:
-            arr = [{} for _ in texts]
+            arr = [
+                {
+                    "final_minors": prelim_minors_list[idx],
+                    "sentiment": sents[idx] or "",
+                    "brand": brands[idx] or "",
+                    "decision_log": [{"minor": "__ALL__", "action": "KEEP", "why": "FALLBACK_PRELIM"}],
+                }
+                for idx in range(len(texts))
+            ]
 
         out = []
         for idx in range(len(texts)):
             parsed = arr[idx] if idx < len(arr) and isinstance(arr[idx], dict) else {}
-            out.append(normalize_issue_output(parsed))
+            out.append(
+                normalize_issue_output(
+                    parsed,
+                    brand_fallback=brands[idx] or "",
+                    sentiment_fallback=sents[idx] or "",
+                    prelim_minors=prelim_minors_list[idx],
+                )
+            )
         return out
+
+    def classify_batch(self, texts: list[str], debug: bool = False) -> list[dict]:
+        empty_prelim = [{minor: False for minor in MINOR_ORDER} for _ in texts]
+        return self.refine_batch(texts, empty_prelim, [""] * len(texts), [""] * len(texts), debug=debug)
 
     def classify_one(self, text: str, debug: bool = False) -> dict:
         return self.classify_batch([text], debug=debug)[0]

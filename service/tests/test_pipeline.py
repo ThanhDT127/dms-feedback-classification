@@ -3,8 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+from support import write_baseline_artifacts
 
 from dms.metrics import MetricsCollector
+from dms.pipeline.baseline_classifier import BaselineIssueClassifier
 from dms.pipeline.issue_classifier import normalize_issue_output
 from dms.pipeline.rag_product import RAGProductMatcher
 from dms.pipeline.runner import PipelineRunner, detect_header_and_textcol
@@ -16,11 +18,11 @@ class FakeGemini:
 
     def generate(self, prompt, temperature=None):
         self.calls.append(("generate", prompt))
-        return "1. AT10 8W"
+        return '{"final_minors":["Báo lỗi"],"sentiment":"Tiêu cực","brand":"","decision_log":[]}'
 
     def generate_json(self, prompt, temperature=0.0):
         self.calls.append(("generate_json", prompt))
-        return '{"final_minors":["Hãng","Website"],"sentiment":"Positive","brand":"Philips","decision_log":[]}'
+        return '{"final_minors":["Báo lỗi","Website"],"sentiment":"Tiêu cực","brand":"","decision_log":[]}'
 
 
 def build_catalog(path: Path) -> None:
@@ -79,19 +81,30 @@ def test_rag_bm25_and_keyword_fallback(settings, tmp_path: Path):
     assert fallback[0]["Sản phẩm"] == "Den LED"
 
 
-def test_pipeline_runner_processes_file(settings, tmp_path: Path):
+def test_pipeline_runner_processes_file_with_prelim_handoff(settings, tmp_path: Path):
     settings.data_dir = tmp_path / "data"
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.keyword_dir.mkdir(parents=True, exist_ok=True)
+    settings.model_dir_override = tmp_path / "Model"
     build_catalog(settings.df_products_path)
+    write_baseline_artifacts(settings.model_dir, settings.keyword_dir, include_keyword_minors=True)
+
     metrics = MetricsCollector(tmp_path / "metrics.json")
     gemini = FakeGemini()
     rag = RAGProductMatcher(settings=settings, gemini=gemini)
-    runner = PipelineRunner(gemini=gemini, rag=rag, metrics=metrics, settings=settings)
+    baseline = BaselineIssueClassifier(settings=settings)
+    runner = PipelineRunner(
+        gemini=gemini,
+        rag=rag,
+        metrics=metrics,
+        settings=settings,
+        baseline_classifier=baseline,
+    )
 
     input_path = tmp_path / "input.xlsx"
-    pd.DataFrame({"Nội dung phản hồi": ["AT10 8W bị lỗi"]}).to_excel(input_path, index=False)
+    pd.DataFrame({"Nội dung phản hồi": ["AT10 8W website bị lỗi"]}).to_excel(input_path, index=False)
 
     result = runner.run_pipeline(input_path, tmp_path / "out.xlsx", tmp_path / "ckpt.json")
     assert result["total_rows"] == 1
     assert (tmp_path / "out.xlsx").exists()
+    assert any("prelim_minors" in prompt for kind, prompt in gemini.calls if kind == "generate_json")

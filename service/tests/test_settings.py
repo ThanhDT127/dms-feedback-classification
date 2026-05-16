@@ -23,7 +23,23 @@ def test_settings_validation_defaults_and_paths(tmp_path):
     )
     assert settings.poll_interval_seconds == 123
     assert settings.keyword_dir == tmp_path / "data" / "Keyword"
+    assert settings.model_dir == tmp_path / "data" / "Model"
     assert settings.df_products_path.name.endswith(".xlsx")
+
+
+def test_settings_model_dir_override(tmp_path):
+    settings = Settings(
+        azure_tenant_id="tenant",
+        azure_client_id="client",
+        azure_client_secret="secret",
+        sharepoint_drive_id="drive",
+        sharepoint_root_folder_id="root",
+        gemini_backend="vertex",
+        gcp_project_id="project",
+        data_dir=tmp_path / "data",
+        model_dir_override=tmp_path / "custom-model",
+    )
+    assert settings.model_dir == tmp_path / "custom-model"
 
 
 def test_settings_missing_required_fields_raise_validation_error():
