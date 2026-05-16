@@ -9,6 +9,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
+from .cleanup import RuntimeCleanup
 from .config_assets import ConfigAssetSyncService
 from .metrics import MetricsCollector
 from .notification import NotificationService
@@ -40,6 +41,7 @@ class Watcher:
         self.settings = settings
         self.runner_factory = runner_factory
         self.config_asset_sync = config_asset_sync
+        self.cleanup = RuntimeCleanup(settings)
         self._last_sync_health: dict = {}
 
     def _load_seen(self) -> dict:
@@ -160,6 +162,11 @@ class Watcher:
             duration = result.get("duration_seconds", 0)
             self.metrics.record_success(file_name, rows, duration)
             self.notification_service.send_success(file_name, result)
+            self.cleanup.cleanup_success_artifacts(
+                local_input=local_input,
+                local_output=local_output,
+                local_checkpoint=local_ckpt,
+            )
             logger.info("Completed: %s (%d rows in %.1fs)", file_name, rows, duration)
             return True
         except Exception as exc:
@@ -254,5 +261,6 @@ class Watcher:
 
             self.metrics.flush()
             self._update_health(cycle=cycle)
+            self.cleanup.cleanup_housekeeping()
             logger.info("Sleeping %d seconds...", self.settings.poll_interval_seconds)
             time.sleep(self.settings.poll_interval_seconds)

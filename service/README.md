@@ -61,3 +61,19 @@ Relevant settings:
 - `SHAREPOINT_MODEL_FOLDER=Model`
 
 Sync state is stored in `work/config_assets_state.json`.
+
+## Runtime cleanup
+
+The watcher can clean up temporary local artifacts automatically.
+
+- deletes per-file `work/input`, `work/output`, and `work/checkpoint` artifacts after a file is processed, uploaded, and marked `done`
+- removes stale `work/config_assets/cfgsync-*` staging folders
+- applies TTL-based cleanup to old files in `work/output/` and `logs/`
+
+Protected state is preserved:
+
+- `work/seen_files.json`
+- `work/metrics.json`
+- `work/health.json`
+- `work/config_assets_state.json`
+- `work/config_assets/active/`
