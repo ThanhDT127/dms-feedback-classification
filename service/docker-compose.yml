@@ -10,12 +10,14 @@ services:
       - .env
     environment:
       - DATA_DIR=/app/data
+      - MODEL_DIR=/app/data/Model
       - WORK_DIR=/app/data/work
       - LOG_DIR=/app/data/logs
       - GCP_SERVICE_ACCOUNT_JSON=/app/data/sa-key.json
       - GOOGLE_APPLICATION_CREDENTIALS=/app/data/sa-key.json
     volumes:
       - ./Keyword:/app/data/Keyword:ro
+      - ./Model:/app/data/Model:ro
       - ./testvertex.json:/app/data/sa-key.json:ro
       - ./work:/app/data/work
       - ./logs:/app/data/logs

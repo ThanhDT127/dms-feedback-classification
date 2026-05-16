@@ -23,3 +23,7 @@ class GeminiError(DMSError):
 
 class PipelineError(DMSError):
     """Raised when pipeline processing fails."""
+
+
+class ModelArtifactError(DMSError):
+    """Raised when local baseline-model artifacts are missing or invalid."""

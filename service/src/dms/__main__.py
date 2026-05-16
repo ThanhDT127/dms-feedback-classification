@@ -11,6 +11,7 @@ from .http_client import create_session
 from .logging_config import setup_logging
 from .metrics import MetricsCollector
 from .notification import NotificationService
+from .pipeline.baseline_classifier import BaselineIssueClassifier
 from .pipeline.rag_product import RAGProductMatcher
 from .pipeline.runner import PipelineRunner
 from .settings import get_settings
@@ -35,8 +36,15 @@ def main() -> None:
     sharepoint = SharePointClient(auth=auth, settings=settings, session=session)
     notifications = NotificationService(auth=auth, settings=settings, session=session)
     metrics = MetricsCollector(settings.metrics_path)
+    baseline = BaselineIssueClassifier(settings=settings)
     rag = RAGProductMatcher(settings=settings, gemini=gemini)
-    runner = PipelineRunner(gemini=gemini, rag=rag, metrics=metrics, settings=settings)
+    runner = PipelineRunner(
+        gemini=gemini,
+        rag=rag,
+        metrics=metrics,
+        settings=settings,
+        baseline_classifier=baseline,
+    )
     watcher = Watcher(
         sharepoint_client=sharepoint,
         pipeline_runner=runner,
@@ -45,6 +53,7 @@ def main() -> None:
         settings=settings,
     )
 
+    logger.info("Baseline model ready from %s", settings.model_dir)
     logger.info("Composition root ready")
     watcher.run_forever()
 

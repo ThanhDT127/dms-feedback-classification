@@ -18,6 +18,7 @@ from ..exceptions import PipelineError
 from ..gemini_client import GeminiClient
 from ..metrics import MetricsCollector
 from ..settings import Settings
+from .baseline_classifier import BaselineIssueClassifier
 from .excel_formatter import write_formatted_header
 from .issue_classifier import MINOR_ORDER, IssueClassifier
 from .rag_product import RAGProductMatcher
@@ -117,12 +118,15 @@ class PipelineRunner:
         rag: RAGProductMatcher,
         metrics: MetricsCollector,
         settings: Settings,
+        baseline_classifier: BaselineIssueClassifier | None = None,
+        issue_classifier: IssueClassifier | None = None,
     ) -> None:
         self.gemini = gemini
         self.rag = rag
         self.metrics = metrics
         self.settings = settings
-        self.issue_classifier = IssueClassifier(gemini=gemini, settings=settings)
+        self.baseline_classifier = baseline_classifier or BaselineIssueClassifier(settings=settings)
+        self.issue_classifier = issue_classifier or IssueClassifier(gemini=gemini, settings=settings)
 
     def _run_rag_with_retry(self, batch_texts: list[str]) -> list[dict]:
         retries = 0
@@ -222,15 +226,36 @@ class PipelineRunner:
 
             time.sleep(self.settings.rate_gap_sec)
 
+            prelim_list: list[dict[str, bool]] = []
+            prelim_senti: list[str] = []
+            prelim_brand: list[str] = []
+            for text in batch:
+                labels, sentiment, _hits, brand = self.baseline_classifier.infer_minor_labels(text)
+                prelim_list.append(labels)
+                prelim_senti.append(sentiment)
+                prelim_brand.append(brand)
+
             t_issue_s = time.time()
             try:
-                issue_list = self.issue_classifier.classify_batch(batch)
+                issue_list = self.issue_classifier.refine_batch(
+                    batch,
+                    prelim_list,
+                    prelim_brand,
+                    prelim_senti,
+                )
                 self.metrics.record_gemini_call()
             except Exception as exc:
-                logger.error("Issue classifier error: %s -> using empty output", exc)
+                logger.error("Issue classifier error: %s -> using prelim output", exc)
                 issue_list = [
-                    {"final_minors": [], "sentiment": "", "brand": "", "decision_log": []}
-                    for _ in range(len(batch))
+                    {
+                        "final_minors": [minor for minor, enabled in prelim_list[idx].items() if enabled],
+                        "sentiment": prelim_senti[idx] or "",
+                        "brand": prelim_brand[idx] or "",
+                        "decision_log": [
+                            {"minor": "__ALL__", "action": "KEEP", "why": "FALLBACK_PRELIM"}
+                        ],
+                    }
+                    for idx in range(len(batch))
                 ]
             logger.info("  Issue classify time: %.2fs", time.time() - t_issue_s)
 

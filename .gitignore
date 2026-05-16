@@ -20,9 +20,13 @@ Check_Point/
 work/
 service/work/
 Keyword/
-service/Keyword/
 Model/
 service/logs/
+
+!service/Keyword/
+!service/Keyword/**
+!service/Model/
+!service/Model/**
 
 # ===========================
 # NOTEBOOKS — có thể chứa credentials hardcode
