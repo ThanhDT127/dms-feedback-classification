@@ -12,7 +12,6 @@ from .http_client import create_session
 from .logging_config import setup_logging
 from .metrics import MetricsCollector
 from .notification import NotificationService
-from .pipeline.baseline_classifier import BaselineIssueClassifier
 from .pipeline.rag_product import RAGProductMatcher
 from .pipeline.runner import PipelineRunner
 from .settings import Settings, get_settings
@@ -32,7 +31,7 @@ def _validate_asset_snapshot(
             "model_dir_override": model_dir,
         }
     )
-    BaselineIssueClassifier(settings=snapshot_settings)
+    # We no longer validate baseline classifier as it is deprecated
     RAGProductMatcher(settings=snapshot_settings, gemini=gemini)
 
 
@@ -72,14 +71,12 @@ def main() -> None:
 
     def build_runner() -> PipelineRunner:
         runtime_settings = _build_runtime_settings(settings, config_asset_sync)
-        baseline = BaselineIssueClassifier(settings=runtime_settings)
         rag = RAGProductMatcher(settings=runtime_settings, gemini=gemini)
         return PipelineRunner(
             gemini=gemini,
             rag=rag,
             metrics=metrics,
             settings=runtime_settings,
-            baseline_classifier=baseline,
         )
 
     runner = build_runner()

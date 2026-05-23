@@ -76,8 +76,19 @@ Thumbs.db
 # ===========================
 openspec/
 CLAUDE.md
+AGENTS.md
+gemini_feedback_classifier/
 
 # ===========================
 # MISC DATA AT ROOT
 # ===========================
 kw_map.json
+testvertex.json
+
+# ===========================
+# TEST & COMPARISON OUTPUT
+# ===========================
+test_output/
+test_checkpoint/
+compare_report*.md
+prompt_v2_comparison.md
