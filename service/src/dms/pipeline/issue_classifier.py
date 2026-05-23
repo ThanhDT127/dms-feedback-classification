@@ -383,9 +383,9 @@ class IssueClassifier:
                - "Bảo hành": Nói về QUY TRÌNH đổi trả, thời gian BH chậm, thủ tục BH — nói về DỊCH VỤ.
                - Nếu câu vừa nhắc SP hỏng vừa nhắc đổi trả/BH → gán CẢ HAI.
             7. "Báo lỗi" VS "Y/c cải tiến":
-               - "Báo lỗi": SP đã hỏng, chết, không dùng được.
-               - "Y/c cải tiến": SP hoạt động bình thường nhưng thiết kế chưa tốt, khách muốn thay đổi.
-               - Nếu thiết kế kém DẪN ĐẾN hỏng → gán cả hai.
+               - "Báo lỗi": SP bị hư hỏng, HOẶC chất lượng THẤP HƠN kỳ vọng (giữ nhiệt kém, không nhạy, đàn hồi kém, ố vàng, hay lỗi, chê dỏm). Chỉ cần khách PHÀN NÀN chất lượng hiện tại = "Báo lỗi".
+               - "Y/c cải tiến": Khách YÊU CẦU CỤ THỂ thay đổi thiết kế ("nên làm nhỏ gọn lại", "thêm nắp che", "in đậm hơn"). Chỉ gán khi có ĐỘNG TỪ yêu cầu rõ ràng.
+               - Nếu câu VỪA phàn nàn chất lượng VỪA yêu cầu cải tiến cụ thể → gán CẢ HAI.
             8. "Đề xuất" VS "Trả thưởng":
                - "Trả thưởng": Nhắc CỤ THỂ đến tiền thưởng, quay số, gói quay, c2td, trả thưởng chậm.
                - "Đề xuất": Gợi ý thay đổi chính sách giá/chiết khấu/khuyến mãi/cơ chế CHUNG của RĐ.
@@ -402,8 +402,9 @@ class IssueClassifier:
                - "Hoạt động": marketing/event/tặng kệ/tài trợ của đối thủ. "CTKM, giá, cơ chế": giá bán/chiết khấu/KM của đối thủ. "TT SP": mẫu mã/tính năng SP đối thủ.
                - Nếu brand là Rạng Đông hoặc không xác định: KHÔNG gán nhãn đối thủ.
                - KHI SO SÁNH giá RĐ với đối thủ (ví dụ: "RĐ đắt hơn MPE 23k"), ưu tiên gán cho ĐỐI THỦ (brand=tên đối thủ, nhãn CTKM/Hãng).
+               - NGOẠI LỆ THAM CHIẾU: Nếu ý chính là YÊU CẦU RĐ cải tiến và đối thủ chỉ là ví dụ/mẫu tham khảo (ví dụ: "làm màu cam giống Sopoka", "thêm đèn báo giống Điện Quang") → gán nhãn RĐ (Y/c cải tiến hoặc Đề xuất SPM), KHÔNG gán nhãn đối thủ.
             16. SENTIMENT: Chỉ "Tích cực", "Tiêu cực", hoặc "". Vừa khen vừa chê → "Tiêu cực".
-            17. TIN TRUNG LẬP: CHỈ gán khi câu hoàn toàn trung tính, không khen/chê/yêu cầu/đề xuất gì, và không gán nhãn nào khác.
+            17. TIN TRUNG LẬP: CHỈ gán khi câu hoàn toàn trung tính, không khen/chê/yêu cầu/đề xuất gì, và không gán nhãn nào khác. Phàn nàn về NPP/giải thưởng/giá/chương trình → KHÔNG phải Tin trung lập, phải gán nhãn cụ thể (HTPP, Trả thưởng, Tốt/ko tốt, v.v.).
 
             DANH SÁCH NHÃN HỢP LỆ THEO THỨ TỰ:
             {minor_order_json}
