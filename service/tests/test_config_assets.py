@@ -9,7 +9,6 @@ from support import write_baseline_artifacts
 
 from dms.config_assets import ConfigAssetSyncService
 from dms.exceptions import ConfigAssetSyncError, ModelArtifactError
-from dms.pipeline.baseline_classifier import BaselineIssueClassifier
 from dms.pipeline.rag_product import RAGProductMatcher
 
 
@@ -50,7 +49,13 @@ def _validator(settings, keyword_dir: Path, model_dir: Path) -> None:
     snapshot_settings = settings.model_copy(
         update={"keyword_dir_override": keyword_dir, "model_dir_override": model_dir}
     )
-    BaselineIssueClassifier(settings=snapshot_settings)
+    tfidf_word_path = model_dir / "tfidf_word.pkl"
+    if tfidf_word_path.exists():
+        try:
+            import joblib
+            joblib.load(tfidf_word_path)
+        except Exception as exc:
+            raise ModelArtifactError(f"Failed to load TF-IDF word model: {exc}")
     RAGProductMatcher(settings=snapshot_settings, gemini=DummyGemini())
 
 

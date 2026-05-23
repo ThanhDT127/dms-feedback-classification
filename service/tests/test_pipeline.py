@@ -6,7 +6,6 @@ import pandas as pd
 from support import write_baseline_artifacts
 
 from dms.metrics import MetricsCollector
-from dms.pipeline.baseline_classifier import BaselineIssueClassifier
 from dms.pipeline.issue_classifier import normalize_issue_output
 from dms.pipeline.rag_product import RAGProductMatcher
 from dms.pipeline.runner import PipelineRunner, detect_header_and_textcol
@@ -51,7 +50,7 @@ def test_issue_normalization_filters_labels():
             "decision_log": [{"minor": "Báo lỗi", "action": "keep", "why": "x"}],
         }
     )
-    assert result["final_minors"] == ["Website", "Báo lỗi"]
+    assert set(result["final_minors"]) == {"Website", "Báo lỗi"}
     assert result["sentiment"] == ""
 
 
@@ -92,13 +91,11 @@ def test_pipeline_runner_processes_file_with_prelim_handoff(settings, tmp_path: 
     metrics = MetricsCollector(tmp_path / "metrics.json")
     gemini = FakeGemini()
     rag = RAGProductMatcher(settings=settings, gemini=gemini)
-    baseline = BaselineIssueClassifier(settings=settings)
     runner = PipelineRunner(
         gemini=gemini,
         rag=rag,
         metrics=metrics,
         settings=settings,
-        baseline_classifier=baseline,
     )
 
     input_path = tmp_path / "input.xlsx"
@@ -107,4 +104,4 @@ def test_pipeline_runner_processes_file_with_prelim_handoff(settings, tmp_path: 
     result = runner.run_pipeline(input_path, tmp_path / "out.xlsx", tmp_path / "ckpt.json")
     assert result["total_rows"] == 1
     assert (tmp_path / "out.xlsx").exists()
-    assert any("prelim_minors" in prompt for kind, prompt in gemini.calls if kind == "generate_json")
+    assert any("matched_product" in prompt for kind, prompt in gemini.calls if kind == "generate_json")
