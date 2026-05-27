@@ -363,8 +363,26 @@ class IssueClassifier:
         brand_json = json.dumps(brand_hints(kw_map), ensure_ascii=False, indent=2)
         input_json = json.dumps(prompt_rows, ensure_ascii=False, indent=2)
 
-        prompt = dedent(
-            f"""
+        prompt_override = self.settings.keyword_dir / "system_prompt.txt"
+        loaded_override = False
+        prompt = ""
+        if prompt_override.is_file():
+            try:
+                template = prompt_override.read_text(encoding="utf-8")
+                prompt = (
+                    template.replace("{minor_order_json}", minor_order_json)
+                    .replace("{label_defs}", label_defs)
+                    .replace("{hints_json}", hints_json)
+                    .replace("{brand_json}", brand_json)
+                    .replace("{input_json}", input_json)
+                ).strip()
+                loaded_override = True
+            except Exception as exc:
+                logger.error("Failed to load prompt override; using default: %s", exc)
+
+        if not loaded_override:
+            prompt = dedent(
+                f"""
             Bạn là hệ thống phân loại phản hồi bán hàng và marketing cho ngành chiếu sáng và thiết bị điện Rạng Đông.
 
             MỤC ĐÍCH
@@ -656,7 +674,7 @@ class IssueClassifier:
 
             Hãy trả về kết quả dưới dạng JSON array duy nhất.
             """
-        ).strip()
+            ).strip()
 
         raw = self._llm_json_call(prompt)
         if debug:

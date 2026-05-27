@@ -161,3 +161,33 @@ def test_watcher_keeps_current_runner_when_sync_fails(settings):
     processed = watcher.poll_once(seen)
     assert processed == 1
     assert watcher.pipeline_runner is current
+
+
+def test_watcher_settings_hot_reloads(settings, monkeypatch, tmp_path):
+    # Mock settings
+    monkeypatch.setattr(settings, "keyword_dir_override", tmp_path)
+    
+    watcher = make_watcher(settings, [])
+    
+    # Check current values
+    assert watcher.settings.gemini_backend == "vertex"
+    
+    # Mock get_settings to return new Settings
+    mock_new_settings = settings.model_copy(
+        update={
+            "gemini_backend": "apikey",
+            "gemini_api_key": "some-key",
+            "gemini_model": "gemini-2.5-pro",
+            "notify_on_success": False
+        }
+    )
+    
+    # Mock get_settings in dms.settings module
+    monkeypatch.setattr("dms.settings.get_settings", lambda: mock_new_settings)
+    
+    watcher.reload_settings()
+    
+    # Verify in-place attributes are updated
+    assert watcher.settings.gemini_backend == "apikey"
+    assert watcher.settings.gemini_model == "gemini-2.5-pro"
+    assert watcher.settings.notify_on_success is False
