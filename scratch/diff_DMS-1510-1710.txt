@@ -1,0 +1,823 @@
+File: DMS-1510-1710.xlsx
+Total differences: 163 / 249 rows
+
+Row: 3
+Text: nan
+  Old: ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Tin trung lập'] | Sentiment: —
+--------------------------------------------------
+Row: 4
+Text: Giá được quay cao hơn giá trần nhiều,nếu quay giải 4,5 là cửa hàng bị lỗ
+  Old: ['Đề xuất SPM'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt', 'Trả thưởng'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 5
+Text: Công ty sản xuất lại mã led dây ánh sáng xanh ld01 cũ
+  Old: ['Y/c cải tiến'] | Sentiment: —
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 6
+Text: Phích cắm chịu tải to dầy hơi gồ gề
+  Old: ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 7
+Text: Khách phản hồi vbm02 vặn dễ bị lệch ren và không được cứng cáp
+  Old: ['Bảng giá, Catalogue'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 8
+Text: Aptomat gia dụng cần thêm đèn báo
+  Old: ['Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 10
+Text: G8 có chương trình cấp kệ trưng bày cho khách
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'Hoạt động'] | Sentiment: —
+--------------------------------------------------
+Row: 16
+Text: Ổ cắm oc05 06 nên thêm nắp che an toàn
+  Old: ['Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 17
+Text: Tủ TAT01-4 dầy quá ,cần  làm mỏng khi thợ xây chát đỡ lòi ra.
+  Old: ['Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 19
+Text: Phích cắm chịu tải cắm chắc nhiều lúc rút còn khó
+  Old: ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 22
+Text: Ổ cắm chịu tải rạng đông đồng pha nhiều,đàn hồi kém!
+  Old: ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 24
+Text: Cp12 vỏ hộp xộc xệch, mỏng, không chắc chắn,cty làm vỏ hộp dày dặn hơn
+  Old: ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 25
+Text: Con ln12 rad độ cảm biến kém khách toàn bắt đổi sang con gt16
+  Old: ['Báo lỗi', 'Bảo hành'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 27
+Text: Pana tặng kệ trưng bày đèn
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'Hoạt động'] | Sentiment: —
+--------------------------------------------------
+Row: 28
+Text: Cải tiến led dây.người tiêu dùng thích loại led dây có 3 hàng mắt led
+  Old: ['Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 29
+Text: Chê npp quảng thành bán giá cao hơn thông hương
+  Old: ['HTPP'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt', 'HTPP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 32
+Text: Ổ cắm oc05 06 cần thêm màu sắc chỗ cắm điện cho bắt mắt
+  Old: ['Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 34
+Text: Đèn năng lượng mặt trời cp03v2 dòng pin hiệu suất cao pin dùng được lâu hơn
+  Old: ['Báo CL tốt'] | Sentiment: Tiêu cực
+  V3:  ['Báo CL tốt'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 35
+Text: Át đơn sino 40k
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 36
+Text: Oc10 nên ra thêm ổ 2,4
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: —
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 38
+Text: Ốp LN12 phổ thông dễ bán hơn LN16 dành cho nhà cao cấp
+  Old: ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Tin trung lập'] | Sentiment: —
+--------------------------------------------------
+Row: 39
+Text: CH nhập hàng từ Hoàng Quý và Quang Phú
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['HTPP'] | Sentiment: —
+--------------------------------------------------
+Row: 40
+Text: CH lấy Tùng Gia Phát đủ loại nhưng ko cho công nợ lâu như mình
+  Old: ['HTPP'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt', 'HTPP'] | Sentiment: —
+--------------------------------------------------
+Row: 43
+Text: Ổ sopoka chịu tải 32k
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'TT SP'] | Sentiment: —
+--------------------------------------------------
+Row: 44
+Text: M66 lỗi không sáng sau 1 tháng sử dụng!
+  Old: ['Hãng'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 45
+Text: Át nổi HB 2P1E lên làm thêm cả đèn báo giống  như hãng Điện Quang.
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 46
+Text: Át khối lioa 31k
+  Old: ['Hãng'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'TT SP'] | Sentiment: —
+--------------------------------------------------
+Row: 47
+Text: At40 cần lỗ quét 90
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 48
+Text: ổ chịu tải lên làm thêm mầu cam giống hãng Sofoka và Vinakip dễ bán hơn.
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 49
+Text: CH nhập từ Tùng Gia Phát
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['HTPP'] | Sentiment: —
+--------------------------------------------------
+Row: 53
+Text: Bóng led trụ 30w ĐQ khách nhập thùng giá 108k tặng 2sp cùng loại .
+  Old: ['Hãng'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế', 'TT SP'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 54
+Text: Khách xin caâtloge để kham khảo sản phẩm mong muốn bán hàng RĐ
+  Old: ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+  V3:  ['Bảng giá, Catalogue'] | Sentiment: —
+--------------------------------------------------
+Row: 55
+Text: Hàng bán chậm, doanh thu thấp nên ít nhập hàng
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Hàng hoá'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 56
+Text: Ổ cắm sopoka mẫu đẹp, đa dạng, chất lượng tốt nên khách hay lựa chọn mua loại này
+  Old: ['Bảng giá, Catalogue'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'TT SP'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 57
+Text: Km điện quang mua doanh số 15 triệu ck 3%
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 58
+Text: M26 1,2m nhập sài gòn 118k
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Tốt/ ko tốt'] | Sentiment: —
+--------------------------------------------------
+Row: 59
+Text: At58 rạng đông ra giá hợp lý nên không phải bán hàng rẻ nữa
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 60
+Text: Ổ dây oc05. Oc06. Oc10.  Làm thêm màn tre cho an toàn điện
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 61
+Text: Mong muốn cty mã Aptomat MCB 2p2e 16A
+  Old: ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 62
+Text: Khách hàng báo đóng cửa kiểm kê hàng hoá .
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Tin trung lập'] | Sentiment: —
+--------------------------------------------------
+Row: 63
+Text: Âm trần đổi màu 9w HC lighting giá 55k
+  Old: ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế', 'TT SP'] | Sentiment: —
+--------------------------------------------------
+Row: 64
+Text: Âm trần 90/8w DM hãng HC lighting giá 52k
+  Old: ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế', 'TT SP'] | Sentiment: —
+--------------------------------------------------
+Row: 65
+Text: Phích cắm omisun giá thành rẻ
+  Old: ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 67
+Text: Khách hàng vừa nhập 1 thùng bán nguyệt 45w ĐQ giá 181k tặng 1
+  Old: ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế', 'TT SP'] | Sentiment: —
+--------------------------------------------------
+Row: 68
+Text: Bộ M36/50w đợt này tỷ lệ khách tới bảo hành nhiều
+  Old: ['Báo lỗi', 'Bảo hành'] | Sentiment: Tiêu cực
+  V3:  ['Bảo hành'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 69
+Text: Thanh đồng ở ổ cắm chịu tải oc10 nhỏ hơn các hãng
+  Old: ['Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 70
+Text: Lon bơ NT03 nên ra cả dòng mắt led COB như NT01 trước đây
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: Tiêu cực
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 72
+Text: Vbm mẩu hãng duhal
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'TT SP'] | Sentiment: —
+--------------------------------------------------
+Row: 75
+Text: Bóng Bulb G8 giá rẻ bảo hành nhanh.
+  Old: ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt', 'Bảo hành'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 78
+Text: Nt cần cải thiện đẹp hơn, mặt hay bị bẩn
+  Old: ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 80
+Text: Bóng G8 tặng kệ trưng bày bóng cho khách hàng
+  Old: ['Hãng'] | Sentiment: Tích cực
+  V3:  ['Kệ bóng, thử đèn,…'] | Sentiment: —
+--------------------------------------------------
+Row: 81
+Text: OC10 làm thêm loại 4,5,6 chân cắm. Logo in màu khác thân vỏ dễ nhận diện thương hiệu. Làm thêm màu cho khách chọn lựa.
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 82
+Text: Tách rời tấm solar để bán riếng
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: Tiêu cực
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 83
+Text: Aptomat giá hợp lý, mẩu mã đẹp
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Báo CL tốt', 'Tốt/ ko tốt'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 84
+Text: Ổ cắm máy bơm lỗi nhiều lỗi liên tục
+  Old: ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 85
+Text: Hộp đựng bút đèn học sinh rl 45 lắp vào không được chắc chắn
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 86
+Text: Gửi bảo hành phích thời gian lâu
+  Old: ['Báo lỗi'] | Sentiment: Tiêu cực
+  V3:  ['Bảo hành'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 87
+Text: Bóng 50w G8 giao khách 52k
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 88
+Text: Nlmt bị lỗi sạc không đầy
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 89
+Text: Led pha IP66 để ngoài trời mà bị vô nước cháy, cần cải thiện
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 90
+Text: Bóng OKas tặng kệ trưng bày bóng cho khách hàng
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Hãng', 'Hoạt động'] | Sentiment: —
+--------------------------------------------------
+Row: 91
+Text: Khách hàng muốn có thêm chương trình biển bảng trưng bày
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Bảng biển'] | Sentiment: —
+--------------------------------------------------
+Row: 92
+Text: Giá bộ bán nguyệt,âm trần  bên nhà buôn Hưng Yên bán thấp hơn nhập Thái Bình
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt', 'HTPP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 96
+Text: KH phản hồi cty nên làm thêm tủ điện nhựa cửa quay, cánh trắng hoặc in tranh đều đẹp. Sản lượng bán tốt
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: Tích cực
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 97
+Text: KH phản hồi cty nên làm thêm tủ điện nhựa cửa quay, cánh trắng hoặc in tranh đều đẹp. Sản lượng bán tốt
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: Tích cực
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 100
+Text: Ổ cắm chịu tải ra thêm loại 2-4. Phích cắm cần làm mỏng đi 1chút
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 102
+Text: mẫu  Ốp trần ln30 xấu không đẹp, ln12 đẹp phổ thông đễ bán , mã mới rất khó vào
+  Old: ['Báo lỗi', 'Báo CL tốt', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến', 'Tốt/ ko tốt'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 103
+Text: Cần được làm biển bảng
+  Old: ['Bảng biển'] | Sentiment: Tiêu cực
+  V3:  ['Bảng biển'] | Sentiment: —
+--------------------------------------------------
+Row: 104
+Text: Vợt muỗi nanoco giá 75.000₫
+  Old: ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 105
+Text: Phích cắm chịu tải PIPO giá 9.000
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Tin trung lập'] | Sentiment: —
+--------------------------------------------------
+Row: 108
+Text: Tấm pin chiếu pha NLMT 200w và 300w khác chê tấm pin đợt này nhỏ họ không yên tâm
+  Old: ['Tin trung lập'] | Sentiment: Tích cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 109
+Text: Vợt muỗi giá SG bán 79.800₫
+  Old: ['Báo lỗi'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt'] | Sentiment: —
+--------------------------------------------------
+Row: 110
+Text: Attomat giờ khách hàng đang quen với sino và pannal nên giờ rạng đông ra rất khó vào thị trường!
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'TT SP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 111
+Text: vỏ hộp  bulb trụ 20w-30w mỏng quá, xếp hay bị văng,tụt sản phẩm ra ngoài.
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 112
+Text: M36 1200/50W lô 241214130003A lỗi không sáng
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 113
+Text: Bảng công tắc snider
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Hãng', 'TT SP'] | Sentiment: —
+--------------------------------------------------
+Row: 117
+Text: Khách vẫn thích dùng máng vs tube hơn bóng led ctrinh quay số khách ko lấy được nhiều
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Trả thưởng'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 118
+Text: Các sản phẩm ổ cắm chịu tải ít khách hỏi thị trường chậm
+  Old: ['Báo lỗi', 'Hàng hoá'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 120
+Text: Sản phẩm led rạng đông chất lượng tốt ít khi bị lỗi phải bảo hành
+  Old: ['Báo CL tốt', 'Bảo hành'] | Sentiment: Tiêu cực
+  V3:  ['Báo CL tốt'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 124
+Text: Cải tiến led dây lên 3 hàng mắt led
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 125
+Text: Ấm siêu tốc của Trung Quốc giá thành rẻ nên khách hay lựa chọn mua loại này
+  Old: ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 127
+Text: Aptomat gia dụng cần bổ sung thêm đèn báo
+  Old: ['Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 128
+Text: Cb cốc hãng DuHaL 20A , 30A giá nhập vào 26.000
+  Old: ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 129
+Text: oc10 mẫu mã và màu xấu hơn các thương hiệu khác như Sopoka hay Omisu
+  Old: ['Hãng', 'CTKM, giá, cơ chế', 'TT SP'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'TT SP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 130
+Text: mua doanh số 30 triệu ck 4%
+  Old: ['Trả thưởng'] | Sentiment: —
+  V3:  ['Tốt/ ko tốt'] | Sentiment: —
+--------------------------------------------------
+Row: 132
+Text: KM điện quang mua doanh số 10 triệu ck 2.5%
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 133
+Text: Bóng sopoka gửi cửa hàng .
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'TT SP'] | Sentiment: —
+--------------------------------------------------
+Row: 137
+Text: Ổ chịu tải OC10 nên làm bản lá đồng to hơn chút nữa
+  Old: ['Y/c cải tiến'] | Sentiment: —
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 139
+Text: G8 bảo hành đổi mới 1năm đèn nlmt cho khách hàng
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 142
+Text: Ổ cắm chịu tải OC10 lá đồng nên làm bản to hơn chút nữa
+  Old: ['Y/c cải tiến'] | Sentiment: —
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 143
+Text: Ra thêm phích cắm âm và làm mỏng phích chịu tải
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 145
+Text: Cty câp Giơ-le nhiệt để cửa hàng chủ động thay thế , đỡ mất công đổi mới nó lãng phí cho cty
+  Old: ['Bảo hành'] | Sentiment: Tiêu cực
+  V3:  ['Đề xuất'] | Sentiment: —
+--------------------------------------------------
+Row: 150
+Text: Ống nhựa tiền phong thay 100% biển mới cho khách hàng mặc dù chưa hỏng hay cũ vẫn thay mới
+  Old: ['Bảng biển'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'Hoạt động'] | Sentiment: —
+--------------------------------------------------
+Row: 152
+Text: Cty nên cải tiến mặt của tủ át TAT01 loại tủ nhựa nên lm dầy lên chứ thấy mỏng manh quá
+  Old: ['Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 153
+Text: Cửa hàng đóng cửa
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Tin trung lập'] | Sentiment: —
+--------------------------------------------------
+Row: 154
+Text: Ra thêm phích cắm âm
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 155
+Text: Cần giải quyết bảo hành nhanh cho nlmt
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Bảo hành'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 156
+Text: Thưởng 6 tháng đầu năm chưa thấy gửi cho khách
+  Old: ['Đề xuất SPM'] | Sentiment: —
+  V3:  ['Trả thưởng'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 157
+Text: Ra thêm ổ chịu tải 2-4
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 158
+Text: Ấm siêu tốc st3 1.8l sản xuất tháng 6/2025 khi nước sôi tự bật nắp lên.
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 159
+Text: At58 giá thành hợp lý
+  Old: ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 160
+Text: Mưa bảo biển bảng bay hết mong CTy làm chương trình biển bảng cho đại lý
+  Old: ['Bảng biển'] | Sentiment: Tiêu cực
+  V3:  ['Bảng biển'] | Sentiment: —
+--------------------------------------------------
+Row: 161
+Text: Bộ M nival giá rẻ
+  Old: ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 163
+Text: Ra thêm phích cắm âm
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 164
+Text: Khu vực xa lẻ. Các sp âm trần vẫn thiên về sp giá rẻ
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt'] | Sentiment: —
+--------------------------------------------------
+Row: 165
+Text: Ổ chịu tải OC10 nên có thêm loại 2 và 4
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 166
+Text: Ổ cắm máy bơm rạng đông dùng hay bị lỗi
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 167
+Text: Bóng led bup vinaco giá thành rẻ
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 168
+Text: Trụ 40w vinasun 86,000
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 170
+Text: Ốp trần bán trậm, ln12n vẫn còn nhiều, ốp ln29,30 mẫu không đẹp lắm lên không nhập
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến', 'Hàng hoá'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 171
+Text: ốp ln29,30 mẫu xấu không đẹp
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 172
+Text: Ổ chịu tải và ổ liền dây o5. 06 làm thêm màn tre cho an toàn điện
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 175
+Text: Nlmt 500w vinasun giá thành rẻ
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 178
+Text: Mong muốn cty ra chương trình hỗ trợ biển bảng , kê trưng bày
+  Old: ['Bảng biển', 'Kệ bóng, thử đèn,…'] | Sentiment: Tiêu cực
+  V3:  ['Bảng biển', 'Kệ bóng, thử đèn,…'] | Sentiment: —
+--------------------------------------------------
+Row: 180
+Text: Ổ cắm siêu chịu tải HINOKI giá 53.000
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 184
+Text: Cửa hàng đóng cửa
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Tin trung lập'] | Sentiment: —
+--------------------------------------------------
+Row: 185
+Text: Khách đề xuất aptomat RD.HB 2P1E có đèn báo.
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 186
+Text: Calisun có chương trình tặng xe thể thao cho khách khi tham gia gói sản phẩm 35 triệu
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 187
+Text: Không lấy m26 vì có cửa hàng gần đó bán ra cho ng dùng cuối giá 118
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt', 'HTPP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 188
+Text: Attomat đen cần làm thêm đèn,màu sắc đen trông không đẹp như sino
+  Old: ['Hãng'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 191
+Text: Tủ Aptomat của Rđ giá cao hơn tủ của Grinew khoảng 20%
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 193
+Text: Đèn mới nhưng dây bị ố vàng
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 194
+Text: M26 50w Ngọc Huy trừ hết giá cho CH còn 118k, Ngọc Hiếu trừ còn 115k
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt'] | Sentiment: —
+--------------------------------------------------
+Row: 195
+Text: Bóng tích điện hãng G8 giá 85.000
+  Old: ['Hãng'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 196
+Text: Đèn bắt muỗi điện Quang giá 190.000
+  Old: ['Hãng'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 197
+Text: MPE: nhà phân phối ck 46% hàng xả
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 198
+Text: Sanomax chạy gói 200tr/năm du lịch Úc
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'Hoạt động'] | Sentiment: —
+--------------------------------------------------
+Row: 199
+Text: Vợt 06 chưa có hàng nằm trong cơ chế
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt', 'Hàng hoá'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 200
+Text: At60 mẫu mã khó bán kén người dùng
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Báo lỗi', 'Tốt/ ko tốt'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 201
+Text: Khách vẫn ám ảnh vợt muỗi rạng đông 01. Ko chịu bán nữa
+  Old: ['Hàng hoá'] | Sentiment: —
+  V3:  ['Báo lỗi', 'Tốt/ ko tốt'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 202
+Text: Km điện quang ổ cắm eco 5m chiết khấu 5%
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 204
+Text: Cửa hàng tham gia 2 gói MPE du lịch trong nước  160.000.000₫
+  Old: ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 205
+Text: MPE triển khai hội  nghị khách hàng 
+Triển khai ct km đến cuối năm
+56tr tặng 500 đô 
+112 tr tặng 1 tour du lịch + 1000 đô
+168 tr tặng 1 tuor du lịch thái lan + 1 xe máy airblade
+  Old: ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 210
+Text: phích cắm chịu tải lên đóng thành dây 10 cái /1 dây, treo dễ trưng bày và dễ khi bán hàng.
+  Old: ['Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 211
+Text: Cty ra thêm mẫu ốp trang trí đổi màu phục vụ nhu  cầu của người dùng
+  Old: ['Đề xuất SPM'] | Sentiment: Tiêu cực
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 214
+Text: Đang bán mã panel vì giá rẻ hơn downlight và ko bị cấn xương
+  Old: ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt'] | Sentiment: —
+--------------------------------------------------
+Row: 215
+Text: Chất lượng tốt.ít lỗi
+  Old: ['Báo CL tốt'] | Sentiment: Tiêu cực
+  V3:  ['Báo CL tốt'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 218
+Text: Tip t8/20w làm tăng công xuất lên 30w
+  Old: ['Đề xuất SPM'] | Sentiment: —
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 219
+Text: Hãng DUHAL giá rẻ, CH nhập số lượng lớn trụ với bán nguyệt, túyp
+  Old: ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 220
+Text: Cty bình ổn giá bán
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Đề xuất'] | Sentiment: —
+--------------------------------------------------
+Row: 223
+Text: Hàng ra chậm quá
+  Old: ['Website'] | Sentiment: Tiêu cực
+  V3:  ['Hàng hoá'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 226
+Text: Ổ chịu tải oc10 gia thêm loại 4 ổ
+  Old: ['Đề xuất SPM'] | Sentiment: Tiêu cực
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 228
+Text: KM MpE doanh số 60trieu đạt 1 vé du lịch
+  Old: ['Hãng'] | Sentiment: Tích cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 229
+Text: Kệ trưng bày Asia
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'Hoạt động'] | Sentiment: —
+--------------------------------------------------
+Row: 230
+Text: led bulb trụ công suất lớn 60w 60k rẻ  quá. Rạng Đông gần 200k đắt khó bán.
+  Old: ['Báo lỗi', 'Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 231
+Text: Welmax đóng hàng đèn NLMT khá gọn, đc bọc trong màng co, dễ vận chuyển
+  Old: ['Hàng hoá'] | Sentiment: Tích cực
+  V3:  ['Hãng', 'TT SP'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 233
+Text: Khách xin kệ bóng tube rạng đông
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Kệ bóng, thử đèn,…'] | Sentiment: —
+--------------------------------------------------
+Row: 235
+Text: Khách yêu cầu trả hỗ trợ sớm cho khách
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Trả thưởng'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 236
+Text: OC 06 cầm nhẹ hơn so với sản phẩm cùng loại các hãng khác.
+  Old: ['Kệ bóng, thử đèn,…'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 237
+Text: Ch hữu hoàng. Ruột 2 lít cô bị lỗi 4 cái giữ nhiệt kém 4 tiếng đã nguội
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 238
+Text: MPE triển khai hội  nghị khách hàng 
+Triển khai ct km 112 tr tặng 1 tour du lịch + 1000 đô
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 239
+Text: Bảng ổ cắm vinasun
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'TT SP'] | Sentiment: —
+--------------------------------------------------
+Row: 240
+Text: Ốp tường LN12 nên thêm loại 15w
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 241
+Text: Kệ chưng bày của hãng nanoco
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'Hoạt động'] | Sentiment: —
+--------------------------------------------------
+Row: 242
+Text: Khách xin bản hiệu rạng đông
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Bảng biển'] | Sentiment: —
+--------------------------------------------------
+Row: 243
+Text: Bóng 40w Dpe giá giao 62.000đ
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 244
+Text: giá buld 20w VNE rẻ có 48k
+  Old: ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 245
+Text: CP asia lỗi đổi mới cho khách
+  Old: ['Hãng'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'Hoạt động', 'TT SP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 246
+Text: Đèn âm trần chất lượng.
+  Old: ['Báo CL tốt'] | Sentiment: —
+  V3:  ['Báo CL tốt'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 248
+Text: Điểm bán chưa có nhiều sự hiện diện của sp rạng đông
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['HTPP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 249
+Text: OC10 điều chỉnh chân cắm 3 quy ngang
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 250
+Text: bộ đèn m36 ( 241113130004A) lỗi không sáng, thời gian sử dụng 6 tháng
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 251
+Text: giá buld 20w VNE rẻ có 49k
+  Old: ['Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tích cực
+--------------------------------------------------

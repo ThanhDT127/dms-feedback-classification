@@ -53,24 +53,50 @@ class GeminiClient:
         logger.info("Gemini API Key client ready (model=%s)", self.settings.gemini_model)
 
     def generate(self, prompt: str, temperature: float | None = None) -> str:
-        try:
-            if self.settings.gemini_backend == "vertex":
-                return self._generate_vertex(prompt, temperature=temperature)
-            return self._generate_apikey(prompt, temperature=temperature)
-        except Exception as exc:
-            raise GeminiError(str(exc)) from exc
+        import time
+        last_err = None
+        for attempt in range(1, self.settings.max_retry + 1):
+            try:
+                if self.settings.gemini_backend == "vertex":
+                    return self._generate_vertex(prompt, temperature=temperature)
+                return self._generate_apikey(prompt, temperature=temperature)
+            except Exception as exc:
+                last_err = exc
+                wait = self.settings.base_wait * attempt
+                logger.warning(
+                    "GeminiClient generate error (%d/%d): %s -> sleep %.1fs",
+                    attempt,
+                    self.settings.max_retry,
+                    exc,
+                    wait,
+                )
+                time.sleep(wait)
+        raise GeminiError(str(last_err)) from last_err
 
     def generate_json(self, prompt: str, temperature: float = 0.0) -> str:
-        try:
-            if self.settings.gemini_backend == "vertex":
-                return self._generate_vertex(
-                    prompt,
-                    response_mime_type="application/json",
-                    temperature=temperature,
+        import time
+        last_err = None
+        for attempt in range(1, self.settings.max_retry + 1):
+            try:
+                if self.settings.gemini_backend == "vertex":
+                    return self._generate_vertex(
+                        prompt,
+                        response_mime_type="application/json",
+                        temperature=temperature,
+                    )
+                return self._generate_apikey_json(prompt, temperature=temperature)
+            except Exception as exc:
+                last_err = exc
+                wait = self.settings.base_wait * attempt
+                logger.warning(
+                    "GeminiClient generate_json error (%d/%d): %s -> sleep %.1fs",
+                    attempt,
+                    self.settings.max_retry,
+                    exc,
+                    wait,
                 )
-            return self._generate_apikey_json(prompt, temperature=temperature)
-        except Exception as exc:
-            raise GeminiError(str(exc)) from exc
+                time.sleep(wait)
+        raise GeminiError(str(last_err)) from last_err
 
     def _generate_vertex(
         self,

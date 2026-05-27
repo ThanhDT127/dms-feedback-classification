@@ -1,0 +1,78 @@
+Total differences found in DMS-13102025: 15 / 48 rows.
+
+--- DETAILED DIFFERENCES ---
+
+[1] Dòng Excel: 4
+Nội dung: "Mã sp NT03 khách thích màu đen hơn trắng, cần bổ sung màu vân gỗ"
+  - OLD: Labels=['Tin trung lập'] | Sentiment=—
+  - NEW (V3): Labels=['Đề xuất SPM'] | Sentiment=—
+
+[2] Dòng Excel: 5
+Nội dung: "Phích cắm chịu tải hơi to vướng, nên sản xuất nhỏ gọn lại"
+  - OLD: Labels=['Y/c cải tiến'] | Sentiment=—
+  - NEW (V3): Labels=['Y/c cải tiến'] | Sentiment=Tiêu cực
+
+[3] Dòng Excel: 7
+Nội dung: "Ổ cắm chịu tải cắm êm nhưng vỏ hơi mềm"
+  - OLD: Labels=['Y/c cải tiến'] | Sentiment=—
+  - NEW (V3): Labels=['Báo lỗi'] | Sentiment=Tiêu cực
+
+[4] Dòng Excel: 9
+Nội dung: "Chiếu pha cp10 giá rẻ độ bền không bằng cp06"
+  - OLD: Labels=['Tốt/ ko tốt'] | Sentiment=Tiêu cực
+  - NEW (V3): Labels=['Báo lỗi', 'Tốt/ ko tốt'] | Sentiment=Tiêu cực
+
+[5] Dòng Excel: 13
+Nội dung: "CB cốc 20A , 30A , 40A hãng DUHAL giá nhập 26.000"
+  - OLD: Labels=['Hãng'] | Sentiment=—
+  - NEW (V3): Labels=['Hãng', 'CTKM, giá, cơ chế'] | Sentiment=—
+
+[6] Dòng Excel: 16
+Nội dung: "Phích cắm siêu tải PIPO giá 9.500"
+  - OLD: Labels=['Tin trung lập'] | Sentiment=—
+  - NEW (V3): Labels=['Tốt/ ko tốt'] | Sentiment=—
+
+[7] Dòng Excel: 20
+Nội dung: "Khách phản hồi BGN095 và 12 cty nên làm nắp như BGN06 và 07"
+  - OLD: Labels=['Y/c cải tiến'] | Sentiment=—
+  - NEW (V3): Labels=['Y/c cải tiến'] | Sentiment=Tiêu cực
+
+[8] Dòng Excel: 23
+Nội dung: "Aptomat gia dụng nên có thêm đèn báo điện"
+  - OLD: Labels=['Đề xuất SPM'] | Sentiment=—
+  - NEW (V3): Labels=['Y/c cải tiến'] | Sentiment=—
+
+[9] Dòng Excel: 24
+Nội dung: "Tip T8 /20w làm lên 30w."
+  - OLD: Labels=['Tin trung lập'] | Sentiment=—
+  - NEW (V3): Labels=['Đề xuất SPM'] | Sentiment=—
+
+[10] Dòng Excel: 25
+Nội dung: "KM điện quang bulb công suất nhỏ mua 2 thùng tặng 4 cái"
+  - OLD: Labels=['Hãng'] | Sentiment=—
+  - NEW (V3): Labels=['Hãng', 'CTKM, giá, cơ chế'] | Sentiment=—
+
+[11] Dòng Excel: 29
+Nội dung: "Km điện quang bóng thuỷ tinh 1m2 mua 1 thùng tặng 2 cái"
+  - OLD: Labels=['Hãng'] | Sentiment=—
+  - NEW (V3): Labels=['Hãng', 'CTKM, giá, cơ chế'] | Sentiment=—
+
+[12] Dòng Excel: 30
+Nội dung: "Km điện quang mua doanh số 5 triệu ck 2%"
+  - OLD: Labels=['Hãng'] | Sentiment=—
+  - NEW (V3): Labels=['Hãng', 'CTKM, giá, cơ chế'] | Sentiment=—
+
+[13] Dòng Excel: 35
+Nội dung: "bóng bulb trụ công suất cao của Rạng Đông giá cao hơn nhiều so với các hãng như g8 và Trung Quốc nên khó bán khó cạnh tranh"
+  - OLD: Labels=['Tốt/ ko tốt'] | Sentiment=Tiêu cực
+  - NEW (V3): Labels=['Hãng', 'CTKM, giá, cơ chế'] | Sentiment=Tiêu cực
+
+[14] Dòng Excel: 48
+Nội dung: "Để nghị cty thiết kế dây 3m,5m,10m cho dòng ổ cắm CSC OC 10"
+  - OLD: Labels=['Tin trung lập'] | Sentiment=—
+  - NEW (V3): Labels=['Đề xuất SPM'] | Sentiment=—
+
+[15] Dòng Excel: 49
+Nội dung: "Cửa hàng giao bóng 1,2m TT01 cho khách phải lấy dây thun quấn đầu bóng lại sợ tuột ra ngoài. Cần cty thiết kế lại cái vỏ bóng"
+  - OLD: Labels=['Y/c cải tiến'] | Sentiment=Tiêu cực
+  - NEW (V3): Labels=['Báo lỗi', 'Y/c cải tiến'] | Sentiment=Tiêu cực

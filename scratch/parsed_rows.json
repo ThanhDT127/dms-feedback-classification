@@ -1,0 +1,2076 @@
+[
+  {
+    "row": 3,
+    "text": "nan",
+    "old_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tin trung lập"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 4,
+    "text": "Giá được quay cao hơn giá trần nhiều,nếu quay giải 4,5 là cửa hàng bị lỗ",
+    "old_labels": [
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt",
+      "Trả thưởng"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 5,
+    "text": "Công ty sản xuất lại mã led dây ánh sáng xanh ld01 cũ",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 6,
+    "text": "Phích cắm chịu tải to dầy hơi gồ gề",
+    "old_labels": [
+      "Báo lỗi",
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 7,
+    "text": "Khách phản hồi vbm02 vặn dễ bị lệch ren và không được cứng cáp",
+    "old_labels": [
+      "Bảng giá, Catalogue"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 8,
+    "text": "Aptomat gia dụng cần thêm đèn báo",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 10,
+    "text": "G8 có chương trình cấp kệ trưng bày cho khách",
+    "old_labels": [
+      "Hãng",
+      "Hoạt động",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "Hoạt động"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 16,
+    "text": "Ổ cắm oc05 06 nên thêm nắp che an toàn",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 17,
+    "text": "Tủ TAT01-4 dầy quá ,cần  làm mỏng khi thợ xây chát đỡ lòi ra.",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi",
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 19,
+    "text": "Phích cắm chịu tải cắm chắc nhiều lúc rút còn khó",
+    "old_labels": [
+      "Báo lỗi",
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 22,
+    "text": "Ổ cắm chịu tải rạng đông đồng pha nhiều,đàn hồi kém!",
+    "old_labels": [
+      "Báo lỗi",
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 24,
+    "text": "Cp12 vỏ hộp xộc xệch, mỏng, không chắc chắn,cty làm vỏ hộp dày dặn hơn",
+    "old_labels": [
+      "Báo lỗi",
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 25,
+    "text": "Con ln12 rad độ cảm biến kém khách toàn bắt đổi sang con gt16",
+    "old_labels": [
+      "Báo lỗi",
+      "Bảo hành"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 27,
+    "text": "Pana tặng kệ trưng bày đèn",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "Hoạt động"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 28,
+    "text": "Cải tiến led dây.người tiêu dùng thích loại led dây có 3 hàng mắt led",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 29,
+    "text": "Chê npp quảng thành bán giá cao hơn thông hương",
+    "old_labels": [
+      "HTPP"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt",
+      "HTPP"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 32,
+    "text": "Ổ cắm oc05 06 cần thêm màu sắc chỗ cắm điện cho bắt mắt",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 34,
+    "text": "Đèn năng lượng mặt trời cp03v2 dòng pin hiệu suất cao pin dùng được lâu hơn",
+    "old_labels": [
+      "Báo CL tốt"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo CL tốt"
+    ],
+    "v3_sentiment": "Tích cực"
+  },
+  {
+    "row": 35,
+    "text": "Át đơn sino 40k",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 36,
+    "text": "Oc10 nên ra thêm ổ 2,4",
+    "old_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 38,
+    "text": "Ốp LN12 phổ thông dễ bán hơn LN16 dành cho nhà cao cấp",
+    "old_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tin trung lập"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 39,
+    "text": "CH nhập hàng từ Hoàng Quý và Quang Phú",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "HTPP"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 40,
+    "text": "CH lấy Tùng Gia Phát đủ loại nhưng ko cho công nợ lâu như mình",
+    "old_labels": [
+      "HTPP"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt",
+      "HTPP"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 43,
+    "text": "Ổ sopoka chịu tải 32k",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "TT SP"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 44,
+    "text": "M66 lỗi không sáng sau 1 tháng sử dụng!",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 45,
+    "text": "Át nổi HB 2P1E lên làm thêm cả đèn báo giống  như hãng Điện Quang.",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 46,
+    "text": "Át khối lioa 31k",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "TT SP"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 47,
+    "text": "At40 cần lỗ quét 90",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 48,
+    "text": "ổ chịu tải lên làm thêm mầu cam giống hãng Sofoka và Vinakip dễ bán hơn.",
+    "old_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 49,
+    "text": "CH nhập từ Tùng Gia Phát",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "HTPP"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 53,
+    "text": "Bóng led trụ 30w ĐQ khách nhập thùng giá 108k tặng 2sp cùng loại .",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế",
+      "TT SP"
+    ],
+    "v3_sentiment": "Tích cực"
+  },
+  {
+    "row": 54,
+    "text": "Khách xin caâtloge để kham khảo sản phẩm mong muốn bán hàng RĐ",
+    "old_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Bảng giá, Catalogue"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 55,
+    "text": "Hàng bán chậm, doanh thu thấp nên ít nhập hàng",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hàng hoá"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 56,
+    "text": "Ổ cắm sopoka mẫu đẹp, đa dạng, chất lượng tốt nên khách hay lựa chọn mua loại này",
+    "old_labels": [
+      "Bảng giá, Catalogue"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "TT SP"
+    ],
+    "v3_sentiment": "Tích cực"
+  },
+  {
+    "row": 57,
+    "text": "Km điện quang mua doanh số 15 triệu ck 3%",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 58,
+    "text": "M26 1,2m nhập sài gòn 118k",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 59,
+    "text": "At58 rạng đông ra giá hợp lý nên không phải bán hàng rẻ nữa",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "Tích cực"
+  },
+  {
+    "row": 60,
+    "text": "Ổ dây oc05. Oc06. Oc10.  Làm thêm màn tre cho an toàn điện",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 61,
+    "text": "Mong muốn cty mã Aptomat MCB 2p2e 16A",
+    "old_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 62,
+    "text": "Khách hàng báo đóng cửa kiểm kê hàng hoá .",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Tin trung lập"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 63,
+    "text": "Âm trần đổi màu 9w HC lighting giá 55k",
+    "old_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế",
+      "TT SP"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 64,
+    "text": "Âm trần 90/8w DM hãng HC lighting giá 52k",
+    "old_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế",
+      "TT SP"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 65,
+    "text": "Phích cắm omisun giá thành rẻ",
+    "old_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 67,
+    "text": "Khách hàng vừa nhập 1 thùng bán nguyệt 45w ĐQ giá 181k tặng 1",
+    "old_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế",
+      "TT SP"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 68,
+    "text": "Bộ M36/50w đợt này tỷ lệ khách tới bảo hành nhiều",
+    "old_labels": [
+      "Báo lỗi",
+      "Bảo hành"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Bảo hành"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 69,
+    "text": "Thanh đồng ở ổ cắm chịu tải oc10 nhỏ hơn các hãng",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi",
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 70,
+    "text": "Lon bơ NT03 nên ra cả dòng mắt led COB như NT01 trước đây",
+    "old_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 72,
+    "text": "Vbm mẩu hãng duhal",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "TT SP"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 75,
+    "text": "Bóng Bulb G8 giá rẻ bảo hành nhanh.",
+    "old_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt",
+      "Bảo hành"
+    ],
+    "v3_sentiment": "Tích cực"
+  },
+  {
+    "row": 78,
+    "text": "Nt cần cải thiện đẹp hơn, mặt hay bị bẩn",
+    "old_labels": [
+      "Báo lỗi",
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 80,
+    "text": "Bóng G8 tặng kệ trưng bày bóng cho khách hàng",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "Tích cực",
+    "v3_labels": [
+      "Kệ bóng, thử đèn,…"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 81,
+    "text": "OC10 làm thêm loại 4,5,6 chân cắm. Logo in màu khác thân vỏ dễ nhận diện thương hiệu. Làm thêm màu cho khách chọn lựa.",
+    "old_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 82,
+    "text": "Tách rời tấm solar để bán riếng",
+    "old_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 83,
+    "text": "Aptomat giá hợp lý, mẩu mã đẹp",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo CL tốt",
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "Tích cực"
+  },
+  {
+    "row": 84,
+    "text": "Ổ cắm máy bơm lỗi nhiều lỗi liên tục",
+    "old_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 85,
+    "text": "Hộp đựng bút đèn học sinh rl 45 lắp vào không được chắc chắn",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 86,
+    "text": "Gửi bảo hành phích thời gian lâu",
+    "old_labels": [
+      "Báo lỗi"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Bảo hành"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 87,
+    "text": "Bóng 50w G8 giao khách 52k",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 88,
+    "text": "Nlmt bị lỗi sạc không đầy",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 89,
+    "text": "Led pha IP66 để ngoài trời mà bị vô nước cháy, cần cải thiện",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi",
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 90,
+    "text": "Bóng OKas tặng kệ trưng bày bóng cho khách hàng",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "Hoạt động"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 91,
+    "text": "Khách hàng muốn có thêm chương trình biển bảng trưng bày",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Bảng biển"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 92,
+    "text": "Giá bộ bán nguyệt,âm trần  bên nhà buôn Hưng Yên bán thấp hơn nhập Thái Bình",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt",
+      "HTPP"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 96,
+    "text": "KH phản hồi cty nên làm thêm tủ điện nhựa cửa quay, cánh trắng hoặc in tranh đều đẹp. Sản lượng bán tốt",
+    "old_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "Tích cực",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 97,
+    "text": "KH phản hồi cty nên làm thêm tủ điện nhựa cửa quay, cánh trắng hoặc in tranh đều đẹp. Sản lượng bán tốt",
+    "old_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "Tích cực",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 100,
+    "text": "Ổ cắm chịu tải ra thêm loại 2-4. Phích cắm cần làm mỏng đi 1chút",
+    "old_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 102,
+    "text": "mẫu  Ốp trần ln30 xấu không đẹp, ln12 đẹp phổ thông đễ bán , mã mới rất khó vào",
+    "old_labels": [
+      "Báo lỗi",
+      "Báo CL tốt",
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến",
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 103,
+    "text": "Cần được làm biển bảng",
+    "old_labels": [
+      "Bảng biển"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Bảng biển"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 104,
+    "text": "Vợt muỗi nanoco giá 75.000₫",
+    "old_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 105,
+    "text": "Phích cắm chịu tải PIPO giá 9.000",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tin trung lập"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 108,
+    "text": "Tấm pin chiếu pha NLMT 200w và 300w khác chê tấm pin đợt này nhỏ họ không yên tâm",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tích cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 109,
+    "text": "Vợt muỗi giá SG bán 79.800₫",
+    "old_labels": [
+      "Báo lỗi"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 110,
+    "text": "Attomat giờ khách hàng đang quen với sino và pannal nên giờ rạng đông ra rất khó vào thị trường!",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "TT SP"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 111,
+    "text": "vỏ hộp  bulb trụ 20w-30w mỏng quá, xếp hay bị văng,tụt sản phẩm ra ngoài.",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 112,
+    "text": "M36 1200/50W lô 241214130003A lỗi không sáng",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 113,
+    "text": "Bảng công tắc snider",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "TT SP"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 117,
+    "text": "Khách vẫn thích dùng máng vs tube hơn bóng led ctrinh quay số khách ko lấy được nhiều",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Trả thưởng"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 118,
+    "text": "Các sản phẩm ổ cắm chịu tải ít khách hỏi thị trường chậm",
+    "old_labels": [
+      "Báo lỗi",
+      "Hàng hoá"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 120,
+    "text": "Sản phẩm led rạng đông chất lượng tốt ít khi bị lỗi phải bảo hành",
+    "old_labels": [
+      "Báo CL tốt",
+      "Bảo hành"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo CL tốt"
+    ],
+    "v3_sentiment": "Tích cực"
+  },
+  {
+    "row": 124,
+    "text": "Cải tiến led dây lên 3 hàng mắt led",
+    "old_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 125,
+    "text": "Ấm siêu tốc của Trung Quốc giá thành rẻ nên khách hay lựa chọn mua loại này",
+    "old_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 127,
+    "text": "Aptomat gia dụng cần bổ sung thêm đèn báo",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 128,
+    "text": "Cb cốc hãng DuHaL 20A , 30A giá nhập vào 26.000",
+    "old_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 129,
+    "text": "oc10 mẫu mã và màu xấu hơn các thương hiệu khác như Sopoka hay Omisu",
+    "old_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế",
+      "TT SP"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "TT SP"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 130,
+    "text": "mua doanh số 30 triệu ck 4%",
+    "old_labels": [
+      "Trả thưởng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 132,
+    "text": "KM điện quang mua doanh số 10 triệu ck 2.5%",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 133,
+    "text": "Bóng sopoka gửi cửa hàng .",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "TT SP"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 137,
+    "text": "Ổ chịu tải OC10 nên làm bản lá đồng to hơn chút nữa",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 139,
+    "text": "G8 bảo hành đổi mới 1năm đèn nlmt cho khách hàng",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 142,
+    "text": "Ổ cắm chịu tải OC10 lá đồng nên làm bản to hơn chút nữa",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 143,
+    "text": "Ra thêm phích cắm âm và làm mỏng phích chịu tải",
+    "old_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến",
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 145,
+    "text": "Cty câp Giơ-le nhiệt để cửa hàng chủ động thay thế , đỡ mất công đổi mới nó lãng phí cho cty",
+    "old_labels": [
+      "Bảo hành"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Đề xuất"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 150,
+    "text": "Ống nhựa tiền phong thay 100% biển mới cho khách hàng mặc dù chưa hỏng hay cũ vẫn thay mới",
+    "old_labels": [
+      "Bảng biển"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "Hoạt động"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 152,
+    "text": "Cty nên cải tiến mặt của tủ át TAT01 loại tủ nhựa nên lm dầy lên chứ thấy mỏng manh quá",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi",
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 153,
+    "text": "Cửa hàng đóng cửa",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Tin trung lập"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 154,
+    "text": "Ra thêm phích cắm âm",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 155,
+    "text": "Cần giải quyết bảo hành nhanh cho nlmt",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Bảo hành"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 156,
+    "text": "Thưởng 6 tháng đầu năm chưa thấy gửi cho khách",
+    "old_labels": [
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Trả thưởng"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 157,
+    "text": "Ra thêm ổ chịu tải 2-4",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 158,
+    "text": "Ấm siêu tốc st3 1.8l sản xuất tháng 6/2025 khi nước sôi tự bật nắp lên.",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 159,
+    "text": "At58 giá thành hợp lý",
+    "old_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "Tích cực"
+  },
+  {
+    "row": 160,
+    "text": "Mưa bảo biển bảng bay hết mong CTy làm chương trình biển bảng cho đại lý",
+    "old_labels": [
+      "Bảng biển"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Bảng biển"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 161,
+    "text": "Bộ M nival giá rẻ",
+    "old_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 163,
+    "text": "Ra thêm phích cắm âm",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 164,
+    "text": "Khu vực xa lẻ. Các sp âm trần vẫn thiên về sp giá rẻ",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 165,
+    "text": "Ổ chịu tải OC10 nên có thêm loại 2 và 4",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 166,
+    "text": "Ổ cắm máy bơm rạng đông dùng hay bị lỗi",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 167,
+    "text": "Bóng led bup vinaco giá thành rẻ",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 168,
+    "text": "Trụ 40w vinasun 86,000",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 170,
+    "text": "Ốp trần bán trậm, ln12n vẫn còn nhiều, ốp ln29,30 mẫu không đẹp lắm lên không nhập",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến",
+      "Hàng hoá"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 171,
+    "text": "ốp ln29,30 mẫu xấu không đẹp",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 172,
+    "text": "Ổ chịu tải và ổ liền dây o5. 06 làm thêm màn tre cho an toàn điện",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 175,
+    "text": "Nlmt 500w vinasun giá thành rẻ",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 178,
+    "text": "Mong muốn cty ra chương trình hỗ trợ biển bảng , kê trưng bày",
+    "old_labels": [
+      "Bảng biển",
+      "Kệ bóng, thử đèn,…"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Bảng biển",
+      "Kệ bóng, thử đèn,…"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 180,
+    "text": "Ổ cắm siêu chịu tải HINOKI giá 53.000",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 184,
+    "text": "Cửa hàng đóng cửa",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Tin trung lập"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 185,
+    "text": "Khách đề xuất aptomat RD.HB 2P1E có đèn báo.",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 186,
+    "text": "Calisun có chương trình tặng xe thể thao cho khách khi tham gia gói sản phẩm 35 triệu",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "Hoạt động",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 187,
+    "text": "Không lấy m26 vì có cửa hàng gần đó bán ra cho ng dùng cuối giá 118",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt",
+      "HTPP"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 188,
+    "text": "Attomat đen cần làm thêm đèn,màu sắc đen trông không đẹp như sino",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 191,
+    "text": "Tủ Aptomat của Rđ giá cao hơn tủ của Grinew khoảng 20%",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 193,
+    "text": "Đèn mới nhưng dây bị ố vàng",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 194,
+    "text": "M26 50w Ngọc Huy trừ hết giá cho CH còn 118k, Ngọc Hiếu trừ còn 115k",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 195,
+    "text": "Bóng tích điện hãng G8 giá 85.000",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 196,
+    "text": "Đèn bắt muỗi điện Quang giá 190.000",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 197,
+    "text": "MPE: nhà phân phối ck 46% hàng xả",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 198,
+    "text": "Sanomax chạy gói 200tr/năm du lịch Úc",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "Hoạt động"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 199,
+    "text": "Vợt 06 chưa có hàng nằm trong cơ chế",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt",
+      "Hàng hoá"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 200,
+    "text": "At60 mẫu mã khó bán kén người dùng",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Báo lỗi",
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 201,
+    "text": "Khách vẫn ám ảnh vợt muỗi rạng đông 01. Ko chịu bán nữa",
+    "old_labels": [
+      "Hàng hoá"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Báo lỗi",
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 202,
+    "text": "Km điện quang ổ cắm eco 5m chiết khấu 5%",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 204,
+    "text": "Cửa hàng tham gia 2 gói MPE du lịch trong nước  160.000.000₫",
+    "old_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 205,
+    "text": "MPE triển khai hội  nghị khách hàng \nTriển khai ct km đến cuối năm\n56tr tặng 500 đô \n112 tr tặng 1 tour du lịch + 1000 đô\n168 tr tặng 1 tuor du lịch thái lan + 1 xe máy airblade",
+    "old_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "Hoạt động",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 210,
+    "text": "phích cắm chịu tải lên đóng thành dây 10 cái /1 dây, treo dễ trưng bày và dễ khi bán hàng.",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 211,
+    "text": "Cty ra thêm mẫu ốp trang trí đổi màu phục vụ nhu  cầu của người dùng",
+    "old_labels": [
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 214,
+    "text": "Đang bán mã panel vì giá rẻ hơn downlight và ko bị cấn xương",
+    "old_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 215,
+    "text": "Chất lượng tốt.ít lỗi",
+    "old_labels": [
+      "Báo CL tốt"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo CL tốt"
+    ],
+    "v3_sentiment": "Tích cực"
+  },
+  {
+    "row": 218,
+    "text": "Tip t8/20w làm tăng công xuất lên 30w",
+    "old_labels": [
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 219,
+    "text": "Hãng DUHAL giá rẻ, CH nhập số lượng lớn trụ với bán nguyệt, túyp",
+    "old_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 220,
+    "text": "Cty bình ổn giá bán",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Đề xuất"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 223,
+    "text": "Hàng ra chậm quá",
+    "old_labels": [
+      "Website"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hàng hoá"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 226,
+    "text": "Ổ chịu tải oc10 gia thêm loại 4 ổ",
+    "old_labels": [
+      "Đề xuất SPM"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 228,
+    "text": "KM MpE doanh số 60trieu đạt 1 vé du lịch",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "Tích cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 229,
+    "text": "Kệ trưng bày Asia",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "Hoạt động"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 230,
+    "text": "led bulb trụ công suất lớn 60w 60k rẻ  quá. Rạng Đông gần 200k đắt khó bán.",
+    "old_labels": [
+      "Báo lỗi",
+      "Tốt/ ko tốt"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 231,
+    "text": "Welmax đóng hàng đèn NLMT khá gọn, đc bọc trong màng co, dễ vận chuyển",
+    "old_labels": [
+      "Hàng hoá"
+    ],
+    "old_sentiment": "Tích cực",
+    "v3_labels": [
+      "Hãng",
+      "TT SP"
+    ],
+    "v3_sentiment": "Tích cực"
+  },
+  {
+    "row": 233,
+    "text": "Khách xin kệ bóng tube rạng đông",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Kệ bóng, thử đèn,…"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 235,
+    "text": "Khách yêu cầu trả hỗ trợ sớm cho khách",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Trả thưởng"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 236,
+    "text": "OC 06 cầm nhẹ hơn so với sản phẩm cùng loại các hãng khác.",
+    "old_labels": [
+      "Kệ bóng, thử đèn,…"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 237,
+    "text": "Ch hữu hoàng. Ruột 2 lít cô bị lỗi 4 cái giữ nhiệt kém 4 tiếng đã nguội",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 238,
+    "text": "MPE triển khai hội  nghị khách hàng \nTriển khai ct km 112 tr tặng 1 tour du lịch + 1000 đô",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "Hoạt động",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 239,
+    "text": "Bảng ổ cắm vinasun",
+    "old_labels": [
+      "Hãng",
+      "Hoạt động",
+      "CTKM, giá, cơ chế"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "TT SP"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 240,
+    "text": "Ốp tường LN12 nên thêm loại 15w",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Đề xuất SPM"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 241,
+    "text": "Kệ chưng bày của hãng nanoco",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Hãng",
+      "Hoạt động"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 242,
+    "text": "Khách xin bản hiệu rạng đông",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Bảng biển"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 243,
+    "text": "Bóng 40w Dpe giá giao 62.000đ",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 244,
+    "text": "giá buld 20w VNE rẻ có 48k",
+    "old_labels": [
+      "Tốt/ ko tốt"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "Tích cực"
+  },
+  {
+    "row": 245,
+    "text": "CP asia lỗi đổi mới cho khách",
+    "old_labels": [
+      "Hãng"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "Hoạt động",
+      "TT SP"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 246,
+    "text": "Đèn âm trần chất lượng.",
+    "old_labels": [
+      "Báo CL tốt"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Báo CL tốt"
+    ],
+    "v3_sentiment": "Tích cực"
+  },
+  {
+    "row": 248,
+    "text": "Điểm bán chưa có nhiều sự hiện diện của sp rạng đông",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "HTPP"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 249,
+    "text": "OC10 điều chỉnh chân cắm 3 quy ngang",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "—",
+    "v3_labels": [
+      "Y/c cải tiến"
+    ],
+    "v3_sentiment": "—"
+  },
+  {
+    "row": 250,
+    "text": "bộ đèn m36 ( 241113130004A) lỗi không sáng, thời gian sử dụng 6 tháng",
+    "old_labels": [
+      "Tin trung lập"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Báo lỗi"
+    ],
+    "v3_sentiment": "Tiêu cực"
+  },
+  {
+    "row": 251,
+    "text": "giá buld 20w VNE rẻ có 49k",
+    "old_labels": [
+      "Y/c cải tiến"
+    ],
+    "old_sentiment": "Tiêu cực",
+    "v3_labels": [
+      "Hãng",
+      "CTKM, giá, cơ chế"
+    ],
+    "v3_sentiment": "Tích cực"
+  }
+]

@@ -99,9 +99,9 @@ NULL_BRAND_ALIASES = {
 }
 
 LABEL_DEFINITIONS = {
-    "Báo lỗi": "Sản phẩm vật lý bị lỗi, hỏng, cháy, không sáng, không hoạt động, sai chức năng. Chỉ dùng khi có lỗi kỹ thuật thực tế.",
+    "Báo lỗi": "Sản phẩm vật lý bị lỗi kỹ thuật, hỏng, cháy, không sáng, không hoạt động, lệch ren, rò điện, nứt vỡ thực tế. KHÔNG dùng cho phàn nàn về thiết kế, kích thước, độ dày/mỏng vỏ nhựa/thanh đồng, phích to vướng (các phàn nàn thiết kế này thuộc Y/c cải tiến).",
     "Báo CL tốt": "Khen chất lượng sản phẩm tốt, bền, sáng tốt, ổn định, khách hài lòng.",
-    "Y/c cải tiến": "Yêu cầu chỉnh sửa thiết kế, tính năng, bao bì, mẫu mã của SP HIỆN CÓ đang bán. SP vẫn hoạt động nhưng khách muốn thay đổi.",
+    "Y/c cải tiến": "Yêu cầu chỉnh sửa hoặc phàn nàn về thiết kế, kích thước, tính năng, độ dày/mỏng của vỏ nhựa/thanh đồng, bao bì, mẫu mã, phích to vướng, kết cấu của sản phẩm HIỆN CÓ đang bán (như vỏ mỏng cần làm dày hơn, phích to cần làm nhỏ lại, thanh đồng mỏng cần làm dày).",
     "Đề xuất SPM": "Đề xuất sản xuất SP MỚI chưa có: mã mới, kích thước mới, loại mới ('ra thêm', 'sản xuất thêm', 'thêm loại', 'có thêm', 'mã mới').",
     "Bảng giá, Catalogue": "Yêu cầu cung cấp bảng giá, báo giá, catalogue, tài liệu bán hàng.",
     "Bảng biển": "Yêu cầu hỗ trợ biển hiệu, biển quảng cáo, bảng hiệu cửa hàng, POSM dạng biển.",
@@ -261,11 +261,12 @@ def normalize_issue_output(
         or str(labels_dict.get(label)).lower() in ("true", "1", "yes", "có", "co")
     ]
 
-    # Apply strict competitor boundaries
+    # Apply competitor boundaries
     if is_competitor:
-        # For competitor: ONLY competitor labels allowed
-        active_labels = [label for label in active_labels if label in COMP_ALLOWED]
-        if "Hãng" not in active_labels:
+        # If competitor, we ALLOW both competitor and RD labels (no hard filter).
+        # We ensure "Hãng" is in active_labels if any competitor label is active or brand is set.
+        has_comp_label = any(label in COMP_ALLOWED for label in active_labels)
+        if (has_comp_label or brand_out) and "Hãng" not in active_labels:
             active_labels.insert(0, "Hãng")
     else:
         # For non-competitor: competitor labels are forbidden
@@ -382,10 +383,10 @@ class IssueClassifier:
                - "Báo lỗi": SP bị hỏng, cháy, không sáng, không hoạt động — nói về LỖI VẬT LÝ của sản phẩm.
                - "Bảo hành": Nói về QUY TRÌNH đổi trả, thời gian BH chậm, thủ tục BH — nói về DỊCH VỤ.
                - Nếu câu vừa nhắc SP hỏng vừa nhắc đổi trả/BH → gán CẢ HAI.
-            7. "Báo lỗi" VS "Y/c cải tiến":
-               - "Báo lỗi": SP bị hư hỏng, HOẶC chất lượng THẤP HƠN kỳ vọng (giữ nhiệt kém, không nhạy, đàn hồi kém, ố vàng, hay lỗi, chê dỏm). Chỉ cần khách PHÀN NÀN chất lượng hiện tại = "Báo lỗi".
-               - "Y/c cải tiến": Khách YÊU CẦU CỤ THỂ thay đổi thiết kế ("nên làm nhỏ gọn lại", "thêm nắp che", "in đậm hơn"). Chỉ gán khi có ĐỘNG TỪ yêu cầu rõ ràng.
-               - Nếu câu VỪA phàn nàn chất lượng VỪA yêu cầu cải tiến cụ thể → gán CẢ HAI.
+            7. RÀNH MẠCH "Báo lỗi" VS "Y/c cải tiến":
+               - "Báo lỗi": Bắt buộc CHỈ gán khi có sự cố kỹ thuật vật lý thực tế, hỏng hóc, cháy nổ, không hoạt động, lệch ren, rò điện, nứt vỡ thực tế. KHÔNG dùng cho phàn nàn về thiết kế, kích thước, độ dày/mỏng vỏ nhựa/thanh đồng, hay phích to vướng.
+               - "Y/c cải tiến": Gán cho các yêu cầu chỉnh sửa, phàn nàn hoặc góp ý về thiết kế, kích thước, độ dày/mỏng của vỏ nhựa/thanh đồng, bao bì, mẫu mã, phích to vướng của sản phẩm HIỆN CÓ (ví dụ: "Ổ cắm chịu tải cắm êm nhưng vỏ hơi mềm" -> gán 'Y/c cải tiến', KHÔNG gán 'Báo lỗi').
+               - Nếu câu VỪA phàn nàn sự cố hỏng hóc vật lý VỪA yêu cầu cải tiến thiết kế cụ thể -> gán CẢ HAI.
             8. "Đề xuất" VS "Trả thưởng":
                - "Trả thưởng": Nhắc CỤ THỂ đến tiền thưởng, quay số, gói quay, c2td, trả thưởng chậm.
                - "Đề xuất": Gợi ý thay đổi chính sách giá/chiết khấu/khuyến mãi/cơ chế CHUNG của RĐ.
@@ -397,14 +398,25 @@ class IssueClassifier:
             12. NHÃN "Khác": CHỈ dùng khi khách yêu cầu công cụ BH cụ thể (áo, tờ rơi, sổ tay, POSM) mà KHÔNG phải bảng giá, biển hiệu, hay kệ. KHÔNG dùng "Khác" như nhãn mặc định.
             13. NHÓM CÔNG CỤ BH: "Bảng giá, Catalogue" cho bảng giá/catalogue. "Bảng biển" cho biển hiệu/biển QC. "Kệ bóng, thử đèn,…" cho kệ trưng bày/tủ thử.
             14. GIÁ CẢ RĐ ("Tốt/ ko tốt"): Bắt buộc gán nếu đề cập rõ giá rẻ/đắt/cao/chiết khấu/cơ chế của Rạng Đông.
-            15. LUẬT CẠNH TRANH (ĐỐI THỦ):
-               - Nếu brand là ĐỐI THỦ: CHỈ gán "Hãng", "Hoạt động", "CTKM, giá, cơ chế", "TT SP". Có thể gán nhiều nhãn đối thủ cùng lúc.
-               - "Hoạt động": marketing/event/tặng kệ/tài trợ của đối thủ. "CTKM, giá, cơ chế": giá bán/chiết khấu/KM của đối thủ. "TT SP": mẫu mã/tính năng SP đối thủ.
-               - Nếu brand là Rạng Đông hoặc không xác định: KHÔNG gán nhãn đối thủ.
-               - KHI SO SÁNH giá RĐ với đối thủ (ví dụ: "RĐ đắt hơn MPE 23k"), ưu tiên gán cho ĐỐI THỦ (brand=tên đối thủ, nhãn CTKM/Hãng).
-               - NGOẠI LỆ THAM CHIẾU: Nếu ý chính là YÊU CẦU RĐ cải tiến và đối thủ chỉ là ví dụ/mẫu tham khảo (ví dụ: "làm màu cam giống Sopoka", "thêm đèn báo giống Điện Quang") → gán nhãn RĐ (Y/c cải tiến hoặc Đề xuất SPM), KHÔNG gán nhãn đối thủ.
-            16. SENTIMENT: Chỉ "Tích cực", "Tiêu cực", hoặc "". Vừa khen vừa chê → "Tiêu cực".
+            15. LUẬT CẠNH TRANH VÀ ĐA NHÃN ĐỒNG THỜI (ĐỐI THỦ VS RẠNG ĐÔNG):
+               - Khi phản hồi có so sánh hoặc đề cập đến cả Rạng Đông và đối thủ cạnh tranh (ví dụ: "Vợt rạng đông 02 vẩn hay lỗi khách vẩn thích vợt ASIA hơn ít lỗi"):
+                 + Hỗ trợ gán ĐỒNG THỜI nhãn của cả Rạng Đông (như 'Báo lỗi', 'Y/c cải tiến', 'Tốt/ko tốt') và nhãn của đối thủ cạnh tranh (như 'Hãng', 'Hoạt động', 'CTKM, giá, cơ chế', 'TT SP').
+                 + Brand phải là tên đối thủ cạnh tranh (ví dụ: "ASIA").
+                 + Ví dụ trên sẽ được gán nhãn ['Báo lỗi', 'Hãng', 'TT SP'] và brand "ASIA".
+               - Nếu brand là ĐỐI THỦ: Bắt buộc gán nhãn "Hãng". Đồng thời có thể gán thêm các nhãn đối thủ khác: "Hoạt động", "CTKM, giá, cơ chế", "TT SP" nếu phù hợp.
+               - Nếu brand là Rạng Đông hoặc không xác định: KHÔNG gán bất kỳ nhãn đối thủ nào ("Hãng", "Hoạt động", "CTKM, giá, cơ chế", "TT SP").
+               - NGOẠI LỆ THAM CHIẾU: Nếu ý chính là YÊU CẦU RĐ cải tiến và đối thủ chỉ là ví dụ/mẫu tham khảo (ví dụ: "làm màu cam giống Sopoka", "thêm đèn báo giống Điện Quang") → gán nhãn RĐ (Y/c cải tiến hoặc Đề xuất SPM), brand để trống, KHÔNG gán nhãn đối thủ.
+            16. SENTIMENT (CẢM XÚC): Chỉ có 3 giá trị: "Tích cực", "Tiêu cực", hoặc "" (trống - trung tính).
+               - Giữ nguyên cảm xúc trung tính "" (trống) cho các đề xuất đóng góp ý kiến mang tính xây dựng (ví dụ: "Aptomat gia dụng nên có thêm đèn báo" -> sentiment "") hoặc thông tin thị trường khách quan của đối thủ cạnh tranh (ví dụ: "ổ cắm Lioa đa dạng mẫu mã giá rẻ" -> sentiment "").
+               - Chỉ gán Sentiment "Tiêu cực" khi phản hồi chứa thái độ phàn nàn, bức xúc, bực dọc, thất vọng, hoặc chê bai rõ rệt đối với chất lượng sản phẩm/dịch vụ/chính sách của Rạng Đông.
+               - Nếu vừa khen vừa chê Rạng Đông -> "Tiêu cực".
             17. TIN TRUNG LẬP: CHỈ gán khi câu hoàn toàn trung tính, không khen/chê/yêu cầu/đề xuất gì, và không gán nhãn nào khác. Phàn nàn về NPP/giải thưởng/giá/chương trình → KHÔNG phải Tin trung lập, phải gán nhãn cụ thể (HTPP, Trả thưởng, Tốt/ko tốt, v.v.).
+            18. SPELL GUARD VÀ BẢO VỆ TỪ VIẾT TẮT/SAI CHÍNH TẢ:
+               - Đại lý/khách hàng thường viết sai chính tả hoặc viết tắt theo phương ngữ Việt Nam. Bạn phải đọc cả câu để hiểu nghĩa chứ KHÔNG được bắt nhầm từ khóa đơn lẻ.
+               - Tránh bẫy từ khóa:
+                 + Từ "tin thưởng" hoặc "tin thưởng" thực chất là viết sai của "tin tưởng" (trust) -> Tuyệt đối KHÔNG gán nhãn "Trả thưởng".
+                 + Từ "attpmat", "atomat" là viết tắt của "aptomat" -> Thuộc nhãn Sản phẩm.
+                 + Từ "bGN" hoặc "bgn" là viết tắt của đèn "bán nguyệt" -> Thuộc nhãn Sản phẩm.
 
             DANH SÁCH NHÃN HỢP LỆ THEO THỨ TỰ:
             {minor_order_json}
@@ -417,6 +429,184 @@ class IssueClassifier:
 
             BRAND HINTS (Gợi ý nhận diện thương hiệu đối thủ):
             {brand_json}
+
+            VÍ DỤ BẢN MẪU (FEW-SHOT EXAMPLES)
+
+            Ví dụ 1:
+            Input: "Vợt rạng đông 02 vẩn hay lỗi khách vẩn thích vợt ASIA hơn ít lỗi"
+            Output:
+            {{
+              "row_index": 0,
+              "brand": "ASIA",
+              "is_competitor": true,
+              "sentiment": "Tiêu cực",
+              "labels": {{
+                "Báo lỗi": true,
+                "Báo CL tốt": false,
+                "Y/c cải tiến": false,
+                "Đề xuất SPM": false,
+                "Bảng giá, Catalogue": false,
+                "Bảng biển": false,
+                "Kệ bóng, thử đèn,…": false,
+                "Khác": false,
+                "Tốt/ ko tốt": false,
+                "Trả thưởng": false,
+                "Đề xuất": false,
+                "Bảo hành": false,
+                "HTPP": false,
+                "Hàng hoá": false,
+                "Hàng giả": false,
+                "Website": false,
+                "Hãng": true,
+                "Hoạt động": false,
+                "CTKM, giá, cơ chế": false,
+                "TT SP": true,
+                "Tin trung lập": false
+              }},
+              "decision_log": [
+                {{
+                  "label": "Báo lỗi",
+                  "action": "ADD",
+                  "evidence": "vẩn hay lỗi",
+                  "reason": "Phản hồi phàn nàn về lỗi của vợt RĐ 02"
+                }},
+                {{
+                  "label": "Hãng",
+                  "action": "ADD",
+                  "evidence": "ASIA",
+                  "reason": "Nhắc tới thương hiệu đối thủ ASIA"
+                }},
+                {{
+                  "label": "TT SP",
+                  "action": "ADD",
+                  "evidence": "thích vợt ASIA hơn ít lỗi",
+                  "reason": "Nhận xét tính năng/thông tin sản phẩm đối thủ ASIA"
+                }}
+              ]
+            }}
+
+            Ví dụ 2:
+            Input: "Ổ cắm chịu tải cắm êm nhưng vỏ hơi mềm"
+            Output:
+            {{
+              "row_index": 1,
+              "brand": "",
+              "is_competitor": false,
+              "sentiment": "",
+              "labels": {{
+                "Báo lỗi": false,
+                "Báo CL tốt": false,
+                "Y/c cải tiến": true,
+                "Đề xuất SPM": false,
+                "Bảng giá, Catalogue": false,
+                "Bảng biển": false,
+                "Kệ bóng, thử đèn,…": false,
+                "Khác": false,
+                "Tốt/ ko tốt": false,
+                "Trả thưởng": false,
+                "Đề xuất": false,
+                "Bảo hành": false,
+                "HTPP": false,
+                "Hàng hoá": false,
+                "Hàng giả": false,
+                "Website": false,
+                "Hãng": false,
+                "Hoạt động": false,
+                "CTKM, giá, cơ chế": false,
+                "TT SP": false,
+                "Tin trung lập": false
+              }},
+              "decision_log": [
+                {{
+                  "label": "Y/c cải tiến",
+                  "action": "ADD",
+                  "evidence": "vỏ hơi mềm",
+                  "reason": "Phàn nàn về thiết kế/độ dày vỏ nhựa của sản phẩm hiện có"
+                }}
+              ]
+            }}
+
+            Ví dụ 3:
+            Input: "Aptomat gia dụng nên có thêm đèn báo"
+            Output:
+            {{
+              "row_index": 2,
+              "brand": "",
+              "is_competitor": false,
+              "sentiment": "",
+              "labels": {{
+                "Báo lỗi": false,
+                "Báo CL tốt": false,
+                "Y/c cải tiến": true,
+                "Đề xuất SPM": false,
+                "Bảng giá, Catalogue": false,
+                "Bảng biển": false,
+                "Kệ bóng, thử đèn,…": false,
+                "Khác": false,
+                "Tốt/ ko tốt": false,
+                "Trả thưởng": false,
+                "Đề xuất": false,
+                "Bảo hành": false,
+                "HTPP": false,
+                "Hàng hoá": false,
+                "Hàng giả": false,
+                "Website": false,
+                "Hãng": false,
+                "Hoạt động": false,
+                "CTKM, giá, cơ chế": false,
+                "TT SP": false,
+                "Tin trung lập": false
+              }},
+              "decision_log": [
+                {{
+                  "label": "Y/c cải tiến",
+                  "action": "ADD",
+                  "evidence": "nên có thêm đèn báo",
+                  "reason": "Góp ý cải tiến bổ sung tính năng đèn báo cho sản phẩm hiện có"
+                }}
+              ]
+            }}
+
+            Ví dụ 4:
+            Input: "aptomat Rạng Đông mới được 1 năm thợ vẫn chưa tin thưởng"
+            Output:
+            {{
+              "row_index": 3,
+              "brand": "",
+              "is_competitor": false,
+              "sentiment": "Tiêu cực",
+              "labels": {{
+                "Báo lỗi": false,
+                "Báo CL tốt": false,
+                "Y/c cải tiến": false,
+                "Đề xuất SPM": false,
+                "Bảng giá, Catalogue": false,
+                "Bảng biển": false,
+                "Kệ bóng, thử đèn,…": false,
+                "Khác": false,
+                "Tốt/ ko tốt": false,
+                "Trả thưởng": false,
+                "Đề xuất": false,
+                "Bảo hành": false,
+                "HTPP": false,
+                "Hàng hoá": false,
+                "Hàng giả": false,
+                "Website": false,
+                "Hãng": false,
+                "Hoạt động": false,
+                "CTKM, giá, cơ chế": false,
+                "TT SP": false,
+                "Tin trung lập": true
+              }},
+              "decision_log": [
+                {{
+                  "label": "Tin trung lập",
+                  "action": "ADD",
+                  "evidence": "chưa tin thưởng",
+                  "reason": "Từ 'tin thưởng' là viết sai chính tả của 'tin tưởng', không liên quan đến Trả thưởng. Vì thợ chưa tin tưởng chung chung mà không phàn nàn lỗi kỹ thuật cụ thể nên gán Tin trung lập."
+                }}
+              ]
+            }}
 
             ĐẦU RA BẮT BUỘC:
             Trả về DUY NHẤT một JSON array hợp lệ. Không viết thêm bất kỳ từ ngữ nào ngoài JSON. Không dùng markdown code block (không có ```json ... ```).

@@ -1,0 +1,13 @@
+Shape: (50, 43)
+
+--- FIRST 10 ROWS ---
+Row 0: ['STT', 'Tên đơn vị', 'Mã vấn đề', 'Mã nhân viên', 'Tên nhân viên', 'Ngày', 'Mã đại lý', 'Đại lý', 'Địa chỉ', 'Tỉnh/TP', 'Quận/huyện', 'Sản phẩm', 'Dòng SP', 'Model', 'Lớp']
+Row 1: [nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan]
+Row 2: ['1', 'Truyền thống Vùng 3', '206548', 'TV03.SangNV', 'Nguyễn Văn Sang', '13-10-2025', 'TV03.C3.0060312', 'CH Mạnh Thiện', '66, Đường 20 Tháng 8, Phường Nguyễn Trãi, Hà Giang, Hà Giang', 'Tỉnh Hà Giang', 'Thành phố Hà Giang', 'Bán nguyệt', 'M26', nan, nan]
+Row 3: ['2', 'Truyền thống Vùng 3', '206547', 'TV03.KienDH', 'Đặng Hồng Kiên', '13-10-2025', 'TV03.C2.0006564', 'CH Tú Hải', 'QL.2, Xã Trung Môn, Huyện Yên Sơn, Tuyên Quang', 'Tỉnh Tuyên Quang', 'Huyện Yên Sơn', 'Downlight', 'NT03', nan, nan]
+Row 4: ['3', 'Truyền thống Vùng 3', '206546', 'TV03.SangNV', 'Nguyễn Văn Sang', '13-10-2025', 'TV03.C2.0061155', 'CH Khang Vi', '135D, Đường Trần Phú, Phường Minh Khai, Hà Giang, Hà Giang', 'Tỉnh Hà Giang', 'Thành phố Hà Giang', 'Ổ cắm kéo dài, phích cắm', 'RD-PC01', nan, nan]
+Row 5: ['4', 'Truyền thống Vùng 2', '206545', 'TV02.DuongDH', 'Đinh Hồng Dương', '13-10-2025', 'TV02.C2.0031206', 'CH Lĩnh Hanh', 'Đại Xuân, Quế Võ, Bắc Ninh, Việt Nam', 'Tỉnh Bắc Ninh', 'Huyện Quế Võ', 'Aptomat', nan, nan, nan]
+Row 6: ['5', 'Truyền thống Vùng 3', '206544', 'TV03.SangNV', 'Nguyễn Văn Sang', '13-10-2025', 'TV03.C2.0006609', 'CH Mạnh Giang', 'Tổ 14  Phường Minh Khai, Thành phố Hà Giang, Tỉnh Hà Giang', 'Tỉnh Hà Giang', 'Thành phố Hà Giang', 'Ổ cắm kéo dài, phích cắm', nan, nan, nan]
+Row 7: ['6', 'Truyền thống Vùng 2', '206543', 'TV02.DungNT', 'Nguyễn Tuấn Dũng', '13-10-2025', 'TV02.C2.0005837', 'CH Minh Loan', 'Ngã 3 Dĩnh Kế, Thành phố Bắc Giang, Tỉnh Bắc Giang', 'Tỉnh Bắc Giang', 'Thành phố Bắc Giang', 'Downlight', 'AT58', nan, nan]
+Row 8: ['7', 'Truyền thống Vùng 3', '206542', 'TV03.SangNV', 'Nguyễn Văn Sang', '13-10-2025', 'TV03.C3.0061223', 'CH Sơn Ngân', '1, Đường Cù Chính Lan, Phường Minh Khai, Hà Giang, Hà Giang', 'Tỉnh Hà Giang', 'Thành phố Hà Giang', 'Flood', 'CP10', nan, nan]
+Row 9: ['8', 'Truyền thống Vùng 2', '206541', 'TV02.NamNH', 'Nguyễn Hoài Nam', '13-10-2025', 'TV02.C3.0025371', 'CH Thanh Huyền', '379 Trần Nhân Tông, Nam Sơn, Kiến An, Hải Phòng,', 'Thành phố Hải Phòng', 'Quận Kiến An', 'Phích, ruột phích', nan, nan, nan]
