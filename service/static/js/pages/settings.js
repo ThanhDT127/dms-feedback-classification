@@ -897,8 +897,9 @@ window.SettingsPage = (() => {
 
   return {
     render, destroy, switchTab, onBackendChange, testConnection,
-    toggleEditPrompt, copyPrompt, savePrompt, saveModelSettings, savePipelineSettings,
-    switchSubTab, renderSubTabContent, saveKeywords, saveProducts, addProductRow, deleteProductRow,
+    toggleEditPrompt, cancelEditPrompt, copyPrompt, savePrompt, saveModelSettings, savePipelineSettings,
+    switchSubTab, renderSubTabContent, toggleEditKeywords, cancelEditKeywords, saveKeywords,
+    toggleEditProducts, cancelEditProducts, switchProductSheet, saveProducts, addProductRow, deleteProductRow,
     updateEmailCount, saveNotificationSettings
   };
 })();
