@@ -161,7 +161,8 @@ class Watcher:
             rows = result.get("total_rows", 0)
             duration = result.get("duration_seconds", 0)
             self.metrics.record_success(file_name, rows, duration)
-            self.notification_service.send_success(file_name, result)
+            if getattr(self.settings, "notify_on_success", True):
+                self.notification_service.send_success(file_name, result)
             self.cleanup.cleanup_success_artifacts(
                 local_input=local_input,
                 local_output=local_output,
@@ -184,12 +185,13 @@ class Watcher:
             if entry["failures"] >= MAX_FILE_RETRIES:
                 entry["status"] = "failed"
                 logger.error("Max retries reached for %s; marking as failed", file_name)
-                self.notification_service.send_error(
-                    file_name,
-                    error_msg,
-                    retry_count=entry["failures"],
-                    max_retries=MAX_FILE_RETRIES,
-                )
+                if getattr(self.settings, "notify_on_error", True):
+                    self.notification_service.send_error(
+                        file_name,
+                        error_msg,
+                        retry_count=entry["failures"],
+                        max_retries=MAX_FILE_RETRIES,
+                    )
             else:
                 entry["status"] = "retry"
                 logger.warning(
@@ -203,7 +205,58 @@ class Watcher:
             self._save_seen(seen)
             return False
 
+    def reload_settings(self) -> None:
+        """Reload settings from disk and update dependent services in-place."""
+        from .settings import get_settings
+        if hasattr(get_settings, "cache_clear"):
+            get_settings.cache_clear()
+        try:
+            new_settings = get_settings()
+            
+            # Save original configuration values to compare
+            old_backend = self.settings.gemini_backend
+            old_model = self.settings.gemini_model
+            old_key = self.settings.gemini_api_key
+            
+            # 1. Update self.settings fields in-place
+            for field in new_settings.__class__.model_fields:
+                val = getattr(new_settings, field)
+                setattr(self.settings, field, val)
+                
+            # 2. Re-initialize pipeline assets reload if Gemini configuration changed
+            backend_changed = (old_backend != self.settings.gemini_backend)
+            model_changed = (old_model != self.settings.gemini_model)
+            key_changed = (old_key != self.settings.gemini_api_key)
+            
+            if backend_changed or model_changed or key_changed:
+                logger.info(
+                    "Watcher detected Gemini settings changed: backend=%s->%s, model=%s->%s",
+                    old_backend, self.settings.gemini_backend,
+                    old_model, self.settings.gemini_model
+                )
+                
+                # Clear cached lazy clients inside GeminiClient
+                if hasattr(self.pipeline_runner, "gemini"):
+                    self.pipeline_runner.gemini._vertex_client = None
+                    self.pipeline_runner.gemini._apikey_model = None
+                
+                # Re-create RAGProductMatcher with new settings
+                if hasattr(self.pipeline_runner, "rag"):
+                    from .pipeline.rag_product import RAGProductMatcher
+                    self.pipeline_runner.rag = RAGProductMatcher(
+                        settings=self.settings,
+                        gemini=self.pipeline_runner.gemini
+                    )
+            
+            # 3. Synchronize other modules that references settings
+            self.cleanup.settings = self.settings
+            logger.info("Watcher settings hot-reloaded successfully")
+            
+        except Exception as exc:
+            logger.error("Failed to hot-reload settings in watcher: %s", exc)
+
     def poll_once(self, seen: dict) -> int:
+        self.reload_settings()
         self._sync_config_assets()
         try:
             remote_files = self.sharepoint_client.list_files()

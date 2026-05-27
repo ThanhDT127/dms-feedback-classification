@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     notification_sender_email: str = Field("", alias="NOTIFICATION_SENDER_EMAIL")
     notification_recipients_raw: str = Field("", alias="NOTIFICATION_RECIPIENTS")
     notification_email: str = Field("", alias="NOTIFICATION_EMAIL")
+    notify_on_success: bool = Field(True, alias="NOTIFY_ON_SUCCESS")
+    notify_on_error: bool = Field(True, alias="NOTIFY_ON_ERROR")
 
     llm_batch_size: int = Field(20, alias="LLM_BATCH_SIZE")
     ckpt_every: int = Field(50, alias="CKPT_EVERY")
@@ -206,3 +208,38 @@ def get_settings() -> Settings:
         return Settings()  # type: ignore[call-arg]
     except ValidationError as exc:
         raise ConfigurationError(str(exc)) from exc
+
+
+def update_env_file(updates: dict[str, str]) -> None:
+    """Update or append key-value pairs in the .env file while preserving comments and order."""
+    env_path = SERVICE_DIR / ".env"
+    if not env_path.exists():
+        env_path.write_text("", encoding="utf-8")
+
+    lines = env_path.read_text(encoding="utf-8").splitlines()
+    updated_keys = set()
+    new_lines = []
+
+    for line in lines:
+        line_stripped = line.strip()
+        if not line_stripped or line_stripped.startswith("#"):
+            new_lines.append(line)
+            continue
+
+        if "=" in line:
+            key, sep, val = line.partition("=")
+            key_stripped = key.strip()
+            if key_stripped in updates:
+                new_lines.append(f"{key_stripped}={updates[key_stripped]}")
+                updated_keys.add(key_stripped)
+            else:
+                new_lines.append(line)
+        else:
+            new_lines.append(line)
+
+    # Append any keys that weren't found in the existing .env file
+    for key, val in updates.items():
+        if key not in updated_keys:
+            new_lines.append(f"{key}={val}")
+
+    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
