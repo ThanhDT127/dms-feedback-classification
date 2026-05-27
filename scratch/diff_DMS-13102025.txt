@@ -1,0 +1,78 @@
+File: DMS-13102025.xlsx
+Total differences: 15 / 48 rows
+
+Row: 4
+Text: Mã sp NT03 khách thích màu đen hơn trắng, cần bổ sung màu vân gỗ
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 5
+Text: Phích cắm chịu tải hơi to vướng, nên sản xuất nhỏ gọn lại
+  Old: ['Y/c cải tiến'] | Sentiment: —
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 7
+Text: Ổ cắm chịu tải cắm êm nhưng vỏ hơi mềm
+  Old: ['Y/c cải tiến'] | Sentiment: —
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 9
+Text: Chiếu pha cp10 giá rẻ độ bền không bằng cp06
+  Old: ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi', 'Tốt/ ko tốt'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 13
+Text: CB cốc 20A , 30A , 40A hãng DUHAL giá nhập 26.000
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 16
+Text: Phích cắm siêu tải PIPO giá 9.500
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Tốt/ ko tốt'] | Sentiment: —
+--------------------------------------------------
+Row: 20
+Text: Khách phản hồi BGN095 và 12 cty nên làm nắp như BGN06 và 07
+  Old: ['Y/c cải tiến'] | Sentiment: —
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 23
+Text: Aptomat gia dụng nên có thêm đèn báo điện
+  Old: ['Đề xuất SPM'] | Sentiment: —
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 24
+Text: Tip T8 /20w làm lên 30w.
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 25
+Text: KM điện quang bulb công suất nhỏ mua 2 thùng tặng 4 cái
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 29
+Text: Km điện quang bóng thuỷ tinh 1m2 mua 1 thùng tặng 2 cái
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 30
+Text: Km điện quang mua doanh số 5 triệu ck 2%
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 35
+Text: bóng bulb trụ công suất cao của Rạng Đông giá cao hơn nhiều so với các hãng như g8 và Trung Quốc nên khó bán khó cạnh tranh
+  Old: ['Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 48
+Text: Để nghị cty thiết kế dây 3m,5m,10m cho dòng ổ cắm CSC OC 10
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 49
+Text: Cửa hàng giao bóng 1,2m TT01 cho khách phải lấy dây thun quấn đầu bóng lại sợ tuột ra ngoài. Cần cty thiết kế lại cái vỏ bóng
+  Old: ['Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------

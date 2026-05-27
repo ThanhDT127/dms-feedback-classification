@@ -1,0 +1,170 @@
+"""Health, metrics, and log endpoints."""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+from datetime import datetime
+from pathlib import Path
+
+from fastapi import APIRouter, Query
+
+from ...settings import SERVICE_DIR
+
+logger = logging.getLogger("dms-web")
+
+router = APIRouter(prefix="/api", tags=["metrics"])
+
+WORK_DIR = SERVICE_DIR / "work"
+LOG_DIR = SERVICE_DIR / "logs"
+
+
+# ---------- Health ----------
+
+
+@router.get("/health")
+async def get_health():
+    """Trả về trạng thái hoạt động của dịch vụ."""
+    health_path = WORK_DIR / "health.json"
+    if health_path.is_file():
+        try:
+            return json.loads(health_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning("Lỗi đọc health.json: %s", exc)
+
+    # Generate basic health if file doesn't exist
+    return {
+        "status": "unknown",
+        "last_poll": None,
+        "uptime": "N/A",
+        "current_cycle": 0,
+        "files_in_queue": 0,
+        "last_success": None,
+        "last_error": None,
+        "metrics_summary": {
+            "processed_24h": 0,
+            "failed_24h": 0,
+            "success_rate": "N/A",
+        },
+        "web_api": True,
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+# ---------- Metrics ----------
+
+
+@router.get("/metrics")
+async def get_metrics():
+    """Trả về số liệu thống kê vận hành."""
+    metrics_path = WORK_DIR / "metrics.json"
+    if metrics_path.is_file():
+        try:
+            return json.loads(metrics_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning("Lỗi đọc metrics.json: %s", exc)
+    return {"message": "Chưa có dữ liệu metrics"}
+
+
+@router.get("/metrics/daily")
+async def get_daily_metrics():
+    """Trả về tổng hợp theo ngày từ daily-summary.jsonl."""
+    summary_path = LOG_DIR / "daily-summary.jsonl"
+    if not summary_path.is_file():
+        return []
+    entries = []
+    try:
+        for line in summary_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    except Exception as exc:
+        logger.warning("Lỗi đọc daily-summary.jsonl: %s", exc)
+    return entries
+
+
+# ---------- Logs ----------
+
+
+def _find_latest_log() -> Path | None:
+    """Find the most recent log file in the logs directory."""
+    if not LOG_DIR.is_dir():
+        return None
+    log_files = sorted(LOG_DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if log_files:
+        return log_files[0]
+    # Fallback: try .log files
+    log_files = sorted(LOG_DIR.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return log_files[0] if log_files else None
+
+
+def _parse_log_line(line: str) -> dict | None:
+    """Parse a JSON log line or a plain-text log line."""
+    line = line.strip()
+    if not line:
+        return None
+
+    # Try JSON-lines format first
+    try:
+        data = json.loads(line)
+        return {
+            "timestamp": data.get("ts", ""),
+            "level": data.get("level", "INFO"),
+            "message": data.get("msg", line),
+            "module": data.get("module", ""),
+            "raw": data,
+        }
+    except json.JSONDecodeError:
+        pass
+
+    # Fallback: plain text format  "2024-01-01 12:00:00 [INFO] module: message"
+    match = re.match(
+        r"^(\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}:\d{2})\s*\[(\w+)\]\s*(\S+):\s*(.*)$",
+        line,
+    )
+    if match:
+        return {
+            "timestamp": match.group(1),
+            "level": match.group(2),
+            "message": match.group(4),
+            "module": match.group(3),
+        }
+
+    return {"timestamp": "", "level": "INFO", "message": line, "module": ""}
+
+
+@router.get("/logs")
+async def get_logs(
+    level: str | None = Query(None, description="Lọc theo level: DEBUG, INFO, WARNING, ERROR"),
+    limit: int = Query(200, ge=1, le=5000, description="Số dòng tối đa"),
+):
+    """Đọc log gần đây từ file log mới nhất."""
+    log_file = _find_latest_log()
+    if log_file is None:
+        return []
+
+    try:
+        all_lines = log_file.read_text(encoding="utf-8").splitlines()
+    except Exception as exc:
+        logger.warning("Lỗi đọc file log %s: %s", log_file, exc)
+        return []
+
+    # Take the last N lines
+    recent_lines = all_lines[-limit * 2 :] if len(all_lines) > limit * 2 else all_lines
+
+    entries = []
+    for line in recent_lines:
+        parsed = _parse_log_line(line)
+        if parsed is None:
+            continue
+        if level and parsed["level"].upper() != level.upper():
+            continue
+        entries.append(parsed)
+
+    # Return the most recent entries, up to limit
+    return entries[-limit:]

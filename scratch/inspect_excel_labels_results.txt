@@ -1,0 +1,25 @@
+Old columns:
+['STT', 'Tên đơn vị', 'Mã vấn đề', 'Mã nhân viên', 'Tên nhân viên', 'Ngày', 'Mã đại lý', 'Đại lý', 'Địa chỉ', 'Tỉnh/TP', 'Quận/huyện', 'Sản phẩm', 'Dòng SP', 'Model', 'Lớp', 'Điểm', 'Nội dung vấn đề', 'Loại vấn đề', 'Trạng thái', 'Sản phẩm.1', 'Unnamed: 20', 'Unnamed: 21', 'Unnamed: 22', 'Yêu cầu công cụ BH', 'Unnamed: 24', 'Unnamed: 25', 'Unnamed: 26', 'Giá, cơ chế RD', 'Unnamed: 28', 'Unnamed: 29', 'Dịch vụ', 'Unnamed: 31', 'Unnamed: 32', 'Hàng giả', 'Website', 'Đối thủ cạnh tranh', 'Unnamed: 36', 'Unnamed: 37', 'Unnamed: 38', 'Tin trung lập', 'Sentiment', 'LLM_Extracted', 'BM25_Score']
+
+New columns:
+['STT', 'Tên đơn vị', 'Mã vấn đề', 'Mã nhân viên', 'Tên nhân viên', 'Ngày', 'Mã đại lý', 'Đại lý', 'Địa chỉ', 'Tỉnh/TP', 'Quận/huyện', 'Sản phẩm', 'Dòng SP', 'Model', 'Lớp', 'Điểm', 'Nội dung vấn đề', 'Loại vấn đề', 'Trạng thái', 'Sản phẩm.1', 'Unnamed: 20', 'Unnamed: 21', 'Unnamed: 22', 'Yêu cầu công cụ BH', 'Unnamed: 24', 'Unnamed: 25', 'Unnamed: 26', 'Giá, cơ chế RD', 'Unnamed: 28', 'Unnamed: 29', 'Dịch vụ', 'Unnamed: 31', 'Unnamed: 32', 'Hàng giả', 'Website', 'Đối thủ cạnh tranh', 'Unnamed: 36', 'Unnamed: 37', 'Unnamed: 38', 'Tin trung lập', 'Sentiment', 'LLM_Extracted', 'BM25_Score']
+
+--- Row 2 in new_df (dòng 5 Excel) ---
+  Column 'STT': np.float64(2.0)
+  Column 'Tên đơn vị': 'Truyền thống Vùng 3'
+  Column 'Mã vấn đề': np.float64(206547.0)
+  Column 'Mã nhân viên': 'TV03.KienDH'
+  Column 'Tên nhân viên': 'Đặng Hồng Kiên'
+  Column 'Ngày': '13-10-2025'
+  Column 'Mã đại lý': 'TV03.C2.0006564'
+  Column 'Đại lý': 'CH Tú Hải'
+  Column 'Địa chỉ': 'QL.2, Xã Trung Môn, Huyện Yên Sơn, Tuyên Quang'
+  Column 'Tỉnh/TP': 'Tỉnh Tuyên Quang'
+  Column 'Quận/huyện': 'Huyện Yên Sơn'
+  Column 'Sản phẩm': 'Downlight'
+  Column 'Dòng SP': 'NT03'
+  Column 'Nội dung vấn đề': 'Mã sp NT03 khách thích màu đen hơn trắng, cần bổ sung màu vân gỗ'
+  Column 'Loại vấn đề': 'Yêu cầu khách hàng'
+  Column 'Trạng thái': 'Chờ xử lý'
+  Column 'Unnamed: 22': 'x'
+  Column 'LLM_Extracted': 'NT03'

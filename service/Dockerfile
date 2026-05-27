@@ -6,6 +6,7 @@ WORKDIR /app
 
 COPY pyproject.toml README.md requirements.txt ./
 COPY src/ ./src/
+COPY static/ ./static/
 
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
     && python -m pip install --no-cache-dir . \

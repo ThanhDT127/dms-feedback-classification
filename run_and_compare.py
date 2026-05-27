@@ -21,6 +21,8 @@ TEST_FILES = [
     "DMS-13102025.xlsx",
     "DMS-14102025.xlsx",
     "DMS-1510-1710.xlsx",
+    "DMS-1810-1910.xlsx",
+    "DMS-2010-2210.xlsx",
 ]
 
 OLD_OUTPUT_DIR = script_dir / "Output"
@@ -39,8 +41,8 @@ def run_all():
         update={
             "keyword_dir_override": active_keyword if active_keyword.exists() else settings.keyword_dir,
             "model_dir_override": active_model if active_model.exists() else settings.model_dir,
-            "llm_batch_size": 10,
-            "rate_gap_sec": 8.0,
+            "llm_batch_size": 20,
+            "rate_gap_sec": 4.0,
         }
     )
     

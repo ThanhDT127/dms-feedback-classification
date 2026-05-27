@@ -1,0 +1,275 @@
+File: DMS-14102025.xlsx
+Total differences: 54 / 74 rows
+
+Row: 3
+Text: Aptomat gia dụng nên có thêm đèn báo
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: —
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 4
+Text: vỏ hộp Bun công suất nhỏ và chữ in mờ quá, lên làm  vỏ  cứng và in đậm  lên.
+  Old: ['Y/c cải tiến', 'Kệ bóng, thử đèn,…', 'Đề xuất'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 6
+Text: Ổ chịu tải không dây G8 4 lỗ cắm giá giao 28.000đ
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 7
+Text: Ổ 3 chịu tải k dây G8 giá giao 25.000đ
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 8
+Text: Ấm siêu tốc đạt tường giá giao 80.000đ
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Tốt/ ko tốt'] | Sentiment: —
+--------------------------------------------------
+Row: 9
+Text: Panel sino 600x600/50w giá giao 375.000đ
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 11
+Text: Cốc đựng bút của đèn bàn rl45 rất dễ bật ra, cần gia cố có chốt giữ chắc chắn hơn
+  Old: ['Báo CL tốt'] | Sentiment: Tích cực
+  V3:  ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 12
+Text: Vợt muỗi rạng đông khách chê dỏm
+  Old: ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: —
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 14
+Text: Bảng giá 2025 của mpe
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 15
+Text: ổ chịu tải mới ra được 1 loại 3c Cty lên ra đủ các mã để phục vụ hết nhu cầu của người dùng, phích chịu tại lên cải tiến dẹt cắm đỡ tốn diện tích
+  Old: ['Y/c cải tiến', 'Đề xuất SPM', 'Kệ bóng, thử đèn,…'] | Sentiment: —
+  V3:  ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 16
+Text: Nhà buôn mời m26 122, rẻ hơn npp bán ra
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Tốt/ ko tốt', 'HTPP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 17
+Text: Khách bán vợt muỗi bị lỗi tới giờ chào mà khách từ chối không bán nữa bán G8 giá 60k mà ổn định
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 18
+Text: Km điện quang ổ cắm ck 5%
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 21
+Text: Khách xin ít vỏ hộp bóng 10,30,40,50w
+Do bị ngập nước
+  Old: ['Báo lỗi', 'Kệ bóng, thử đèn,…', 'Khác'] | Sentiment: —
+  V3:  ['Khác'] | Sentiment: —
+--------------------------------------------------
+Row: 22
+Text: Bộ m36 đợt này hay lỗi,cty cần ktra chât lượng kĩ hơn trước khi bán ra thị trường
+  Old: ['Báo lỗi'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 24
+Text: led Bun trụ 10w Asia giá rẻ 12k hợp lý dễ bán. Rạng Đông cao hơn gấp 3 lần.
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: Tích cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 25
+Text: Cải tiến vỏ thùng bub, để trong phòng kín bị hôi
+  Old: ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: —
+  V3:  ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 26
+Text: Bóng thái dương ctr 30tr tặng 1 chỉ vàng
+  Old: ['Kệ bóng, thử đèn,…'] | Sentiment: —
+  V3:  ['Trả thưởng'] | Sentiment: —
+--------------------------------------------------
+Row: 27
+Text: Đèn bàn 45 8w không phủ seal bề mặt nên bị trày rất nhiều
+  Old: ['Báo lỗi'] | Sentiment: —
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 28
+Text: Vợt 02 vẫn bị lỗi k lên điện
+  Old: ['Báo lỗi', 'Kệ bóng, thử đèn,…'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 31
+Text: Km MpE mua doanh số 10 triệu ck 9%
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 33
+Text: Giá âm trần at10_8w đổi màu nhà buôn hưng yên giao rẻ hơn 3000₫/ 1 sản phẩm
+  Old: ['Bảo hành', 'HTPP'] | Sentiment: —
+  V3:  ['Tốt/ ko tốt', 'HTPP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 35
+Text: At60 mẫu mã khác kén người dùng sẽ ko bán được loại âm.trần này
+  Old: ['Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 36
+Text: At58 giá tốt nhưng cầm đèn trên tay khách trãi nghiệm lại rất nhẹ cũng 1 phần gây khách hàng tiêu dùng phân vân
+  Old: ['Báo CL tốt', 'Tốt/ ko tốt'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi', 'Tốt/ ko tốt'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 37
+Text: Ốp 12n bị phản ánh vô nước
+  Old: ['Báo lỗi'] | Sentiment: —
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 38
+Text: Ấm siêu tốc st3 dễ mở nắp
+  Old: ['Báo lỗi'] | Sentiment: —
+  V3:  ['Báo CL tốt'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 39
+Text: Km điện quang mua doanh số 5 triệu ck 2%
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 40
+Text: Khách phản hồi ấm siêu tốc của rạng đông hay bị hư công tắc. Cty nên làm công tắc tốt hơn
+  Old: ['Báo lỗi', 'Báo CL tốt', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi', 'Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 42
+Text: Trụ 60w lấy tràn vùng giá 178k
+  Old: ['Tốt/ ko tốt', 'HTPP'] | Sentiment: —
+  V3:  ['HTPP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 43
+Text: Cần mở bán thêm nắp phích và nắp bảo vệ của phích 2lit và 3lit
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
+Row: 44
+Text: Trụ 80w lấy tràn vùng giá 193k
+  Old: ['Tốt/ ko tốt', 'HTPP'] | Sentiment: —
+  V3:  ['Tốt/ ko tốt', 'HTPP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 45
+Text: M26 lấy tràn vùng giá 115
+  Old: ['Tốt/ ko tốt', 'HTPP'] | Sentiment: —
+  V3:  ['Tốt/ ko tốt', 'HTPP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 46
+Text: Phích nước tý liên giá 86.000
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Tin trung lập'] | Sentiment: —
+--------------------------------------------------
+Row: 47
+Text: Ấm siêu tốc TQ giá nhập 140.000
+  Old: ['Tin trung lập'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 48
+Text: Tip T8/20w làm tăng công suất lên 30w các hãng làm tăng công suất lên hết rồi
+  Old: ['Đề xuất SPM', 'Kệ bóng, thử đèn,…'] | Sentiment: —
+  V3:  ['Y/c cải tiến'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 49
+Text: Ổ chịu tải grinew cho khách đập thoải mái không vỡ
+Giá ổ 3: 28.000₫
+  Old: ['Báo lỗi'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'CTKM, giá, cơ chế', 'TT SP'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 50
+Text: Âm trần TLC 8w 90 3 chế độ ,60,000
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế', 'TT SP'] | Sentiment: —
+--------------------------------------------------
+Row: 52
+Text: Đèn Led TLC lỗi nhiều cho nên khách hàng đang tập trung đẩy hết hàng cũ của TLC và chuyển sang bán rạng đông
+  Old: ['Hãng', 'Hoạt động'] | Sentiment: Tiêu cực
+  V3:  ['Hãng', 'TT SP'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 54
+Text: Thông số của panel 105/9w của mpe
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'TT SP'] | Sentiment: —
+--------------------------------------------------
+Row: 56
+Text: MPE tặng kệ trưng bày sản phẩm
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'Hoạt động'] | Sentiment: —
+--------------------------------------------------
+Row: 58
+Text: TLC chương trình gói quý 50-70tr chiết khấu thêm 5%
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 59
+Text: Các mối nhập hàng đang bị đối thủ chào giá thấp hơn dẫn đến doanh thu CH giảm chậm lấy hàng
+  Old: ['Báo lỗi', 'Tốt/ ko tốt', 'Tin trung lập'] | Sentiment: Tiêu cực
+  V3:  ['Tốt/ ko tốt', 'Hàng hoá'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 63
+Text: Công ty cung cấp kệ trưng bày
+  Old: ['Kệ bóng, thử đèn,…', 'Đề xuất'] | Sentiment: —
+  V3:  ['Kệ bóng, thử đèn,…'] | Sentiment: —
+--------------------------------------------------
+Row: 64
+Text: bóng 9w của HC có chế độ điều chỉnh độ sáng
+  Old: ['Hãng'] | Sentiment: —
+  V3:  ['Hãng', 'TT SP'] | Sentiment: —
+--------------------------------------------------
+Row: 65
+Text: Ốp tròn LN12N 220/18w 6500k khách hàng mới sử dụng được 2 tuần thì bị chết mất 1 nửa led của bóng k sáng
+  Old: ['Báo lỗi', 'Kệ bóng, thử đèn,…'] | Sentiment: Tiêu cực
+  V3:  ['Báo lỗi'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 66
+Text: Bóng bulb trụ Việt Nhật 30 W giá 30k
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 67
+Text: Thẻ cào giải buld 3w quá nhỏ
+  Old: ['Báo lỗi', 'Đề xuất'] | Sentiment: Tiêu cực
+  V3:  ['Trả thưởng'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 68
+Text: Downlight hãng OLed giá rẻ bằng 1/2 Rạng Đông
+  Old: ['Tốt/ ko tốt'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: Tiêu cực
+--------------------------------------------------
+Row: 69
+Text: Bóng chất lượng, ánh sáng ổn định.
+  Old: ['Báo CL tốt', 'Kệ bóng, thử đèn,…'] | Sentiment: Tích cực
+  V3:  ['Báo CL tốt'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 71
+Text: Aptomat gia dụng nên có thêm đèn báo hiệu có điện vào
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: —
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 72
+Text: Bóng bulb chất lượng tốt.
+  Old: ['Báo CL tốt', 'Kệ bóng, thử đèn,…'] | Sentiment: Tích cực
+  V3:  ['Báo CL tốt'] | Sentiment: Tích cực
+--------------------------------------------------
+Row: 73
+Text: MPE chương trình tháng 10 cho KH khi thanh toán ngay đơn hàng trị giá 3.000.000 tặng 1 bóng led buld LBD3-9V ( tương đương với 3% giá trị đơn hàng)
+  Old: ['Hãng', 'Hoạt động', 'CTKM, giá, cơ chế'] | Sentiment: —
+  V3:  ['Hãng', 'CTKM, giá, cơ chế'] | Sentiment: —
+--------------------------------------------------
+Row: 75
+Text: Cp03 nên làm chung 1 hộp đựng cả pha đèn và tấm pin, cho cửa hàng dễ bán, trưng bày và quản lý
+  Old: ['Y/c cải tiến', 'Kệ bóng, thử đèn,…', 'Tin trung lập'] | Sentiment: —
+  V3:  ['Y/c cải tiến'] | Sentiment: —
+--------------------------------------------------
+Row: 76
+Text: Cần có thêm sp ổ cắm chịu tải 2 và 4 lỗ cắm
+  Old: ['Y/c cải tiến', 'Đề xuất SPM'] | Sentiment: —
+  V3:  ['Đề xuất SPM'] | Sentiment: —
+--------------------------------------------------
