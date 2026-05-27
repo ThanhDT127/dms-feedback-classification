@@ -161,32 +161,59 @@ def test_put_pipeline_keywords(client, tmp_path):
 
 
 def test_products_list_and_save(client, tmp_path):
-    # Create mock product catalog excel file first
+    # Create mock product catalog excel file first with 3 sheets
     import pandas as pd
     products_file = tmp_path / "Keyword" / "Phân Chia Nhóm Sản Phẩm V2.xlsx"
-    df = pd.DataFrame([
+    
+    df1 = pd.DataFrame([
         {"Sản phẩm": "Đèn Led", "Dòng SP": "Bulb", "Model": "LED-BULB-9W"},
         {"Sản phẩm": "Thiết bị điện", "Dòng SP": "Ổ cắm", "Model": "OC-4D-3M"}
     ])
-    df.to_excel(products_file, index=False)
+    df2 = pd.DataFrame([
+        {"Sản phẩm": "Ấm siêu tốc", "Dòng SP": "RD-AST18", "Từ khóa": "Ast18"}
+    ])
+    df3 = pd.DataFrame([
+        {"Sản phẩm": "Aptomat", "Từ khóa": "át khối"}
+    ])
     
-    # 1. Test GET list
+    with pd.ExcelWriter(products_file, engine='openpyxl') as writer:
+        df1.to_excel(writer, sheet_name="Lọc lần 1", index=False)
+        df2.to_excel(writer, sheet_name="Lọc lần 2", index=False)
+        df3.to_excel(writer, sheet_name="Lọc lần 3", index=False)
+    
+    # 1. Test GET list (all sheets)
     response = client.get("/api/pipeline/products/list")
     assert response.status_code == 200
     data = response.json()
-    assert "columns" in data
-    assert len(data["products"]) == 2
-    assert data["products"][0]["Model"] == "LED-BULB-9W"
+    assert "sheets" in data
+    assert "Lọc lần 1" in data["sheet_names"]
+    assert "Lọc lần 2" in data["sheet_names"]
+    assert "Lọc lần 3" in data["sheet_names"]
+    assert len(data["sheets"]["Lọc lần 1"]["products"]) == 2
+    assert data["sheets"]["Lọc lần 1"]["products"][0]["Model"] == "LED-BULB-9W"
+    assert len(data["sheets"]["Lọc lần 2"]["products"]) == 1
+    assert data["sheets"]["Lọc lần 2"]["products"][0]["Từ khóa"] == "Ast18"
     
-    # 2. Test PUT list
-    new_products = [
-        {"Sản phẩm": "Đèn Led", "Dòng SP": "Bulb", "Model": "LED-BULB-9W-V2"},
-        {"Sản phẩm": "Thiết bị điện", "Dòng SP": "Ổ cắm", "Model": "OC-4D-3M"}
-    ]
-    response = client.put("/api/pipeline/products", json=new_products)
+    # 2. Test PUT list (updating Sheet 2 while preserving Sheet 1 and 3)
+    payload = {
+        "sheet_name": "Lọc lần 2",
+        "products": [
+            {"Sản phẩm": "Ấm siêu tốc", "Dòng SP": "RD-AST18", "Từ khóa": "Ast18-Updated"}
+        ]
+    }
+    response = client.put("/api/pipeline/products", json=payload)
     assert response.status_code == 200
     
-    # Verify excel file has been updated
-    updated_df = pd.read_excel(products_file)
-    assert len(updated_df) == 2
-    assert updated_df.iloc[0]["Model"] == "LED-BULB-9W-V2"
+    # Verify all sheets are preserved, and only the target sheet is updated!
+    with pd.ExcelFile(products_file) as xl:
+        assert list(xl.sheet_names) == ["Lọc lần 1", "Lọc lần 2", "Lọc lần 3"]
+        updated_df1 = pd.read_excel(xl, "Lọc lần 1")
+        updated_df2 = pd.read_excel(xl, "Lọc lần 2")
+        updated_df3 = pd.read_excel(xl, "Lọc lần 3")
+        
+        assert len(updated_df1) == 2
+        assert updated_df1.iloc[0]["Model"] == "LED-BULB-9W"
+        assert len(updated_df2) == 1
+        assert updated_df2.iloc[0]["Từ khóa"] == "Ast18-Updated"
+        assert len(updated_df3) == 1
+        assert updated_df3.iloc[0]["Sản phẩm"] == "Aptomat"

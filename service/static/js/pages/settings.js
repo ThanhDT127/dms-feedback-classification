@@ -5,11 +5,26 @@
 window.SettingsPage = (() => {
   let _activeTab = 'model';
   let _activeSubTab = 'prompt_text';
+  let _activeProductSheet = 'Lọc lần 1';
   let _settings = null;
   let _models = [];
   let _prompt = '';
   let _rawKeywords = null;
-  let _productsData = null;
+  let _productsData = null; // Map of sheet names to product lists
+  let _productsColumns = {}; // Map of sheet names to columns
+  let _productsSheetNames = ['Lọc lần 1', 'Lọc lần 2', 'Lọc lần 3'];
+
+  let _editStates = {
+    prompt: false,
+    keywords: false,
+    products: false
+  };
+
+  let _backups = {
+    prompt: '',
+    keywords: null,
+    products: {}
+  };
 
   const TABS = [
     { id: 'model',    icon: '🤖', label: 'Model' },
@@ -240,6 +255,16 @@ window.SettingsPage = (() => {
     }
   }
 
+  /* ---- Edit Banner Helper ---- */
+  function renderEditBanner(section) {
+    if (!_editStates[section]) return '';
+    return `
+      <div class="animate-in" style="margin-bottom:16px;padding:10px 14px;border-radius:6px;background:rgba(217,119,6,0.12);border:1px solid rgba(217,119,6,0.3);color:#fbbf24;font-size:12px;font-weight:500;display:flex;align-items:center;gap:8px;">
+        ⚠️ Đang ở chế độ chỉnh sửa — Các thay đổi chưa được lưu vào file hệ thống.
+      </div>
+    `;
+  }
+
   /* ---- Prompt Tab & Sub-tabs ---- */
   function renderPromptTab() {
     return `
@@ -295,21 +320,32 @@ window.SettingsPage = (() => {
   }
 
   function renderPromptTextSubTab() {
+    const isEditing = _editStates.prompt;
     const wordCount = _prompt ? _prompt.split(/\s+/).length : 0;
     const tokenEstimate = Math.round(wordCount * 1.3);
 
     return `
       <div class="animate-in">
+        ${renderEditBanner('prompt')}
+        
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <span style="font-size:13px;font-weight:600;color:var(--text-muted);">Mẫu Prompt của Classifier</span>
-          <div class="btn-group">
+          <span style="font-size:13px;font-weight:600;color:var(--text-muted);">
+            Mẫu Prompt của Classifier ${isEditing ? '<span style="color:#fbbf24;font-size:11px;font-weight:normal;margin-left:8px;">(Chế độ chỉnh sửa)</span>' : ''}
+          </span>
+          <div class="btn-group" style="display:flex;gap:8px;">
             <button class="btn btn-ghost btn-sm" onclick="SettingsPage.copyPrompt()">📋 Sao chép</button>
-            <button class="btn btn-secondary btn-sm" id="btn-edit-prompt" onclick="SettingsPage.toggleEditPrompt()">✏️ Chỉnh sửa</button>
+            ${!isEditing 
+              ? `<button class="btn btn-secondary btn-sm" onclick="SettingsPage.toggleEditPrompt()">✏️ Chỉnh sửa</button>`
+              : `
+                <button class="btn btn-secondary btn-sm" onclick="SettingsPage.cancelEditPrompt()">🔙 Quay lại</button>
+                <button class="btn btn-primary btn-sm" onclick="SettingsPage.savePrompt()">💾 Lưu thay đổi</button>
+              `
+            }
           </div>
         </div>
 
-        <textarea class="form-textarea code" id="prompt-textarea" readonly
-                  style="min-height:380px;line-height:1.6;font-family:monospace;font-size:12px;width:100%;border-radius:6px;background:rgba(0,0,0,0.2);">${esc(_prompt)}</textarea>
+        <textarea class="form-textarea code" id="prompt-textarea" ${!isEditing ? 'readonly' : ''}
+                  style="min-height:380px;line-height:1.6;font-family:monospace;font-size:12px;width:100%;border-radius:6px;background:rgba(0,0,0,0.2);${isEditing ? 'border-color:var(--accent-blue);box-shadow:0 0 0 2px rgba(59,130,246,0.2);' : ''}">${esc(_prompt)}</textarea>
 
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
           <div style="display:flex;gap:16px;font-size:11px;color:var(--text-muted);">
@@ -317,25 +353,21 @@ window.SettingsPage = (() => {
             <span>🔤 ${tokenEstimate.toLocaleString()} tokens (ước tính)</span>
             <span>📏 ${_prompt.length.toLocaleString()} ký tự</span>
           </div>
-          <button class="btn btn-primary hidden" id="btn-save-prompt" onclick="SettingsPage.savePrompt()">
-            💾 Lưu System Prompt
-          </button>
         </div>
       </div>
     `;
   }
 
   function toggleEditPrompt() {
-    const textarea = document.getElementById('prompt-textarea');
-    const saveBtn = document.getElementById('btn-save-prompt');
-    const editBtn = document.getElementById('btn-edit-prompt');
-    if (!textarea) return;
+    _editStates.prompt = true;
+    _backups.prompt = _prompt;
+    renderSubTabContent();
+  }
 
-    const isReadonly = textarea.readOnly;
-    textarea.readOnly = !isReadonly;
-    textarea.style.borderColor = isReadonly ? 'var(--accent-blue)' : '';
-    if (saveBtn) saveBtn.classList.toggle('hidden', isReadonly);
-    if (editBtn) editBtn.innerHTML = isReadonly ? '🔒 Khóa' : '✏️ Chỉnh sửa';
+  function cancelEditPrompt() {
+    _prompt = _backups.prompt;
+    _editStates.prompt = false;
+    renderSubTabContent();
   }
 
   function copyPrompt() {
@@ -354,8 +386,9 @@ window.SettingsPage = (() => {
     try {
       await API.put('/settings/prompt', { prompt: textarea.value });
       _prompt = textarea.value;
-      Toast.success('Đã lưu prompt thành công');
-      toggleEditPrompt();
+      _editStates.prompt = false;
+      Toast.success('Đã lưu System Prompt thành công');
+      renderSubTabContent();
     } catch (e) {
       Toast.error('Lỗi lưu prompt: ' + e.message);
     }
@@ -378,12 +411,28 @@ window.SettingsPage = (() => {
       return `<div class="text-center" style="padding:40px;"><span class="spinner"></span> Đang tải từ khóa...</div>`;
     }
 
+    const isEditing = _editStates.keywords;
     const categories = Object.keys(_rawKeywords).filter(k => k !== 'manual_brand_alias');
+    
     return `
       <div class="animate-in">
-        <p class="form-hint mb-4" style="color:var(--text-muted); font-size:12px; margin-bottom:16px;">
-          Chỉnh sửa từ khóa gợi ý cho từng nhãn phân loại. Nhập các từ khóa cách nhau bằng dấu phẩy.
-        </p>
+        ${renderEditBanner('keywords')}
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <p class="form-hint" style="color:var(--text-muted); font-size:12px; margin:0;">
+            Chỉnh sửa từ khóa gợi ý cho từng nhãn phân loại. Nhập các từ khóa cách nhau bằng dấu phẩy.
+          </p>
+          <div class="btn-group" style="display:flex;gap:8px;">
+            ${!isEditing 
+              ? `<button class="btn btn-secondary btn-sm" onclick="SettingsPage.toggleEditKeywords()">✏️ Chỉnh sửa</button>`
+              : `
+                <button class="btn btn-secondary btn-sm" onclick="SettingsPage.cancelEditKeywords()">🔙 Quay lại</button>
+                <button class="btn btn-primary btn-sm" onclick="SettingsPage.saveKeywords()">💾 Lưu thay đổi</button>
+              `
+            }
+          </div>
+        </div>
+
         <div style="max-height: 400px; overflow-y: auto; padding-right: 8px;">
           ${categories.map(cat => `
             <div class="form-group mb-4" style="border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px; margin-bottom:16px;">
@@ -392,15 +441,26 @@ window.SettingsPage = (() => {
                 <span style="font-size:11px; font-weight:normal; color:var(--text-muted);">(${_rawKeywords[cat].length} từ khóa)</span>
               </label>
               <input type="text" class="form-input keyword-input" data-cat="${esc(cat)}" 
-                     value="${esc(_rawKeywords[cat].join(', '))}" placeholder="Nhập từ khóa gợi ý..." style="font-size:12px; padding:6px 10px;">
+                     ${!isEditing ? 'disabled' : ''}
+                     value="${esc(_rawKeywords[cat].join(', '))}" placeholder="Nhập từ khóa gợi ý..." 
+                     style="font-size:12px; padding:6px 10px; ${isEditing ? 'border-color:var(--accent-blue);' : 'background:rgba(255,255,255,0.01);opacity:0.8;'}" />
             </div>
           `).join('')}
         </div>
-        <button class="btn btn-primary mt-4" onclick="SettingsPage.saveKeywords()">
-          💾 Lưu từ khóa gợi ý
-        </button>
       </div>
     `;
+  }
+
+  function toggleEditKeywords() {
+    _editStates.keywords = true;
+    _backups.keywords = JSON.parse(JSON.stringify(_rawKeywords));
+    renderSubTabContent();
+  }
+
+  function cancelEditKeywords() {
+    _rawKeywords = JSON.parse(JSON.stringify(_backups.keywords));
+    _editStates.keywords = false;
+    renderSubTabContent();
   }
 
   async function saveKeywords() {
@@ -415,7 +475,9 @@ window.SettingsPage = (() => {
     try {
       await API.put('/pipeline/keywords', data);
       _rawKeywords = data;
+      _editStates.keywords = false;
       Toast.success('Đã lưu từ khóa gợi ý thành công');
+      renderSubTabContent();
     } catch (e) {
       Toast.error('Lỗi lưu từ khóa: ' + e.message);
     }
@@ -426,11 +488,55 @@ window.SettingsPage = (() => {
     if (_productsData) return;
     try {
       const res = await API.get('/pipeline/products/list');
-      _productsData = res.products || [];
+      // res.sheets maps sheet names to {columns, products}
+      _productsData = res.sheets || {};
+      _productsColumns = {};
+      _productsSheetNames = res.sheet_names || ['Lọc lần 1', 'Lọc lần 2', 'Lọc lần 3'];
+
+      for (const name of _productsSheetNames) {
+        _productsColumns[name] = _productsData[name]?.columns || ['Sản phẩm', 'Dòng SP', 'Model'];
+        _productsData[name] = _productsData[name]?.products || [];
+      }
+
+      _activeProductSheet = _productsSheetNames[0] || 'Lọc lần 1';
       renderSubTabContent();
     } catch (e) {
       Toast.error('Không thể tải danh mục sản phẩm: ' + e.message);
     }
+  }
+
+  function captureActiveSheetEdits() {
+    const table = document.getElementById('products-edit-table');
+    if (!table) return;
+    const rows = table.querySelectorAll('tbody tr');
+    const products = [];
+    const cols = _productsColumns[_activeProductSheet] || ['Sản phẩm', 'Dòng SP', 'Model'];
+    
+    rows.forEach(row => {
+      const cells = row.querySelectorAll('.prod-cell');
+      if (cells.length === 0) return;
+      
+      const item = {};
+      cells.forEach(cell => {
+        const field = cell.dataset.field;
+        item[field] = cell.textContent.trim();
+      });
+      
+      // Keep only if at least one field is filled
+      if (Object.values(item).some(v => v !== '')) {
+        products.push(item);
+      }
+    });
+    
+    _productsData[_activeProductSheet] = products;
+  }
+
+  function switchProductSheet(sheetName) {
+    if (_editStates.products) {
+      captureActiveSheetEdits();
+    }
+    _activeProductSheet = sheetName;
+    renderSubTabContent();
   }
 
   function renderProductsSubTab() {
@@ -439,89 +545,129 @@ window.SettingsPage = (() => {
       return `<div class="text-center" style="padding:40px;"><span class="spinner"></span> Đang tải danh mục sản phẩm...</div>`;
     }
 
+    const isEditing = _editStates.products;
+    const cols = _productsColumns[_activeProductSheet] || ['Sản phẩm', 'Dòng SP', 'Model'];
+    const rows = _productsData[_activeProductSheet] || [];
+
     return `
       <div class="animate-in">
+        ${renderEditBanner('products')}
+
+        <!-- Sheet selector tabs -->
+        <div style="display:flex;gap:8px;margin-bottom:16px;background:rgba(255,255,255,0.02);padding:6px;border-radius:6px;border:1px solid var(--border);width:fit-content;">
+          ${_productsSheetNames.map(name => {
+            const active = name === _activeProductSheet;
+            return `
+              <button class="btn btn-sm" 
+                      style="padding:6px 16px; font-size:12px; border-radius:4px; font-weight:600; border:none; transition:all 0.2s;
+                             background:${active ? 'var(--accent-blue)' : 'transparent'};
+                             color:${active ? '#ffffff' : 'var(--text-muted)'};"
+                      onclick="SettingsPage.switchProductSheet('${esc(name)}')">
+                📄 ${esc(name)}
+              </button>
+            `;
+          }).join('')}
+        </div>
+
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
           <p class="form-hint" style="color:var(--text-muted); margin:0; font-size:12px;">
-            Kích đúp vào ô bất kỳ để chỉnh sửa trực tiếp thông tin sản phẩm.
+            ${isEditing ? 'Nhấp đúp vào ô để chỉnh sửa trực tiếp thông tin sản phẩm.' : 'Danh mục sản phẩm (Chế độ xem). Bấm Chỉnh sửa để sửa đổi.'}
           </p>
-          <button class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px;" onclick="SettingsPage.addProductRow()">
-            ➕ Thêm sản phẩm mới
-          </button>
+          
+          <div class="btn-group" style="display:flex; gap:8px;">
+            ${isEditing 
+              ? `
+                <button class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px;" onclick="SettingsPage.addProductRow()">
+                  ➕ Thêm dòng mới
+                </button>
+                <button class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px;" onclick="SettingsPage.cancelEditProducts()">
+                  🔙 Quay lại
+                </button>
+                <button class="btn btn-primary btn-sm" style="padding:4px 10px; font-size:12px;" onclick="SettingsPage.saveProducts()">
+                  💾 Lưu thay đổi
+                </button>
+              `
+              : `<button class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px;" onclick="SettingsPage.toggleEditProducts()">✏️ Chỉnh sửa</button>`
+            }
+          </div>
         </div>
+
         <div style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-md);">
           <table class="table" style="width:100%; border-collapse:collapse; text-align:left; font-size:12px;" id="products-edit-table">
             <thead>
               <tr style="background:rgba(255,255,255,0.02); border-bottom:1px solid var(--border);">
-                <th style="padding:10px 12px; font-weight:600;">Sản phẩm</th>
-                <th style="padding:10px 12px; font-weight:600;">Dòng SP</th>
-                <th style="padding:10px 12px; font-weight:600;">Model</th>
-                <th style="padding:10px 12px; width:80px; text-align:center; font-weight:600;">Thao tác</th>
+                ${cols.map(c => `<th style="padding:10px 12px; font-weight:600;">${esc(c)}</th>`).join('')}
+                ${isEditing ? `<th style="padding:10px 12px; width:80px; text-align:center; font-weight:600;">Thao tác</th>` : ''}
               </tr>
             </thead>
             <tbody>
-              ${_productsData.length === 0 
-                ? `<tr><td colspan="4" style="padding:24px; text-align:center; color:var(--text-muted);">Không có sản phẩm nào. Click "Thêm sản phẩm mới" để bắt đầu.</td></tr>`
-                : _productsData.map((p, idx) => `
+              ${rows.length === 0 
+                ? `<tr><td colspan="${cols.length + (isEditing ? 1 : 0)}" style="padding:24px; text-align:center; color:var(--text-muted);">Không có sản phẩm nào trong sheet này.</td></tr>`
+                : rows.map((p, idx) => `
                   <tr style="border-bottom:1px solid var(--border);" data-idx="${idx}">
-                    <td style="padding:8px 12px;" contenteditable="true" class="prod-cell" data-field="Sản phẩm">${esc(p["Sản phẩm"] || '')}</td>
-                    <td style="padding:8px 12px;" contenteditable="true" class="prod-cell" data-field="Dòng SP">${esc(p["Dòng SP"] || p["dong_sp"] || '')}</td>
-                    <td style="padding:8px 12px;" contenteditable="true" class="prod-cell" data-field="Model">${esc(p["Model"] || p["model"] || '')}</td>
-                    <td style="padding:8px 12px; text-align:center;">
-                      <button class="btn btn-ghost btn-sm" style="color:var(--accent-red); padding:2px 6px; font-size:11px;" 
-                              onclick="SettingsPage.deleteProductRow(${idx})">🗑️ Xóa</button>
-                    </td>
+                    ${cols.map(c => `
+                      <td style="padding:8px 12px; ${isEditing ? 'border-bottom: 1px dashed rgba(59,130,246,0.15);' : ''}" 
+                          contenteditable="${isEditing ? 'true' : 'false'}" 
+                          class="prod-cell" data-field="${esc(c)}">${esc(p[c] || '')}</td>
+                    `).join('')}
+                    ${isEditing ? `
+                      <td style="padding:8px 12px; text-align:center;">
+                        <button class="btn btn-ghost btn-sm" style="color:var(--accent-red); padding:2px 6px; font-size:11px;" 
+                                onclick="SettingsPage.deleteProductRow(${idx})">🗑️ Xóa</button>
+                      </td>
+                    ` : ''}
                   </tr>
                 `).join('')}
             </tbody>
           </table>
         </div>
-        <button class="btn btn-primary mt-4" onclick="SettingsPage.saveProducts()">
-          💾 Lưu danh mục sản phẩm Excel
-        </button>
       </div>
     `;
   }
 
+  function toggleEditProducts() {
+    _editStates.products = true;
+    // Deep clone products data for backup
+    _backups.products = JSON.parse(JSON.stringify(_productsData));
+    renderSubTabContent();
+  }
+
+  function cancelEditProducts() {
+    _productsData = JSON.parse(JSON.stringify(_backups.products));
+    _editStates.products = false;
+    renderSubTabContent();
+  }
+
   function addProductRow() {
-    if (!_productsData) _productsData = [];
-    _productsData.unshift({
-      "Sản phẩm": "Thiết bị điện",
-      "Dòng SP": "Mới",
-      "Model": "Mới"
+    captureActiveSheetEdits();
+    const cols = _productsColumns[_activeProductSheet] || ['Sản phẩm', 'Dòng SP', 'Model'];
+    const newRow = {};
+    cols.forEach(c => {
+      newRow[c] = 'Mới';
     });
-    renderTab();
+    _productsData[_activeProductSheet].unshift(newRow);
+    renderSubTabContent();
   }
 
   function deleteProductRow(idx) {
-    if (!_productsData) return;
-    _productsData.splice(idx, 1);
-    renderTab();
+    captureActiveSheetEdits();
+    _productsData[_activeProductSheet].splice(idx, 1);
+    renderSubTabContent();
   }
 
   async function saveProducts() {
-    const rows = document.querySelectorAll('#products-edit-table tbody tr');
-    const products = [];
-    rows.forEach(row => {
-      const idx = row.dataset.idx;
-      if (idx == null) return;
-      
-      const cells = row.querySelectorAll('.prod-cell');
-      const item = {};
-      cells.forEach(cell => {
-        const field = cell.dataset.field;
-        item[field] = cell.textContent.trim();
-      });
-      
-      if (item["Sản phẩm"] || item["Dòng SP"] || item["Model"]) {
-        products.push(item);
-      }
-    });
+    captureActiveSheetEdits();
+    
+    const payload = {
+      sheet_name: _activeProductSheet,
+      products: _productsData[_activeProductSheet]
+    };
 
     try {
-      await API.put('/pipeline/products', products);
-      _productsData = products;
-      Toast.success('Đã lưu danh mục sản phẩm Excel thành công');
+      await API.put('/pipeline/products', payload);
+      _editStates.products = false;
+      Toast.success(`Đã lưu danh mục sản phẩm của sheet '${_activeProductSheet}' thành công`);
+      renderSubTabContent();
     } catch (e) {
       Toast.error('Lỗi lưu danh mục Excel: ' + e.message);
     }

@@ -175,7 +175,7 @@ async def save_keywords(data: dict):
 
 @router.get("/products/list")
 async def list_products():
-    """Trả về toàn bộ danh sách sản phẩm trong file Excel."""
+    """Trả về toàn bộ danh sách sản phẩm theo từng sheet trong file Excel."""
     settings = deps.get_settings()
     if settings is None:
         raise HTTPException(status_code=400, detail="Settings chưa được cấu hình")
@@ -185,15 +185,20 @@ async def list_products():
         raise HTTPException(status_code=404, detail="Không tìm thấy file sản phẩm Excel.")
         
     try:
-        # Load excel file
-        df = pd.read_excel(products_path)
-        # Fill NaN with empty string
-        df = df.fillna("")
-        # Convert to list of dict
-        records = df.to_dict(orient="records")
+        sheets_data = {}
+        sheet_names = []
+        with pd.ExcelFile(products_path) as xl:
+            sheet_names = list(xl.sheet_names)
+            for sheet_name in sheet_names:
+                df = pd.read_excel(xl, sheet_name)
+                df = df.fillna("")
+                sheets_data[sheet_name] = {
+                    "columns": list(df.columns),
+                    "products": df.to_dict(orient="records")
+                }
         return {
-            "columns": list(df.columns),
-            "products": records,
+            "sheets": sheets_data,
+            "sheet_names": sheet_names,
             "file_path": str(products_path),
         }
     except Exception as exc:
@@ -204,26 +209,41 @@ async def list_products():
 
 
 @router.put("/products")
-async def save_products(products: list[dict]):
-    """Lưu danh sách sản phẩm mới vào file Excel Phân Chia Nhóm Sản Phẩm V2.xlsx."""
+async def save_products(payload: dict):
+    """Lưu danh sách sản phẩm mới cho một sheet cụ thể vào file Excel Phân Chia Nhóm Sản Phẩm V2.xlsx, bảo toàn các sheet khác."""
     settings = deps.get_settings()
     if settings is None:
         raise HTTPException(status_code=400, detail="Settings chưa được cấu hình")
+        
+    sheet_name = payload.get("sheet_name")
+    products = payload.get("products")
+    
+    if not sheet_name or products is None:
+        raise HTTPException(status_code=400, detail="Thiếu thông tin sheet_name hoặc danh sách sản phẩm trong payload.")
         
     products_path = settings.df_products_path
     try:
         # Create parent directories if they don't exist
         products_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Convert list of dicts to a pandas DataFrame
-        df = pd.DataFrame(products)
+        # Load all existing sheets first to preserve them
+        sheets_data = {}
+        if products_path.is_file():
+            with pd.ExcelFile(products_path) as xl:
+                for name in xl.sheet_names:
+                    sheets_data[name] = pd.read_excel(xl, name)
+                    
+        # Update the target sheet
+        sheets_data[sheet_name] = pd.DataFrame(products)
         
-        # Save to excel file using openpyxl engine
-        df.to_excel(products_path, index=False)
-        
+        # Save all sheets back to excel using openpyxl engine
+        with pd.ExcelWriter(products_path, engine='openpyxl') as writer:
+            for name, df_sheet in sheets_data.items():
+                df_sheet.to_excel(writer, sheet_name=name, index=False)
+                
         # Reset dependencies so cached RAG index is re-initialized
         deps.reset()
-        return {"success": True, "message": "Đã lưu danh mục sản phẩm thành công."}
+        return {"success": True, "message": f"Đã lưu danh mục sản phẩm của sheet '{sheet_name}' thành công."}
     except PermissionError:
         raise HTTPException(
             status_code=400,
