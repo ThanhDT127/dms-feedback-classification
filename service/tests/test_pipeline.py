@@ -105,3 +105,65 @@ def test_pipeline_runner_processes_file_with_prelim_handoff(settings, tmp_path: 
     assert result["total_rows"] == 1
     assert (tmp_path / "out.xlsx").exists()
     assert any("matched_product" in prompt for kind, prompt in gemini.calls if kind == "generate_json")
+
+
+def test_issue_classifier_prompt_inverted_cot():
+    # Verify that normalize_issue_output works with the inverted JSON output structure
+    raw_parsed = {
+        "row_index": 0,
+        "brand": "Asia",
+        "is_competitor": True,
+        "sentiment": "Tiêu cực",
+        "decision_log": [
+            {
+                "minor": "Báo lỗi",
+                "action": "ADD",
+                "why": "vợt ASIA hay lỗi"
+            },
+            {
+                "minor": "Hãng",
+                "action": "ADD",
+                "why": "Nhắc tới Asia"
+            }
+        ],
+        "labels": {
+            "Báo lỗi": True,
+            "Hãng": True,
+            "Website": False
+        }
+    }
+    
+    normalized = normalize_issue_output(raw_parsed)
+    assert normalized["brand"] == "Asia"
+    assert normalized["sentiment"] == "Tiêu cực"
+    assert "Báo lỗi" in normalized["final_minors"]
+    assert "Hãng" in normalized["final_minors"]
+    assert "Website" not in normalized["final_minors"]
+
+
+def test_issue_classifier_typo_guard_and_brand_fallback():
+    # Typo guard scenario: "tin thưởng" typo of "tin tưởng" should not trigger Trả thưởng
+    raw_parsed = {
+        "row_index": 2,
+        "brand": "",
+        "is_competitor": False,
+        "sentiment": "Tiêu cực",
+        "decision_log": [
+            {
+                "minor": "Tin trung lập",
+                "action": "ADD",
+                "why": "tin thưởng là viết sai chính tả của tin tưởng"
+            }
+        ],
+        "labels": {
+            "Tin trung lập": True,
+            "Trả thưởng": False
+        }
+    }
+    
+    normalized = normalize_issue_output(raw_parsed)
+    assert normalized["brand"] == ""
+    assert normalized["sentiment"] == "Tiêu cực"
+    assert "Tin trung lập" in normalized["final_minors"]
+    assert "Trả thưởng" not in normalized["final_minors"]
+

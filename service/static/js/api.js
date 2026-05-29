@@ -92,6 +92,8 @@ window.API = (() => {
   function getKeywords()         { return get('/pipeline/keywords'); }
   function getBrands()           { return get('/pipeline/brands'); }
   function getLogs()             { return get('/logs'); }
+  function syncKeywordsToSP()    { return post('/pipeline/sync-keywords-to-sp'); }
+  function syncProductsToSP()    { return post('/pipeline/sync-products-to-sp'); }
 
   return {
     get, post, put, del, upload,
@@ -100,6 +102,7 @@ window.API = (() => {
     getFiles, getFilePreview, getFileTree, getFilesSeen,
     uploadFile, classifyText, classifyFile, getJobs,
     getSettings, putSettings, getPrompt, getModels, testConnection,
-    getLabels, getKeywords, getBrands, getLogs
+    getLabels, getKeywords, getBrands, getLogs,
+    syncKeywordsToSP, syncProductsToSP
   };
 })();

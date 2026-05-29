@@ -168,3 +168,25 @@ def get_pipeline_runner():
             return None
 
     return _get_or_create("pipeline_runner", _factory)
+
+
+def get_sharepoint_client():
+    """Return a SharePointClient, or None if credentials are incomplete."""
+
+    def _factory():
+        settings = get_settings()
+        if settings is None:
+            return None
+        try:
+            from ..auth import AuthProvider
+            from ..http_client import create_session
+            from ..sharepoint import SharePointClient
+
+            session = create_session(default_timeout=settings.http_timeout_seconds)
+            auth = AuthProvider(settings)
+            return SharePointClient(auth=auth, settings=settings, session=session)
+        except Exception as exc:
+            logger.warning("Không thể khởi tạo SharePointClient: %s", exc)
+            return None
+
+    return _get_or_create("sharepoint_client", _factory)

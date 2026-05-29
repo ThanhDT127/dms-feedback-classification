@@ -196,29 +196,44 @@ window.FilesPage = (() => {
     nameEl.textContent = `📄 ${filename}`;
     body.innerHTML = '<div class="text-center" style="padding:20px;"><span class="spinner"></span> Đang tải...</div>';
 
-    // Check if file type is previewable
-    const ext = filename.split('.').pop()?.toLowerCase() || '';
-    if (!['xlsx', 'xls', 'csv'].includes(ext)) {
-      body.innerHTML = `
-        <div class="empty-state" style="padding:30px;">
-          <div class="empty-state-icon">📝</div>
-          <p class="empty-state-text">Không hỗ trợ xem trước file .${escHtml(ext)}</p>
-          <p class="empty-state-hint">Chỉ hỗ trợ xem trước file Excel (.xlsx, .xls) và CSV</p>
-        </div>
-      `;
-      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      return;
-    }
-
     try {
       const data = await API.getFilePreview(_activeFolder, filename);
-      if (data && data.data && data.columns) {
-        // API returns {filename, columns, data: [{...}, ...], total_columns, preview_rows}
-        body.innerHTML = renderPreviewTable(data.data, data.columns);
+
+      // Type-based rendering from backend response
+      if (data && data.type === 'table' && data.data && data.columns) {
+        let html = renderPreviewTable(data.data, data.columns);
+        if (data.truncated) {
+          html += '<p class="text-muted text-center mt-2" style="font-size:11px;">⚠️ File đã bị cắt bớt do kích thước lớn</p>';
+        }
+        body.innerHTML = html;
+      } else if (data && data.type === 'json') {
+        const formatted = typeof data.content === 'string'
+          ? escHtml(data.content)
+          : escHtml(JSON.stringify(data.content, null, 2));
+        let html = `<pre style="white-space:pre-wrap;word-break:break-word;color:var(--accent-blue);line-height:1.6;font-family:var(--font-mono);font-size:12px;background:rgba(0,0,0,0.2);padding:16px;border-radius:6px;max-height:400px;overflow-y:auto;">${formatted}</pre>`;
+        if (data.parse_error) {
+          html = `<div style="margin-bottom:8px;padding:8px 12px;border-radius:4px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:var(--accent-red);font-size:11px;">⚠️ JSON parse error: ${escHtml(data.parse_error)}</div>` + html;
+        }
+        if (data.truncated) {
+          html += '<p class="text-muted text-center mt-2" style="font-size:11px;">⚠️ File quá lớn — chỉ hiển thị 500KB đầu</p>';
+        }
+        body.innerHTML = html;
+      } else if (data && data.type === 'text') {
+        let html = `<pre style="white-space:pre-wrap;word-break:break-word;color:var(--text-primary);line-height:1.6;font-family:var(--font-mono);font-size:12px;background:rgba(0,0,0,0.2);padding:16px;border-radius:6px;max-height:400px;overflow-y:auto;">${escHtml(data.content)}</pre>`;
+        if (data.truncated) {
+          html += `<p class="text-muted text-center mt-2" style="font-size:11px;">⚠️ Hiển thị ${MAX_TEXT_LINES || 200} dòng đầu / ${data.total_lines} dòng</p>`;
+        }
+        body.innerHTML = html;
+      } else if (data && data.type === 'unsupported') {
+        body.innerHTML = `
+          <div class="empty-state" style="padding:30px;">
+            <div class="empty-state-icon">📦</div>
+            <p class="empty-state-text">Không hỗ trợ xem trước file ${escHtml(data.extension || '')}</p>
+            <p class="empty-state-hint">Định dạng file này chưa được hỗ trợ preview</p>
+          </div>
+        `;
       } else if (typeof data === 'string') {
         body.innerHTML = `<pre style="white-space:pre-wrap;word-break:break-word;color:var(--text-primary);line-height:1.6;">${escHtml(data)}</pre>`;
-      } else if (Array.isArray(data)) {
-        body.innerHTML = renderPreviewTable(data);
       } else {
         body.innerHTML = `<pre style="white-space:pre-wrap;color:var(--text-primary);">${escHtml(JSON.stringify(data, null, 2))}</pre>`;
       }

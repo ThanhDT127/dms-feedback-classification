@@ -213,7 +213,8 @@ window.QAPage = (() => {
               <span class="badge badge-success" style="font-size:9px;">ACTUAL RESOLUTION: 1920x1080</span>
             </div>
             <div class="qa-img-wrapper" style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg-primary);cursor:pointer;position:relative;" onclick="QAPage.showLightbox('${item.live}')">
-              <img src="${item.live}" alt="Actual Live Web Image" style="width:100%;height:auto;display:block;transition:transform 0.3s ease;" class="qa-img-hover">
+              <img src="${item.live}" alt="Actual Live Web Image" style="width:100%;height:auto;display:block;transition:transform 0.3s ease;" class="qa-img-hover"
+                   onerror="this.onerror=null;this.style.display='none';this.parentElement.innerHTML='<div style=\\'padding:60px 20px;text-align:center;color:var(--text-muted);font-size:13px;\\'><div style=\\'font-size:48px;margin-bottom:12px;\\'>🖼️</div>Ảnh không tải được<br><span style=\\'font-size:11px;opacity:0.6;\\'>${item.live}</span></div>';">
               <div class="qa-img-overlay" style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);padding:8px 12px;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:space-between;opacity:0;transition:opacity 0.2s ease;">
                 <span>🔍 Nhấp để phóng to chi tiết</span>
                 <span>Playwright Verified ✓</span>

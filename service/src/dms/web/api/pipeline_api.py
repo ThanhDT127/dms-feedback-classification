@@ -254,3 +254,118 @@ async def save_products(payload: dict):
             status_code=500,
             detail=f"Lỗi khi lưu file sản phẩm Excel: {exc}",
         ) from exc
+
+
+# ---------- Sync to SharePoint ----------
+
+
+def _update_config_asset_state(asset_key: str, sp_response: dict) -> None:
+    """Update config_assets_state.json so ConfigAssetSyncService won't re-download.
+
+    Writes the same version fields that ``ConfigAssetSyncService._item_version()``
+    produces, ensuring ``_is_changed()`` returns *False* for this asset on the
+    next automatic sync cycle.
+    """
+    settings = deps.get_settings()
+    if settings is None:
+        return
+
+    state_path = settings.config_assets_state_path
+    state: dict = {"assets": {}, "last_success_at": None}
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning("Cannot read config asset state for update: %s", exc)
+
+    version = {
+        "item_id": str(sp_response.get("id", "")),
+        "e_tag": str(sp_response.get("eTag", "")),
+        "last_modified": str(sp_response.get("lastModifiedDateTime", "")),
+        "size": str(sp_response.get("size", "")),
+    }
+    state.setdefault("assets", {})[asset_key] = version
+
+    try:
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(
+            json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception as exc:
+        logger.warning("Cannot write config asset state after sync: %s", exc)
+
+
+@router.post("/sync-keywords-to-sp")
+async def sync_keywords_to_sharepoint():
+    """Upload kw_map.json từ local lên thư mục Keyword/ trên SharePoint."""
+    settings = deps.get_settings()
+    if settings is None:
+        raise HTTPException(status_code=400, detail="Settings chưa được cấu hình")
+
+    sp_client = deps.get_sharepoint_client()
+    if sp_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Không thể kết nối SharePoint (thiếu cấu hình Azure credentials)",
+        )
+
+    kw_map_path = settings.kw_map_path
+    if not kw_map_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Không tìm thấy kw_map.json local để upload tại {kw_map_path}",
+        )
+
+    try:
+        result = sp_client.upload_file(kw_map_path, settings.sp_keyword_folder)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upload kw_map.json lên SharePoint thất bại: {exc}",
+        ) from exc
+
+    _update_config_asset_state("keyword/kw_map.json", result)
+    return {
+        "success": True,
+        "message": f"Đã upload kw_map.json lên SharePoint/{settings.sp_keyword_folder}/",
+        "sharepoint_item_id": result.get("id"),
+    }
+
+
+@router.post("/sync-products-to-sp")
+async def sync_products_to_sharepoint():
+    """Upload file Excel sản phẩm từ local lên thư mục Keyword/ trên SharePoint."""
+    settings = deps.get_settings()
+    if settings is None:
+        raise HTTPException(status_code=400, detail="Settings chưa được cấu hình")
+
+    sp_client = deps.get_sharepoint_client()
+    if sp_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Không thể kết nối SharePoint (thiếu cấu hình Azure credentials)",
+        )
+
+    products_path = settings.df_products_path
+    if not products_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Không tìm thấy file sản phẩm Excel local để upload tại {products_path}",
+        )
+
+    try:
+        result = sp_client.upload_file(products_path, settings.sp_keyword_folder)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upload file sản phẩm lên SharePoint thất bại: {exc}",
+        ) from exc
+
+    _update_config_asset_state(
+        f"keyword/{products_path.name}", result
+    )
+    return {
+        "success": True,
+        "message": f"Đã upload {products_path.name} lên SharePoint/{settings.sp_keyword_folder}/",
+        "sharepoint_item_id": result.get("id"),
+    }
