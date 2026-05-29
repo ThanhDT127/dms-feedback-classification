@@ -424,7 +424,11 @@ window.SettingsPage = (() => {
           </p>
           <div class="btn-group" style="display:flex;gap:8px;">
             ${!isEditing 
-              ? `<button class="btn btn-secondary btn-sm" onclick="SettingsPage.toggleEditKeywords()">✏️ Chỉnh sửa</button>`
+              ? `
+                <button class="btn btn-secondary btn-sm" onclick="SettingsPage.toggleEditKeywords()">✏️ Chỉnh sửa</button>
+                <button class="btn btn-sm" id="btn-sync-keywords" style="background:rgba(59,130,246,0.15);color:var(--accent-blue);border:1px solid rgba(59,130,246,0.3);" 
+                        onclick="SettingsPage.syncKeywordsToSP()">☁️ Đồng bộ SharePoint</button>
+              `
               : `
                 <button class="btn btn-secondary btn-sm" onclick="SettingsPage.cancelEditKeywords()">🔙 Quay lại</button>
                 <button class="btn btn-primary btn-sm" onclick="SettingsPage.saveKeywords()">💾 Lưu thay đổi</button>
@@ -587,7 +591,11 @@ window.SettingsPage = (() => {
                   💾 Lưu thay đổi
                 </button>
               `
-              : `<button class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px;" onclick="SettingsPage.toggleEditProducts()">✏️ Chỉnh sửa</button>`
+              : `
+                <button class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px;" onclick="SettingsPage.toggleEditProducts()">✏️ Chỉnh sửa</button>
+                <button class="btn btn-sm" id="btn-sync-products" style="padding:4px 10px; font-size:12px; background:rgba(59,130,246,0.15);color:var(--accent-blue);border:1px solid rgba(59,130,246,0.3);" 
+                        onclick="SettingsPage.syncProductsToSP()">☁️ Đồng bộ SharePoint</button>
+              `
             }
           </div>
         </div>
@@ -895,11 +903,47 @@ window.SettingsPage = (() => {
 
   function destroy() {}
 
+  /* ---- Sync to SharePoint ---- */
+  async function syncKeywordsToSP() {
+    const btn = document.getElementById('btn-sync-keywords');
+    if (!btn) return;
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;"></span> Đang đồng bộ...';
+    try {
+      const res = await API.syncKeywordsToSP();
+      Toast.success(res.message || 'Đã đồng bộ từ khóa lên SharePoint');
+    } catch (e) {
+      Toast.error('Đồng bộ thất bại: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origText;
+    }
+  }
+
+  async function syncProductsToSP() {
+    const btn = document.getElementById('btn-sync-products');
+    if (!btn) return;
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;"></span> Đang đồng bộ...';
+    try {
+      const res = await API.syncProductsToSP();
+      Toast.success(res.message || 'Đã đồng bộ sản phẩm lên SharePoint');
+    } catch (e) {
+      Toast.error('Đồng bộ thất bại: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origText;
+    }
+  }
+
   return {
     render, destroy, switchTab, onBackendChange, testConnection,
     toggleEditPrompt, cancelEditPrompt, copyPrompt, savePrompt, saveModelSettings, savePipelineSettings,
     switchSubTab, renderSubTabContent, toggleEditKeywords, cancelEditKeywords, saveKeywords,
     toggleEditProducts, cancelEditProducts, switchProductSheet, saveProducts, addProductRow, deleteProductRow,
-    updateEmailCount, saveNotificationSettings
+    updateEmailCount, saveNotificationSettings,
+    syncKeywordsToSP, syncProductsToSP
   };
 })();

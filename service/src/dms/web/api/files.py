@@ -134,9 +134,31 @@ async def list_files(folder: str):
     return files
 
 
+MAX_PREVIEW_BYTES = 512_000  # 500 KB cap for JSON / text files
+MAX_TEXT_LINES = 200
+EXCEL_EXTS = {".xlsx", ".xls"}
+CSV_EXTS = {".csv"}
+JSON_EXTS = {".json"}
+TEXT_EXTS = {".txt", ".log", ".md", ".yaml", ".yml", ".cfg", ".ini", ".toml"}
+
+
+def _safe_dataframe_records(df: "pd.DataFrame") -> list[dict]:
+    """Convert a DataFrame to JSON-safe list of dicts.
+
+    Replaces NaN/Inf/-Inf with empty strings so ``json.dumps`` never crashes
+    with ``ValueError: Out of range float values are not JSON compliant``.
+    """
+    import numpy as np
+
+    df = df.fillna("")
+    # Replace Inf / -Inf with string representation
+    df = df.replace([np.inf, -np.inf], "Inf")
+    return df.to_dict(orient="records")
+
+
 @router.get("/{folder}/{filename}/preview")
 async def preview_file(folder: str, filename: str, max_rows: int = 20):
-    """Đọc preview 20 dòng đầu tiên của file Excel."""
+    """Đọc preview file — hỗ trợ Excel, CSV, JSON, text."""
     dirs = FOLDER_MAP.get(folder.lower())
     if dirs is None:
         raise HTTPException(status_code=400, detail=f"Thư mục không hợp lệ: {folder}")
@@ -151,19 +173,104 @@ async def preview_file(folder: str, filename: str, max_rows: int = 20):
     if file_path is None:
         raise HTTPException(status_code=404, detail=f"Không tìm thấy file: {filename}")
 
-    try:
-        df = pd.read_excel(file_path, nrows=max_rows)
-        # Replace NaN with None for clean JSON serialization
-        df = df.where(df.notna(), None)
+    ext = file_path.suffix.lower()
+
+    # ── Excel ──
+    if ext in EXCEL_EXTS:
+        try:
+            df = pd.read_excel(file_path, nrows=max_rows)
+            return {
+                "type": "table",
+                "filename": filename,
+                "total_columns": len(df.columns),
+                "preview_rows": max_rows,
+                "columns": list(df.columns),
+                "data": _safe_dataframe_records(df),
+            }
+        except Exception as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Không thể đọc file Excel: {exc}",
+            ) from exc
+
+    # ── CSV ──
+    if ext in CSV_EXTS:
+        try:
+            df = pd.read_csv(file_path, nrows=max_rows, encoding="utf-8")
+        except UnicodeDecodeError:
+            df = pd.read_csv(file_path, nrows=max_rows, encoding="cp1252")
+        except Exception as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Không thể đọc file CSV: {exc}",
+            ) from exc
         return {
+            "type": "table",
             "filename": filename,
             "total_columns": len(df.columns),
             "preview_rows": max_rows,
             "columns": list(df.columns),
-            "data": df.to_dict(orient="records"),
+            "data": _safe_dataframe_records(df),
         }
-    except Exception as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Không thể đọc file Excel: {exc}",
-        ) from exc
+
+    # ── JSON ──
+    if ext in JSON_EXTS:
+        try:
+            raw = file_path.read_bytes()
+            truncated = len(raw) > MAX_PREVIEW_BYTES
+            text = raw[:MAX_PREVIEW_BYTES].decode("utf-8", errors="replace")
+            content = json.loads(text) if not truncated else text
+            return {
+                "type": "json",
+                "filename": filename,
+                "content": content,
+                "truncated": truncated,
+                "size": len(raw),
+            }
+        except json.JSONDecodeError as exc:
+            return {
+                "type": "json",
+                "filename": filename,
+                "content": raw[:MAX_PREVIEW_BYTES].decode("utf-8", errors="replace"),
+                "truncated": False,
+                "parse_error": str(exc),
+                "size": len(raw),
+            }
+        except Exception as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Không thể đọc file JSON: {exc}",
+            ) from exc
+
+    # ── Text-based ──
+    if ext in TEXT_EXTS:
+        try:
+            raw = file_path.read_bytes()
+            truncated = len(raw) > MAX_PREVIEW_BYTES
+            text = raw[:MAX_PREVIEW_BYTES].decode("utf-8", errors="replace")
+            lines = text.splitlines()
+            if len(lines) > MAX_TEXT_LINES:
+                lines = lines[:MAX_TEXT_LINES]
+                truncated = True
+            return {
+                "type": "text",
+                "filename": filename,
+                "content": "\n".join(lines),
+                "truncated": truncated,
+                "total_lines": len(text.splitlines()),
+                "size": len(raw),
+            }
+        except Exception as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Không thể đọc file text: {exc}",
+            ) from exc
+
+    # ── Unsupported ──
+    return {
+        "type": "unsupported",
+        "filename": filename,
+        "extension": ext,
+        "message": f"Không hỗ trợ xem trước file {ext}",
+    }
+
