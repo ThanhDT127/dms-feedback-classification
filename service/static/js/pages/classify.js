@@ -59,6 +59,7 @@ window.ClassifyPage = (() => {
     `;
 
     renderMode();
+    checkActiveJob();
   }
 
   function setMode(mode) {
@@ -575,6 +576,9 @@ window.ClassifyPage = (() => {
     _wsClient = WS.classifyWS(jobId, {
       onProgress: (data) => {
         updateFileProgress(data);
+        if (data.step) {
+          updateFileSteps(data.step, data.step_status);
+        }
       },
       onBatchResult: (data) => {
         appendBatchResults(data);
@@ -586,12 +590,84 @@ window.ClassifyPage = (() => {
         Toast.error('Lỗi job: ' + (data.message || 'Unknown'));
       },
       onMessage: (data) => {
-        // Handle step updates
         if (data.step) {
-          updateFileSteps(data.step, data.status);
+          updateFileSteps(data.step, data.step_status || data.status);
         }
       }
     });
+  }
+
+  async function checkActiveJob() {
+    try {
+      const jobs = await API.getJobs();
+      if (!Array.isArray(jobs) || jobs.length === 0) return;
+
+      // Find the most recent active job (running or queued)
+      const activeJob = jobs
+        .filter(j => j.status === 'running' || j.status === 'queued')
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+      if (activeJob) {
+        _currentJob = activeJob;
+        _mode = 'file';
+        
+        // Render file mode UI
+        setMode('file');
+
+        // Populate selected file info
+        document.getElementById('classify-dropzone')?.classList.add('hidden');
+        const info = document.getElementById('file-info');
+        if (info) {
+          info.classList.remove('hidden');
+          document.getElementById('file-info-name').textContent = activeJob.filename || 'Excel File';
+          document.getElementById('file-info-size').textContent = '';
+        }
+
+        // Show progress panel & results panel
+        document.getElementById('file-progress')?.classList.remove('hidden');
+        document.getElementById('file-results')?.classList.remove('hidden');
+        document.getElementById('file-config')?.classList.add('hidden');
+
+        // Populate progress bar and progress text
+        updateFileProgress({
+          rows_done: activeJob.rows_done,
+          rows_total: activeJob.total_rows,
+          speed: 0,
+          eta: 'Đang chạy ngầm...'
+        });
+
+        // Set sub-steps progress
+        updateFileSteps(activeJob.step || 1, activeJob.step_status || 'running');
+
+        // Render existing batch results
+        const tbody = document.getElementById('file-results-tbody');
+        const countEl = document.getElementById('result-count');
+        if (tbody && activeJob.results) {
+          tbody.innerHTML = '';
+          activeJob.results.forEach((r, idx) => {
+            const num = idx + 1;
+            const tr = document.createElement('tr');
+            tr.className = 'animate-in';
+            tr.innerHTML = `
+              <td class="text-muted">${num}</td>
+              <td class="wrap" style="max-width:300px;font-size:12px;">${esc(r.text || r.content || '—').substring(0, 150)}...</td>
+              <td style="font-size:12px;">${esc(r.product || r.product_name || '—')}</td>
+              <td style="font-size:12px;">
+                ${(r.labels || []).map(l => `<span class="chip" style="margin:1px;">${esc(typeof l === 'string' ? l : l.label || l.name)}</span>`).join(' ') || '—'}
+              </td>
+              <td><span class="badge ${sentimentBadge(r.sentiment)}">${esc(r.sentiment || '—')}</span></td>
+            `;
+            tbody.appendChild(tr);
+          });
+          if (countEl) countEl.textContent = `${activeJob.results.length} dòng`;
+        }
+
+        // Connect WebSocket
+        connectJobWS(activeJob.job_id);
+      }
+    } catch (e) {
+      console.warn('Lỗi kiểm tra active job:', e);
+    }
   }
 
   function updateFileProgress(data) {

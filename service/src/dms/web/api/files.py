@@ -75,20 +75,14 @@ async def get_folder_tree():
     """Trả về cấu trúc cây thư mục."""
     tree: dict = {}
     folder_map = _get_folder_map()
-    for folder_name, dirs in folder_map.items():
-        children: list[dict] = []
-        for dir_path in dirs:
-            if not dir_path.is_dir():
-                continue
-            dir_entry = {
-                "path": str(dir_path),
-                "files": [],
+    for folder_name in folder_map.keys():
+        files = await list_files(folder_name)
+        tree[folder_name] = [
+            {
+                "path": files[0].get("source_dir", folder_name) if files else folder_name,
+                "files": files,
             }
-            for item in sorted(dir_path.iterdir()):
-                if item.is_file():
-                    dir_entry["files"].append(_file_info(item))
-            children.append(dir_entry)
-        tree[folder_name] = children
+        ]
     return tree
 
 

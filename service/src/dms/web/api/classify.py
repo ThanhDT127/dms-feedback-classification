@@ -124,13 +124,24 @@ def _run_classification_job(
 
         ckpt_path = WORK_DIR / "checkpoint" / f"{job_id}.json"
 
-        def progress_callback(done: int, total: int, new_results: list[dict]):
-            job["rows_done"] = done
-            job["total_rows"] = total
-            job["percent"] = int((done / total) * 100) if total > 0 else 0
-            if "results" not in job:
-                job["results"] = []
-            job["results"].extend(new_results)
+        def progress_callback(
+            done: int | None = None,
+            total: int | None = None,
+            new_results: list[dict] | None = None,
+            step: int | None = None,
+            step_status: str | None = None,
+        ):
+            if step is not None:
+                job["step"] = step
+                job["step_status"] = step_status
+            if done is not None:
+                job["rows_done"] = done
+                job["total_rows"] = total
+                job["percent"] = int((done / total) * 100) if total > 0 else 0
+            if new_results:
+                if "results" not in job:
+                    job["results"] = []
+                job["results"].extend(new_results)
 
         result = runner.run_pipeline(
             input_path=input_path,

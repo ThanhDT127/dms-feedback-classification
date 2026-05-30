@@ -231,13 +231,28 @@ class PipelineRunner:
             t0 = time.time()
 
             t_rag_s = time.time()
+            if progress_callback is not None:
+                try:
+                    progress_callback(step=1, step_status="running")
+                except Exception:
+                    pass
             rag_batch = self._run_rag_with_retry(batch)
+            if progress_callback is not None:
+                try:
+                    progress_callback(step=2, step_status="running")
+                except Exception:
+                    pass
             rag_batch = self.rag.enrich_with_keyword_fallbacks(rag_batch, batch)
             logger.info("  RAG time: %.2fs", time.time() - t_rag_s)
 
             time.sleep(self.settings.rate_gap_sec)
 
             t_issue_s = time.time()
+            if progress_callback is not None:
+                try:
+                    progress_callback(step=3, step_status="running")
+                except Exception:
+                    pass
             try:
                 # Call pure-LLM classify_batch directly using RAG products as hints
                 issue_list = self.issue_classifier.classify_batch(
@@ -333,7 +348,10 @@ class PipelineRunner:
                         "sentiment": sentiment,
                         "labels": [m for m in MINOR_ORDER if labels_minor[m]]
                     })
-                progress_callback(done, n_total, new_results_batch)
+                try:
+                    progress_callback(done, n_total, new_results_batch, step=3, step_status="done")
+                except TypeError:
+                    progress_callback(done, n_total, new_results_batch)
 
         duration = time.time() - t_start
         logger.info("Pipeline complete: %d rows in %.1fs -> %s", n_total, duration, output_path)
