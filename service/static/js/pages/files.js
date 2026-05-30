@@ -15,6 +15,7 @@ window.FilesPage = (() => {
   let _files = [];
   let _previewFile = null;
   let _refreshInterval = null;
+  let _lastFilesHash = '';
 
   function render() {
     const app = document.getElementById('app');
@@ -174,7 +175,15 @@ window.FilesPage = (() => {
 
     try {
       const data = await API.getFiles(_activeFolder);
-      _files = Array.isArray(data) ? data : (data.files || []);
+      const newFiles = Array.isArray(data) ? data : (data.files || []);
+
+      // Smart refresh: skip re-render if data unchanged
+      const newHash = JSON.stringify(newFiles);
+      if (silent && newHash === _lastFilesHash) {
+        return; // No changes, skip DOM update
+      }
+      _lastFilesHash = newHash;
+      _files = newFiles;
 
       if (countEl) countEl.textContent = `${_files.length} file`;
 
@@ -197,8 +206,11 @@ window.FilesPage = (() => {
         const date = f.modified || f.date || '—';
         const status = getStatusBadge(f.status);
 
+        // No animation for silent (auto) refresh
+        const animClass = silent ? '' : `class="animate-in" style="animation-delay:${i * 30}ms"`;
+
         return `
-          <tr class="animate-in" style="animation-delay:${i * 30}ms">
+          <tr ${animClass}>
             <td class="text-muted">${i + 1}</td>
             <td>
               <span style="cursor:pointer;color:var(--accent-blue);" onclick="FilesPage.preview('${escAttr(name)}')">
@@ -394,7 +406,7 @@ window.FilesPage = (() => {
       if (!_previewFile) {
         loadFiles(true);
       }
-    }, 5000);
+    }, 30000);
   }
 
   function stopRefresh() {

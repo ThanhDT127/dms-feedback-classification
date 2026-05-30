@@ -8,6 +8,8 @@ window.ClassifyPage = (() => {
   let _wsClient = null;
   let _currentJob = null;
   let _isPaused = false;
+  let _lastTextResult = null;
+  let _lastTextInput = '';
 
   /* ---- Label groups matching MINOR_TO_MAJOR from pipeline ---- */
   const LABEL_GROUPS = [
@@ -75,7 +77,20 @@ window.ClassifyPage = (() => {
     if (!el) return;
 
     switch (_mode) {
-      case 'text': el.innerHTML = renderTextMode(); break;
+      case 'text': 
+        el.innerHTML = renderTextMode();
+        // Restore saved text input and result after tab switch
+        if (_lastTextInput) {
+          const input = document.getElementById('classify-input');
+          if (input) { input.value = _lastTextInput; updateCharCount(); }
+        }
+        if (_lastTextResult) {
+          renderTextResult(_lastTextResult);
+          setStepState(1, 'done');
+          setStepState(2, 'done');
+          setStepState(3, 'done');
+        }
+        break;
       case 'file': 
         el.innerHTML = renderFileMode(); 
         if (_currentJob) {
@@ -142,7 +157,7 @@ window.ClassifyPage = (() => {
     if (job.status === 'completed') {
       updateFileProgress({
         rows_done: job.total_rows || job.rows_done || 0,
-        rows_total: job.total_rows || job.rows_done || 0,
+        total_rows: job.total_rows || job.rows_done || 0,
         speed: 0,
         eta: 'Hoàn thành'
       });
@@ -166,7 +181,7 @@ window.ClassifyPage = (() => {
       // 'running' or 'queued'
       updateFileProgress({
         rows_done: job.rows_done,
-        rows_total: job.total_rows,
+        total_rows: job.total_rows,
         speed: 0,
         eta: job.status === 'queued' ? 'Đang chờ xếp hàng...' : 'Đang xử lý...'
       });
@@ -255,6 +270,8 @@ window.ClassifyPage = (() => {
   function clearInput() {
     const input = document.getElementById('classify-input');
     if (input) { input.value = ''; updateCharCount(); }
+    _lastTextResult = null;
+    _lastTextInput = '';
   }
 
   async function classifyText() {
@@ -287,6 +304,8 @@ window.ClassifyPage = (() => {
       setStepState(3, 'done');
 
       renderTextResult(result);
+      _lastTextResult = result;
+      _lastTextInput = input.value;
       Toast.success('Phân loại hoàn tất!');
     } catch (e) {
       setStepState(1, 'done');
@@ -669,7 +688,14 @@ window.ClassifyPage = (() => {
     if (_wsClient) _wsClient.close();
 
     _wsClient = WS.classifyWS(jobId, {
+      onOpen: () => {
+        console.log('[WS] Connected to job:', jobId);
+      },
+      onClose: () => {
+        console.log('[WS] Disconnected from job:', jobId);
+      },
       onProgress: (data) => {
+        console.log('[WS] Progress:', data);
         updateFileProgress(data);
         if (data.step) {
           updateFileSteps(data.step, data.step_status);
@@ -690,6 +716,7 @@ window.ClassifyPage = (() => {
         }
       },
       onComplete: (data) => {
+        console.log('[WS] Complete:', data);
         onJobComplete(data);
         if (_currentJob) {
           _currentJob.status = 'completed';
@@ -697,6 +724,7 @@ window.ClassifyPage = (() => {
         }
       },
       onError: (data) => {
+        console.error('[WS] Error:', data);
         const errMsg = data.error || data.message || 'Lỗi không xác định';
         Toast.error('Lỗi job: ' + errMsg);
         if (_currentJob) {
@@ -801,7 +829,7 @@ window.ClassifyPage = (() => {
 
   function updateFileProgress(data) {
     const done = data.rows_done || data.processed || 0;
-    const total = data.rows_total || data.total || 1;
+    const total = data.total_rows || data.total || 1;
     const pct = Math.round((done / total) * 100);
     const speed = data.speed || 0;
     const eta = data.eta || '—';
@@ -864,7 +892,7 @@ window.ClassifyPage = (() => {
 
   function onJobComplete(data) {
     Toast.success('Phân loại hoàn tất!');
-    updateFileProgress({ rows_done: data.total || 0, rows_total: data.total || 0, speed: 0, eta: 'Xong' });
+    updateFileProgress({ rows_done: data.total_rows || data.total || 0, total_rows: data.total_rows || data.total || 0, speed: 0, eta: 'Xong' });
     updateFileSteps(4, 'done');
 
     const dl = document.getElementById('btn-download');
