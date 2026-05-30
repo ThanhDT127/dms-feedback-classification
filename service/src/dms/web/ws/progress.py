@@ -36,6 +36,8 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
 
     last_sent_rows = -1
     last_sent_results_count = 0
+    last_sent_step = None
+    last_sent_step_status = None
     try:
         while True:
             job = jobs.get(job_id)
@@ -60,10 +62,20 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
                     }
                 })
 
-            # 2. Send progress update when rows_done changes
+            # 2. Send progress update when rows_done OR step changes
             current_rows = job.get("rows_done", 0)
-            if current_rows != last_sent_rows or status in ("completed", "error", "cancelled"):
+            current_step = job.get("step")
+            current_step_status = job.get("step_status")
+            
+            rows_changed = current_rows != last_sent_rows
+            step_changed = (current_step != last_sent_step or 
+                          current_step_status != last_sent_step_status)
+            terminal = status in ("completed", "error", "cancelled")
+            
+            if rows_changed or step_changed or terminal:
                 last_sent_rows = current_rows
+                last_sent_step = current_step
+                last_sent_step_status = current_step_status
 
                 if status == "completed":
                     # Send final batch results if any are left
@@ -118,8 +130,8 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
                         "total_rows": job.get("total_rows", 0),
                         "rows_done": current_rows,
                         "percent": job.get("percent", 0),
-                        "step": job.get("step"),
-                        "step_status": job.get("step_status"),
+                        "step": current_step,
+                        "step_status": current_step_status,
                     },
                 })
 
