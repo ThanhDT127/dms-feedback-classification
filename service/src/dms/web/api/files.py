@@ -10,22 +10,28 @@ from pathlib import Path
 import pandas as pd
 from fastapi import APIRouter, HTTPException, UploadFile
 
-from ...settings import SERVICE_DIR
+from ...settings import SERVICE_DIR, get_settings
 
 logger = logging.getLogger("dms-web")
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
-WORK_DIR = SERVICE_DIR / "work"
+WORK_DIR = get_settings().work_dir
+FOLDER_MAP: dict[str, list[Path]] = {}
 
-# Mapping of logical folder names to physical directories (checked in order)
-FOLDER_MAP: dict[str, list[Path]] = {
-    "input": [WORK_DIR / "input", SERVICE_DIR / "Input"],
-    "output": [WORK_DIR / "output", SERVICE_DIR / "Output"],
-    "checkpoint": [WORK_DIR / "checkpoint", SERVICE_DIR / "Check_Point"],
-    "keyword": [SERVICE_DIR / "Keyword"],
-    "model": [SERVICE_DIR / "Model"],
-}
+
+def _get_folder_map() -> dict[str, list[Path]]:
+    """Return a mapping of logical folder names to physical directories dynamically based on settings."""
+    if FOLDER_MAP:
+        return FOLDER_MAP
+    settings = get_settings()
+    return {
+        "input": [settings.work_dir / "input", settings.data_dir / "Input"],
+        "output": [settings.work_dir / "output", settings.data_dir / "Output"],
+        "checkpoint": [settings.work_dir / "checkpoint", settings.data_dir / "Check_Point"],
+        "keyword": [settings.keyword_dir],
+        "model": [settings.model_dir],
+    }
 
 
 def _file_info(path: Path) -> dict:
@@ -67,7 +73,8 @@ def _validate_safe_path(base_dir: Path, filename: str) -> Path:
 async def get_folder_tree():
     """Trả về cấu trúc cây thư mục."""
     tree: dict = {}
-    for folder_name, dirs in FOLDER_MAP.items():
+    folder_map = _get_folder_map()
+    for folder_name, dirs in folder_map.items():
         children: list[dict] = []
         for dir_path in dirs:
             if not dir_path.is_dir():
@@ -144,7 +151,7 @@ async def upload_file(file: UploadFile):
 @router.get("/{folder}")
 async def list_files(folder: str):
     """Liệt kê các file trong thư mục chỉ định."""
-    dirs = FOLDER_MAP.get(folder.lower())
+    dirs = _get_folder_map().get(folder.lower())
     if dirs is None:
         raise HTTPException(status_code=400, detail=f"Thư mục không hợp lệ: {folder}")
 
@@ -188,7 +195,7 @@ def _safe_dataframe_records(df: "pd.DataFrame") -> list[dict]:
 @router.get("/{folder}/{filename}/preview")
 async def preview_file(folder: str, filename: str, max_rows: int = 20):
     """Đọc preview file — hỗ trợ Excel, CSV, JSON, text."""
-    dirs = FOLDER_MAP.get(folder.lower())
+    dirs = _get_folder_map().get(folder.lower())
     if dirs is None:
         raise HTTPException(status_code=400, detail=f"Thư mục không hợp lệ: {folder}")
 
