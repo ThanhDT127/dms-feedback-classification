@@ -144,6 +144,8 @@ window.ClassifyPage = (() => {
           <td class="text-muted">${num}</td>
           <td class="wrap" style="max-width:300px;font-size:12px;">${esc(r.text || r.content || '—').substring(0, 150)}...</td>
           <td style="font-size:12px;">${esc(r.product || r.product_name || '—')}</td>
+          <td style="font-size:12px;">${esc(r.product_line || '—')}</td>
+          <td style="font-size:12px;">${esc(r.model || '—')}</td>
           <td style="font-size:12px;">
             ${(r.labels || []).map(l => `<span class="chip" style="margin:1px;">${esc(typeof l === 'string' ? l : l.label || l.name)}</span>`).join(' ') || '—'}
           </td>
@@ -552,7 +554,7 @@ window.ClassifyPage = (() => {
               <button class="btn btn-secondary btn-sm" id="btn-pause" onclick="ClassifyPage.togglePause()">⏸️ Tạm dừng</button>
               <button class="btn btn-danger btn-sm" onclick="ClassifyPage.stopClassify()">⏹️ Dừng</button>
               <button class="btn btn-success btn-sm hidden" id="btn-download" onclick="ClassifyPage.downloadResult()">📥 Tải kết quả</button>
-              <button class="btn btn-primary btn-sm hidden" id="btn-reset-job" onclick="ClassifyPage.resetJob()">🔄 Phân loại lại</button>
+              <button class="btn btn-primary btn-sm hidden" id="btn-reset-job" onclick="ClassifyPage.resetJob()">🔄 Reset</button>
             </div>
           </div>
 
@@ -573,19 +575,19 @@ window.ClassifyPage = (() => {
           <div class="steps mt-4" id="file-pipeline-steps">
             <div class="step-card waiting" id="fstep-1">
               <div class="step-card-num">Bước 1</div>
-              <div class="step-card-title">🤖 LLM</div>
+              <div class="step-card-title">🤖 Trích xuất SP</div>
               <div class="step-card-status">Chờ</div>
             </div>
             <div class="step-connector">→</div>
             <div class="step-card waiting" id="fstep-2">
               <div class="step-card-num">Bước 2</div>
-              <div class="step-card-title">🔍 BM25</div>
+              <div class="step-card-title">🔍 Tra cứu SP</div>
               <div class="step-card-status">Chờ</div>
             </div>
             <div class="step-connector">→</div>
             <div class="step-card waiting" id="fstep-3">
               <div class="step-card-num">Bước 3</div>
-              <div class="step-card-title">🏷️ Nhãn</div>
+              <div class="step-card-title">🏷️ Gán nhãn</div>
               <div class="step-card-status">Chờ</div>
             </div>
           </div>
@@ -606,6 +608,8 @@ window.ClassifyPage = (() => {
                   <th>#</th>
                   <th>Nội dung</th>
                   <th>Sản phẩm</th>
+                  <th>Dòng SP</th>
+                  <th>Model</th>
                   <th>Nhãn</th>
                   <th>Cảm xúc</th>
                 </tr>
@@ -891,6 +895,8 @@ window.ClassifyPage = (() => {
         <td class="text-muted">${num}</td>
         <td class="wrap" style="max-width:300px;font-size:12px;">${esc(r.text || r.content || '—').substring(0, 150)}...</td>
         <td style="font-size:12px;">${esc(r.product || r.product_name || '—')}</td>
+        <td style="font-size:12px;">${esc(r.product_line || '—')}</td>
+        <td style="font-size:12px;">${esc(r.model || '—')}</td>
         <td style="font-size:12px;">
           ${(r.labels || []).map(l => `<span class="chip" style="margin:1px;">${esc(typeof l === 'string' ? l : l.label || l.name)}</span>`).join(' ') || '—'}
         </td>
@@ -1013,6 +1019,7 @@ window.ClassifyPage = (() => {
                   <th>Kích thước</th>
                   <th>Trạng thái</th>
                   <th style="width:200px;">Tiến trình</th>
+                  <th style="width:40px;"></th>
                 </tr>
               </thead>
               <tbody id="batch-tbody"></tbody>
@@ -1056,6 +1063,7 @@ window.ClassifyPage = (() => {
             <div class="progress-bar" id="batch-bar-${i}" style="width:0%"></div>
           </div>
         </td>
+        <td><button class="btn btn-ghost btn-sm" id="batch-remove-${i}" onclick="ClassifyPage.removeBatchFile(${i})" title="Xóa file" style="padding:2px 6px;font-size:11px;">✕</button></td>
       </tr>
     `).join('');
 
@@ -1125,6 +1133,16 @@ window.ClassifyPage = (() => {
     if (pctEl) pctEl.textContent = pct + '%';
   }
 
+  function removeBatchFile(index) {
+    if (index < 0 || index >= _batchFiles.length) return;
+    _batchFiles.splice(index, 1);
+    if (_batchFiles.length === 0) {
+      clearBatch();
+    } else {
+      renderBatchTable();
+    }
+  }
+
   function clearBatch() {
     _batchFiles = [];
     _batchDone = 0;
@@ -1163,6 +1181,6 @@ window.ClassifyPage = (() => {
     updateCharCount, clearInput, classifyText,
     fileDragOver, fileDragLeave, fileDrop, handleFile, clearFile,
     startFileClassify, togglePause, stopClassify, downloadResult, resetJob,
-    batchDrop, handleBatchFiles, startBatch, clearBatch
+    batchDrop, handleBatchFiles, startBatch, clearBatch, removeBatchFile
   };
 })();

@@ -341,12 +341,20 @@ class PipelineRunner:
                             
                     sentiment = issue.get("sentiment", "") or ""
                     best_cat = (rag.get("Sản phẩm", "") or "").strip()
+                    best_line = (rag.get("Dòng SP", "") or "").strip()
+                    best_model = (rag.get("Model", "") or "").strip()
+                    best_score = rag.get("Score", 0.0) or 0.0
+                    brand = (issue.get("brand", "") or "").strip()
                     
                     new_results_batch.append({
                         "text": batch[idx_in_batch],
                         "product": best_cat,
+                        "product_line": best_line,
+                        "model": best_model,
+                        "bm25_score": round(float(best_score), 1) if best_score else 0,
                         "sentiment": sentiment,
-                        "labels": [m for m in MINOR_ORDER if labels_minor[m]]
+                        "labels": [m for m in MINOR_ORDER if labels_minor[m]],
+                        "brand": brand,
                     })
                 try:
                     progress_callback(done, n_total, new_results_batch, step=3, step_status="done")
