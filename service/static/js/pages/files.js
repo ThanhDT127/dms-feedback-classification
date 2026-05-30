@@ -14,13 +14,14 @@ window.FilesPage = (() => {
   let _activeFolder = 'input';
   let _files = [];
   let _previewFile = null;
+  let _refreshInterval = null;
 
   function render() {
     const app = document.getElementById('app');
     app.innerHTML = `
       <div class="page-header">
         <h2>📂 Quản lý file</h2>
-        <p>Duyệt, tải lên và xem trước file trong các thư mục hệ thống</p>
+        <p>Duyệt và xem trước file trong các thư mục hệ thống và SharePoint Cloud</p>
       </div>
 
       <!-- Tabs -->
@@ -41,23 +42,6 @@ window.FilesPage = (() => {
         </div>
         <div class="btn-group">
           <button class="btn btn-secondary btn-sm" onclick="FilesPage.refresh()">🔄 Làm mới</button>
-          <button class="btn btn-primary btn-sm" onclick="FilesPage.showUpload()" id="btn-upload">📤 Tải lên</button>
-        </div>
-      </div>
-
-      <!-- Upload zone (hidden by default) -->
-      <div id="upload-zone" class="hidden" style="margin-bottom:20px;">
-        <div class="dropzone" id="file-dropzone"
-             ondragover="FilesPage.dragOver(event)"
-             ondragleave="FilesPage.dragLeave(event)"
-             ondrop="FilesPage.drop(event)"
-             onclick="document.getElementById('file-picker').click()">
-          <div class="dropzone-icon">📁</div>
-          <div class="dropzone-text">Kéo thả file vào đây hoặc nhấn để chọn</div>
-          <div class="dropzone-hint">Hỗ trợ: .xlsx, .csv, .json, .txt</div>
-          <input type="file" id="file-picker" style="display:none;"
-                 accept=".xlsx,.csv,.json,.txt,.yaml,.yml"
-                 onchange="FilesPage.handleFiles(this.files)" multiple>
         </div>
       </div>
 
@@ -103,10 +87,45 @@ window.FilesPage = (() => {
           Đang tải...
         </div>
       </div>
+
+      <!-- Cloud-centric workflow instructions and status legend -->
+      <div class="card mt-6 animate-in animate-in-delay-4" style="background:rgba(255,255,255,0.02);border:1px solid var(--border);padding:20px;">
+        <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--accent-blue);display:flex;align-items:center;gap:6px;">
+          <span>💡 Luồng hoạt động dữ liệu & Chú thích trạng thái</span>
+        </div>
+        <div style="font-size:12px;line-height:1.6;color:var(--text-secondary);display:flex;flex-direction:column;gap:12px;">
+          <div>
+            <strong style="color:var(--text-primary);">☁️ Chế độ Tự động hóa đồng bộ Cloud (SharePoint-centric):</strong>
+            <p style="margin:4px 0 0 0;color:var(--text-muted);">Hệ thống hoạt động theo mô hình Cloud-first. Để phân loại phản hồi, anh chỉ cần kéo thả/tải file Excel lên trực tiếp thư mục <span style="color:var(--accent-blue);font-weight:500;">Input</span> trên SharePoint của anh. Watcher của hệ thống sẽ quét tự động, tải tạm về máy ảo để xử lý và đẩy kết quả lên thư mục <span style="color:var(--accent-green);font-weight:500;">Output</span> trên SharePoint Cloud. Không hỗ trợ tải file lên local tại đây để tránh xung đột luồng.</p>
+          </div>
+          <div style="border-top:1px solid var(--border);padding-top:12px;">
+            <strong style="color:var(--text-primary);display:block;margin-bottom:8px;">📌 Chú thích trạng thái file:</strong>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:8px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="badge badge-amber" style="width:85px;text-align:center;display:inline-block;">🆕 File mới</span>
+                <span style="color:var(--text-muted);">File vừa tải lên Cloud, chờ Watcher quét.</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="badge badge-blue" style="width:85px;text-align:center;display:inline-block;">🔄 Đang xử lý</span>
+                <span style="color:var(--text-muted);">Watcher đang phân loại nội dung file.</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="badge badge-green" style="width:85px;text-align:center;display:inline-block;">✅ Đã xử lý</span>
+                <span style="color:var(--text-muted);">Hoàn thành phân loại & đẩy lên Cloud.</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="badge badge-red" style="width:85px;text-align:center;display:inline-block;">❌ Thất bại</span>
+                <span style="color:var(--text-muted);">Gặp lỗi nghiêm trọng (Format file sai...).</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
 
     loadFiles();
     loadTree();
+    startRefresh();
   }
 
   function switchFolder(folder) {
@@ -119,14 +138,17 @@ window.FilesPage = (() => {
 
     document.getElementById('preview-panel')?.classList.add('hidden');
     loadFiles();
+    startRefresh();
   }
 
-  async function loadFiles() {
+  async function loadFiles(silent = false) {
     const tbody = document.getElementById('file-tbody');
     const countEl = document.getElementById('file-count');
     if (!tbody) return;
 
-    tbody.innerHTML = '<tr><td colspan="6"><div class="text-center" style="padding:30px;"><span class="spinner"></span></div></td></tr>';
+    if (!silent) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="text-center" style="padding:30px;"><span class="spinner"></span></div></td></tr>';
+    }
 
     try {
       const data = await API.getFiles(_activeFolder);
@@ -171,7 +193,9 @@ window.FilesPage = (() => {
         `;
       }).join('');
     } catch (e) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="text-center text-red" style="padding:30px;">Lỗi tải file: ${escHtml(e.message)}</div></td></tr>`;
+      if (!silent) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="text-center text-red" style="padding:30px;">Lỗi tải file: ${escHtml(e.message)}</div></td></tr>`;
+      }
     }
   }
 
@@ -323,54 +347,34 @@ window.FilesPage = (() => {
     return result;
   }
 
-  function showUpload() {
-    const zone = document.getElementById('upload-zone');
-    if (zone) zone.classList.toggle('hidden');
-  }
 
-  function dragOver(e) {
-    e.preventDefault();
-    e.currentTarget.classList.add('dragover');
-  }
 
-  function dragLeave(e) {
-    e.currentTarget.classList.remove('dragover');
-  }
-
-  function drop(e) {
-    e.preventDefault();
-    e.currentTarget.classList.remove('dragover');
-    const files = e.dataTransfer.files;
-    handleFiles(files);
-  }
-
-  async function handleFiles(fileList) {
-    if (!fileList || fileList.length === 0) return;
-
-    for (const file of fileList) {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('folder', _activeFolder);
-
-      try {
-        await API.uploadFile(fd);
-        Toast.success(`Đã tải lên: ${file.name}`);
-      } catch (e) {
-        Toast.error(`Lỗi tải lên ${file.name}: ${e.message}`);
+  function startRefresh() {
+    stopRefresh();
+    _refreshInterval = setInterval(() => {
+      // Chỉ tự động tải lại nếu người dùng không mở xem trước file
+      if (!_previewFile) {
+        loadFiles(true);
       }
-    }
+    }, 5000);
+  }
 
-    loadFiles();
-    document.getElementById('file-picker').value = '';
+  function stopRefresh() {
+    if (_refreshInterval) {
+      clearInterval(_refreshInterval);
+      _refreshInterval = null;
+    }
   }
 
   function refresh() {
     loadFiles();
+    loadTree();
     Toast.info('Đã làm mới danh sách file');
   }
 
   function destroy() {
     _previewFile = null;
+    stopRefresh();
   }
 
   function formatSize(bytes) {
@@ -387,6 +391,6 @@ window.FilesPage = (() => {
 
   return {
     render, destroy, switchFolder, loadFiles, preview, closePreview,
-    loadTree, showUpload, dragOver, dragLeave, drop, handleFiles, refresh
+    loadTree, refresh
   };
 })();
