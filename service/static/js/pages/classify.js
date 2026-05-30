@@ -807,16 +807,37 @@ window.ClassifyPage = (() => {
       const statusEl = document.getElementById(`batch-status-${i}`);
       const barEl = document.getElementById(`batch-bar-${i}`);
 
-      if (statusEl) statusEl.innerHTML = '<span class="badge badge-blue">🔄 Đang xử lý</span>';
+      if (statusEl) statusEl.innerHTML = '<span class="badge badge-blue">🔄 Đang xử lý (0%)</span>';
 
       const fd = new FormData();
       fd.append('file', _batchFiles[i]);
       fd.append('batch_size', 10);
 
       try {
-        await API.classifyFile(fd);
-        if (statusEl) statusEl.innerHTML = '<span class="badge badge-green">✅ Hoàn thành</span>';
-        if (barEl) barEl.style.width = '100%';
+        const job = await API.classifyFile(fd);
+        const jobId = job.job_id || job.id;
+        
+        let completed = false;
+        while (!completed) {
+          await sleep(2000);
+          const statusJob = await API.get(`/classify/jobs/${jobId}`);
+          const status = statusJob.status;
+          
+          if (status === 'completed') {
+            completed = true;
+            if (statusEl) statusEl.innerHTML = `<span class="badge badge-green">✅ Hoàn thành</span> <button class="btn btn-ghost btn-sm" onclick="window.open('/api/classify/jobs/${jobId}/download', '_blank')" title="Tải kết quả" style="padding: 2px 6px; margin-left: 4px; font-size: 11px;">📥 Tải</button>`;
+            if (barEl) barEl.style.width = '100%';
+          } else if (status === 'error') {
+            completed = true;
+            if (statusEl) statusEl.innerHTML = `<span class="badge badge-red" title="${esc(statusJob.error || 'Lỗi không xác định')}">❌ Thất bại</span>`;
+          } else {
+            const done = statusJob.rows_done || 0;
+            const total = statusJob.total_rows || 1;
+            const pct = Math.round((done / total) * 100);
+            if (barEl) barEl.style.width = `${pct}%`;
+            if (statusEl) statusEl.innerHTML = `<span class="badge badge-blue">🔄 Đang xử lý (${pct}%)</span>`;
+          }
+        }
       } catch (e) {
         if (statusEl) statusEl.innerHTML = '<span class="badge badge-red">❌ Thất bại</span>';
       }

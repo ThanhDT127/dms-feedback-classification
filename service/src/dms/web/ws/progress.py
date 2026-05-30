@@ -35,6 +35,7 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
         return
 
     last_sent_rows = -1
+    last_sent_results_count = 0
     try:
         while True:
             job = jobs.get(job_id)
@@ -47,12 +48,32 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
 
             status = job.get("status", "unknown")
 
-            # Send progress update when rows_done changes
+            # 1. Send any new batch results
+            all_results = job.get("results", [])
+            if len(all_results) > last_sent_results_count:
+                new_results = all_results[last_sent_results_count:]
+                last_sent_results_count = len(all_results)
+                await websocket.send_json({
+                    "type": "batch_result",
+                    "data": {
+                        "results": new_results
+                    }
+                })
+
+            # 2. Send progress update when rows_done changes
             current_rows = job.get("rows_done", 0)
             if current_rows != last_sent_rows or status in ("completed", "error", "cancelled"):
                 last_sent_rows = current_rows
 
                 if status == "completed":
+                    # Send final batch results if any are left
+                    if len(all_results) > last_sent_results_count:
+                        new_results = all_results[last_sent_results_count:]
+                        await websocket.send_json({
+                            "type": "batch_result",
+                            "data": {"results": new_results}
+                        })
+                    
                     await websocket.send_json({
                         "type": "complete",
                         "data": {
