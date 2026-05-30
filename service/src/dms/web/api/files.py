@@ -73,6 +73,7 @@ async def get_folder_tree():
             if not dir_path.is_dir():
                 continue
             dir_entry = {
+                "path": str(dir_path),
                 "files": [],
             }
             for item in sorted(dir_path.iterdir()):
