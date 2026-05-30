@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
     command: python -m dms.web
     ports:
-      - "127.0.0.1:8501:8501"
+      - "8501:8501"
     env_file:
       - .env
     environment:
