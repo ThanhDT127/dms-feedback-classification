@@ -11,6 +11,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, UploadFile
 
 from ...settings import SERVICE_DIR, get_settings
+from ..deps import get_sharepoint_client
 
 logger = logging.getLogger("dms-web")
 
@@ -150,8 +151,68 @@ async def upload_file(file: UploadFile):
 
 @router.get("/{folder}")
 async def list_files(folder: str):
-    """Liệt kê các file trong thư mục chỉ định."""
-    dirs = _get_folder_map().get(folder.lower())
+    """Liệt kê các file trong thư mục chỉ định (Duyệt SharePoint Cloud hoặc Local Fallback)."""
+    folder_lower = folder.lower()
+    
+    # Quyết định xem có nên duyệt SharePoint không
+    sp_folder_map = {
+        "input": get_settings().sp_input_folder,
+        "output": get_settings().sp_output_folder,
+        "checkpoint": get_settings().sp_checkpoint_folder,
+    }
+    
+    sp_folder = sp_folder_map.get(folder_lower)
+    sp_client = get_sharepoint_client() if sp_folder else None
+    
+    # ─── Đọc seen_files.json để map trạng thái ───
+    seen_data = {}
+    seen_path = WORK_DIR / "seen_files.json"
+    if seen_path.is_file():
+        try:
+            seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    # Nếu có kết nối SharePoint
+    if sp_client is not None and sp_folder:
+        try:
+            items = sp_client.list_folder_items(sp_folder)
+            files = []
+            for item in items:
+                name = item.get("name", "")
+                # Bỏ qua nếu là thư mục
+                if "folder" in item:
+                    continue
+                
+                # Trạng thái mặc định là "new" (hoặc None cho output/checkpoint)
+                status = "new" if folder_lower == "input" else None
+                item_id = item.get("id")
+                
+                # Đối chiếu chéo từ seen_files.json theo ID hoặc Tên file
+                if item_id and item_id in seen_data:
+                    status = seen_data[item_id].get("status", "done")
+                else:
+                    # Fallback theo tên file nếu không lưu ID trong seen
+                    for fid, s_info in seen_data.items():
+                        if s_info.get("name") == name:
+                            status = s_info.get("status", "done")
+                            break
+                            
+                files.append({
+                    "name": name,
+                    "size": item.get("size", 0),
+                    "modified": item.get("lastModifiedDateTime", "—"),
+                    "extension": Path(name).suffix.lstrip("."),
+                    "source_dir": "SharePoint",
+                    "status": status,
+                    "id": item_id,
+                })
+            return files
+        except Exception as exc:
+            logger.warning("Không thể duyệt SharePoint cho thư mục %s, chuyển sang fallback local: %s", folder, exc)
+
+    # ─── Fallback Local (Keyword, Model hoặc khi SharePoint lỗi) ───
+    dirs = _get_folder_map().get(folder_lower)
     if dirs is None:
         raise HTTPException(status_code=400, detail=f"Thư mục không hợp lệ: {folder}")
 
@@ -165,6 +226,16 @@ async def list_files(folder: str):
                 seen_names.add(item.name)
                 info = _file_info(item)
                 info["source_dir"] = str(dir_path)
+                
+                # Gán trạng thái cho file local
+                status = None
+                if folder_lower == "input":
+                    status = "new"
+                    for fid, s_info in seen_data.items():
+                        if s_info.get("name") == item.name:
+                            status = s_info.get("status", "done")
+                            break
+                info["status"] = status
                 files.append(info)
 
     return files
@@ -194,35 +265,101 @@ def _safe_dataframe_records(df: "pd.DataFrame") -> list[dict]:
 
 @router.get("/{folder}/{filename}/preview")
 async def preview_file(folder: str, filename: str, max_rows: int = 20):
-    """Đọc preview file — hỗ trợ Excel, CSV, JSON, text."""
-    dirs = _get_folder_map().get(folder.lower())
-    if dirs is None:
-        raise HTTPException(status_code=400, detail=f"Thư mục không hợp lệ: {folder}")
-
+    """Đọc preview file — hỗ trợ Excel, CSV, JSON, text (SharePoint Cloud hoặc Local Fallback)."""
+    folder_lower = folder.lower()
+    
+    # ─── Lấy file trên SharePoint nếu được hỗ trợ ───
+    sp_folder_map = {
+        "input": get_settings().sp_input_folder,
+        "output": get_settings().sp_output_folder,
+        "checkpoint": get_settings().sp_checkpoint_folder,
+    }
+    
+    sp_folder = sp_folder_map.get(folder_lower)
+    sp_client = get_sharepoint_client() if sp_folder else None
+    
     file_path: Path | None = None
-    for dir_path in dirs:
-        # Validate path traversal before looking up file
-        safe_name = Path(filename).name
-        if not safe_name:
-            raise HTTPException(status_code=400, detail="Tên file không hợp lệ")
-        candidate = (dir_path / safe_name).resolve()
+    temp_downloaded_path: Path | None = None
+    
+    if sp_client is not None and sp_folder:
         try:
-            candidate.relative_to(dir_path.resolve())
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Tên file không hợp lệ")  # noqa: B904
-        if candidate.is_file():
-            file_path = candidate
-            break
+            items = sp_client.list_folder_items(sp_folder)
+            target_item = None
+            for item in items:
+                if item.get("name") == filename:
+                    target_item = item
+                    break
+            
+            if target_item:
+                # Tải file về thư mục staging tạm thời
+                staging_dir = WORK_DIR / "staging"
+                staging_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Sanitize filename to avoid path traversal in staging
+                safe_name = Path(filename).name
+                temp_path = staging_dir / safe_name
+                
+                sp_client.download_file(target_item["id"], temp_path)
+                file_path = temp_path
+                temp_downloaded_path = temp_path
+        except Exception as exc:
+            logger.warning("Không thể tải preview từ SharePoint cho %s: %s", filename, exc)
+
+    # ─── Fallback Local (Keyword, Model hoặc khi SharePoint lỗi) ───
+    if file_path is None:
+        dirs = _get_folder_map().get(folder_lower)
+        if dirs is None:
+            raise HTTPException(status_code=400, detail=f"Thư mục không hợp lệ: {folder}")
+
+        for dir_path in dirs:
+            # Validate path traversal before looking up file
+            safe_name = Path(filename).name
+            if not safe_name:
+                raise HTTPException(status_code=400, detail="Tên file không hợp lệ")
+            candidate = (dir_path / safe_name).resolve()
+            try:
+                candidate.relative_to(dir_path.resolve())
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Tên file không hợp lệ")  # noqa: B904
+            if candidate.is_file():
+                file_path = candidate
+                break
 
     if file_path is None:
         raise HTTPException(status_code=404, detail=f"Không tìm thấy file: {filename}")
 
-    ext = file_path.suffix.lower()
+    try:
+        ext = file_path.suffix.lower()
 
-    # ── Excel ──
-    if ext in EXCEL_EXTS:
-        try:
-            df = pd.read_excel(file_path, nrows=max_rows)
+        # ── Excel ──
+        if ext in EXCEL_EXTS:
+            try:
+                df = pd.read_excel(file_path, nrows=max_rows)
+                return {
+                    "type": "table",
+                    "filename": filename,
+                    "total_columns": len(df.columns),
+                    "preview_rows": max_rows,
+                    "columns": list(df.columns),
+                    "data": _safe_dataframe_records(df),
+                }
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Không thể đọc file Excel: {exc}",
+                ) from exc
+
+        # ── CSV ──
+        if ext in CSV_EXTS:
+            try:
+                df = pd.read_csv(file_path, nrows=max_rows, encoding="utf-8")
+            except UnicodeDecodeError:
+                df = pd.read_csv(file_path, nrows=max_rows, encoding="cp1252")
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Không thể đọc file CSV: {exc}",
+                ) from exc
             return {
                 "type": "table",
                 "filename": filename,
@@ -231,90 +368,72 @@ async def preview_file(folder: str, filename: str, max_rows: int = 20):
                 "columns": list(df.columns),
                 "data": _safe_dataframe_records(df),
             }
-        except Exception as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Không thể đọc file Excel: {exc}",
-            ) from exc
 
-    # ── CSV ──
-    if ext in CSV_EXTS:
-        try:
-            df = pd.read_csv(file_path, nrows=max_rows, encoding="utf-8")
-        except UnicodeDecodeError:
-            df = pd.read_csv(file_path, nrows=max_rows, encoding="cp1252")
-        except Exception as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Không thể đọc file CSV: {exc}",
-            ) from exc
+        # ── JSON ──
+        if ext in JSON_EXTS:
+            try:
+                raw = file_path.read_bytes()
+                truncated = len(raw) > MAX_PREVIEW_BYTES
+                text = raw[:MAX_PREVIEW_BYTES].decode("utf-8", errors="replace")
+                content = json.loads(text) if not truncated else text
+                return {
+                    "type": "json",
+                    "filename": filename,
+                    "content": content,
+                    "truncated": truncated,
+                    "size": len(raw),
+                }
+            except json.JSONDecodeError as exc:
+                return {
+                    "type": "json",
+                    "filename": filename,
+                    "content": raw[:MAX_PREVIEW_BYTES].decode("utf-8", errors="replace"),
+                    "truncated": False,
+                    "parse_error": str(exc),
+                    "size": len(raw),
+                }
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Không thể đọc file JSON: {exc}",
+                ) from exc
+
+        # ── Text-based ──
+        if ext in TEXT_EXTS:
+            try:
+                raw = file_path.read_bytes()
+                truncated = len(raw) > MAX_PREVIEW_BYTES
+                text = raw[:MAX_PREVIEW_BYTES].decode("utf-8", errors="replace")
+                lines = text.splitlines()
+                if len(lines) > MAX_TEXT_LINES:
+                    lines = lines[:MAX_TEXT_LINES]
+                    truncated = True
+                return {
+                    "type": "text",
+                    "filename": filename,
+                    "content": "\n".join(lines),
+                    "truncated": truncated,
+                    "total_lines": len(text.splitlines()),
+                    "size": len(raw),
+                }
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Không thể đọc file text: {exc}",
+                ) from exc
+
+        # ── Unsupported ──
         return {
-            "type": "table",
+            "type": "unsupported",
             "filename": filename,
-            "total_columns": len(df.columns),
-            "preview_rows": max_rows,
-            "columns": list(df.columns),
-            "data": _safe_dataframe_records(df),
+            "extension": ext,
+            "message": f"Không hỗ trợ xem trước file {ext}",
         }
-
-    # ── JSON ──
-    if ext in JSON_EXTS:
-        try:
-            raw = file_path.read_bytes()
-            truncated = len(raw) > MAX_PREVIEW_BYTES
-            text = raw[:MAX_PREVIEW_BYTES].decode("utf-8", errors="replace")
-            content = json.loads(text) if not truncated else text
-            return {
-                "type": "json",
-                "filename": filename,
-                "content": content,
-                "truncated": truncated,
-                "size": len(raw),
-            }
-        except json.JSONDecodeError as exc:
-            return {
-                "type": "json",
-                "filename": filename,
-                "content": raw[:MAX_PREVIEW_BYTES].decode("utf-8", errors="replace"),
-                "truncated": False,
-                "parse_error": str(exc),
-                "size": len(raw),
-            }
-        except Exception as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Không thể đọc file JSON: {exc}",
-            ) from exc
-
-    # ── Text-based ──
-    if ext in TEXT_EXTS:
-        try:
-            raw = file_path.read_bytes()
-            truncated = len(raw) > MAX_PREVIEW_BYTES
-            text = raw[:MAX_PREVIEW_BYTES].decode("utf-8", errors="replace")
-            lines = text.splitlines()
-            if len(lines) > MAX_TEXT_LINES:
-                lines = lines[:MAX_TEXT_LINES]
-                truncated = True
-            return {
-                "type": "text",
-                "filename": filename,
-                "content": "\n".join(lines),
-                "truncated": truncated,
-                "total_lines": len(text.splitlines()),
-                "size": len(raw),
-            }
-        except Exception as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Không thể đọc file text: {exc}",
-            ) from exc
-
-    # ── Unsupported ──
-    return {
-        "type": "unsupported",
-        "filename": filename,
-        "extension": ext,
-        "message": f"Không hỗ trợ xem trước file {ext}",
-    }
+    finally:
+        # Xóa file tạm sau khi đã đọc xong
+        if temp_downloaded_path and temp_downloaded_path.is_file():
+            try:
+                temp_downloaded_path.unlink()
+            except Exception:
+                pass
 

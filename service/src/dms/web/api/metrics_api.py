@@ -59,12 +59,46 @@ async def get_health():
 async def get_metrics():
     """Trả về số liệu thống kê vận hành."""
     metrics_path = WORK_DIR / "metrics.json"
+    seen_path = WORK_DIR / "seen_files.json"
+
+    data = {}
     if metrics_path.is_file():
         try:
-            return json.loads(metrics_path.read_text(encoding="utf-8"))
+            data = json.loads(metrics_path.read_text(encoding="utf-8"))
         except Exception as exc:
             logger.warning("Lỗi đọc metrics.json: %s", exc)
-    return {"message": "Chưa có dữ liệu metrics"}
+
+    # Ánh xạ key thống kê chuẩn sang format frontend tiêu thụ
+    success_cnt = data.get("files_processed", 0)
+    failed_cnt = data.get("files_failed", 0)
+    data["total_files"] = success_cnt + failed_cnt
+    data["success_files"] = success_cnt
+    data["failed_files"] = failed_cnt
+    data["avg_processing_time"] = data.get("avg_processing_seconds", 0.0)
+
+    # Đọc seen_files.json để trả về danh sách recent_files động
+    recent_files = []
+    if seen_path.is_file():
+        try:
+            seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
+            for fid, info in seen_data.items():
+                recent_files.append({
+                    "id": fid,
+                    "filename": info.get("name", "Unknown"),
+                    "status": info.get("status", "done"),
+                    "timestamp": info.get("processed_at") or info.get("last_attempt") or "",
+                    "total_rows": info.get("total_rows", 0),
+                    "duration_seconds": info.get("duration_seconds", 0.0),
+                    "failures": info.get("failures", 0),
+                    "last_error": info.get("last_error", ""),
+                })
+            # Sắp xếp giảm dần theo thời gian xử lý
+            recent_files.sort(key=lambda x: x["timestamp"], reverse=True)
+        except Exception as exc:
+            logger.warning("Lỗi đọc seen_files.json trong metrics API: %s", exc)
+
+    data["recent_files"] = recent_files
+    return data
 
 
 @router.get("/metrics/daily")
