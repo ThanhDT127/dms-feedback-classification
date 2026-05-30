@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from ...settings import SERVICE_DIR
@@ -123,10 +124,19 @@ def _run_classification_job(
 
         ckpt_path = WORK_DIR / "checkpoint" / f"{job_id}.json"
 
+        def progress_callback(done: int, total: int, new_results: list[dict]):
+            job["rows_done"] = done
+            job["total_rows"] = total
+            job["percent"] = int((done / total) * 100) if total > 0 else 0
+            if "results" not in job:
+                job["results"] = []
+            job["results"].extend(new_results)
+
         result = runner.run_pipeline(
             input_path=input_path,
             output_path=output_path,
             ckpt_path=ckpt_path,
+            progress_callback=progress_callback,
         )
 
         job["status"] = "completed"
@@ -136,6 +146,18 @@ def _run_classification_job(
         job["output_path"] = result.get("output_path", "")
         job["duration_seconds"] = result.get("duration_seconds", 0)
         job["completed_at"] = datetime.now().isoformat(timespec="seconds")
+
+        # Upload output to SharePoint if configured
+        try:
+            settings = deps.get_settings()
+            sp_client = deps.get_sharepoint_client()
+            if sp_client and settings.sp_output_folder:
+                logger.info("Uploading completed job %s output to SharePoint: %s", job_id, output_path.name)
+                sp_client.upload_file(output_path, settings.sp_output_folder)
+                job["sp_uploaded"] = True
+                job["sp_folder"] = settings.sp_output_folder
+        except Exception as exc:
+            logger.warning("Không thể upload kết quả lên SharePoint cho job %s: %s", job_id, exc)
 
     except Exception as exc:
         logger.error("Job %s thất bại: %s", job_id, exc, exc_info=True)
@@ -250,3 +272,28 @@ async def cancel_job(request: Request, job_id: str):
 
     job["status"] = "cancelled"
     return {"message": f"Đã hủy job: {job_id}"}
+
+
+@router.get("/jobs/{job_id}/download")
+async def download_job_result(request: Request, job_id: str):
+    """Tải file Excel kết quả phân loại."""
+    jobs: dict = request.app.state.jobs
+    job = jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy job: {job_id}")
+
+    if job["status"] != "completed":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job chưa hoàn thành. Trạng thái hiện tại: {job['status']}",
+        )
+
+    output_path = Path(job["output_path"])
+    if not output_path.is_file():
+        raise HTTPException(status_code=404, detail="File kết quả không tồn tại trên hệ thống")
+
+    return FileResponse(
+        path=output_path,
+        filename=output_path.name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )

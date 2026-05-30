@@ -157,13 +157,25 @@ class PipelineRunner:
             for _ in batch_texts
         ]
 
-    def run_pipeline(self, input_path: str | Path, output_path: str | Path, ckpt_path: str | Path) -> dict:
+    def run_pipeline(
+        self,
+        input_path: str | Path,
+        output_path: str | Path,
+        ckpt_path: str | Path,
+        progress_callback: callable | None = None,
+    ) -> dict:
         try:
-            return self._run_pipeline(input_path, output_path, ckpt_path)
+            return self._run_pipeline(input_path, output_path, ckpt_path, progress_callback)
         except Exception as exc:
             raise PipelineError(str(exc)) from exc
 
-    def _run_pipeline(self, input_path: str | Path, output_path: str | Path, ckpt_path: str | Path) -> dict:
+    def _run_pipeline(
+        self,
+        input_path: str | Path,
+        output_path: str | Path,
+        ckpt_path: str | Path,
+        progress_callback: callable | None = None,
+    ) -> dict:
         input_path = Path(input_path)
         output_path = Path(output_path)
         ckpt_path = Path(ckpt_path)
@@ -208,6 +220,8 @@ class PipelineRunner:
 
         texts = df_all[text_col].fillna("").astype(str).tolist()
         n_total = len(texts)
+        if progress_callback is not None:
+            progress_callback(start_idx, n_total, [])
         batch_index = start_idx // self.settings.llm_batch_size
 
         for i in range(start_idx, n_total, self.settings.llm_batch_size):
@@ -297,6 +311,29 @@ class PipelineRunner:
                 self._save_output(rows_out, all_cols, output_path)
                 self._save_checkpoint(ckpt_path, done)
                 logger.info("Checkpoint %d/%d -> %s", done, n_total, ckpt_path)
+
+            if progress_callback is not None:
+                new_results_batch = []
+                for idx_in_batch in range(len(batch)):
+                    base_row = df_all.iloc[i + idx_in_batch].to_dict()
+                    rag = rag_batch[idx_in_batch]
+                    issue = issue_list[idx_in_batch]
+                    
+                    labels_minor = {m: False for m in MINOR_ORDER}
+                    for minor in issue.get("final_minors", []):
+                        if minor in labels_minor:
+                            labels_minor[minor] = True
+                            
+                    sentiment = issue.get("sentiment", "") or ""
+                    best_cat = (rag.get("Sản phẩm", "") or "").strip()
+                    
+                    new_results_batch.append({
+                        "text": batch[idx_in_batch],
+                        "product": best_cat,
+                        "sentiment": sentiment,
+                        "labels": [m for m in MINOR_ORDER if labels_minor[m]]
+                    })
+                progress_callback(done, n_total, new_results_batch)
 
         duration = time.time() - t_start
         logger.info("Pipeline complete: %d rows in %.1fs -> %s", n_total, duration, output_path)
