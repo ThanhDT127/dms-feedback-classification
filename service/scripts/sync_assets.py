@@ -10,7 +10,7 @@ try:
     import requests
 except ImportError:
     print("Đang cài msal, requests...")
-    os.system(f"{sys.executable} -m pip install msal requests -q")
+    os.system(f"{sys.executable} -m pip install msal requests --trusted-host pypi.org --trusted-host files.pythonhosted.org -q")
     import msal
     import requests
 
@@ -32,15 +32,18 @@ TENANT = env.get("AZURE_TENANT_ID", "")
 CLIENT_ID = env.get("AZURE_CLIENT_ID", "")
 CLIENT_SECRET = env.get("AZURE_CLIENT_SECRET", "")
 DRIVE_ID = env.get("SHAREPOINT_DRIVE_ID", "")
-SP_KEYWORD_FOLDER = env.get("SP_KEYWORD_FOLDER", "Keyword")
+ROOT_FOLDER_ID = env.get("SHAREPOINT_ROOT_FOLDER_ID", "")
+KEYWORD_FOLDER_NAME = env.get("SHAREPOINT_KEYWORD_FOLDER", "Keyword")
 KEYWORD_DIR = os.path.join(SERVICE_DIR, "Keyword")
 
-if not all([TENANT, CLIENT_ID, CLIENT_SECRET, DRIVE_ID]):
-    print("Thiếu config trong .env (AZURE_TENANT_ID, CLIENT_ID, CLIENT_SECRET, SHAREPOINT_DRIVE_ID)")
+if not all([TENANT, CLIENT_ID, CLIENT_SECRET, DRIVE_ID, ROOT_FOLDER_ID]):
+    print("Thiếu config trong .env:")
+    for k in ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "SHAREPOINT_DRIVE_ID", "SHAREPOINT_ROOT_FOLDER_ID"]:
+        print(f"  {k}: {'OK' if env.get(k) else 'THIẾU'}")
     sys.exit(1)
 
 # --- Auth ---
-print(f"Đang xác thực Azure AD...")
+print("Đang xác thực Azure AD...")
 app = msal.ConfidentialClientApplication(
     CLIENT_ID,
     authority=f"https://login.microsoftonline.com/{TENANT}",
@@ -55,29 +58,53 @@ TOKEN = token_resp["access_token"]
 HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 GRAPH = "https://graph.microsoft.com/v1.0"
 
-# --- Tìm folder Keyword trên SharePoint ---
-print(f"Đang tìm thư mục '{SP_KEYWORD_FOLDER}' trên SharePoint...")
-resp = requests.get(f"{GRAPH}/drives/{DRIVE_ID}/root:/{SP_KEYWORD_FOLDER}:/children", headers=HEADERS)
+# --- Tìm subfolder Keyword trong root folder ---
+print(f"Đang tìm subfolder '{KEYWORD_FOLDER_NAME}' trong root folder...")
+resp = requests.get(
+    f"{GRAPH}/drives/{DRIVE_ID}/items/{ROOT_FOLDER_ID}/children",
+    headers=HEADERS,
+)
 if resp.status_code != 200:
-    print(f"Lỗi: {resp.status_code} - {resp.text[:300]}")
+    print(f"Lỗi list root folder: {resp.status_code} - {resp.text[:300]}")
     sys.exit(1)
 
+keyword_folder_id = None
+for item in resp.json().get("value", []):
+    if item.get("name") == KEYWORD_FOLDER_NAME and "folder" in item:
+        keyword_folder_id = item["id"]
+        break
+
+if not keyword_folder_id:
+    print(f"Không tìm thấy subfolder '{KEYWORD_FOLDER_NAME}' trong root folder!")
+    print("Các folder có sẵn:")
+    for item in resp.json().get("value", []):
+        if "folder" in item:
+            print(f"  📁 {item['name']}")
+    sys.exit(1)
+
+print(f"Tìm thấy folder ID: {keyword_folder_id[:20]}...")
+
+# --- List files trong Keyword folder ---
+resp = requests.get(
+    f"{GRAPH}/drives/{DRIVE_ID}/items/{keyword_folder_id}/children",
+    headers=HEADERS,
+)
 files = resp.json().get("value", [])
-print(f"Tìm thấy {len(files)} file trong {SP_KEYWORD_FOLDER}/")
+print(f"Có {len(files)} file trong {KEYWORD_FOLDER_NAME}/")
 
 # --- Tải về ---
 os.makedirs(KEYWORD_DIR, exist_ok=True)
 downloaded = 0
 
 for f in files:
+    if "folder" in f:
+        continue
     name = f["name"]
     size = f.get("size", 0)
-    download_url = f.get("@microsoft.graph.downloadUrl")
 
-    if not download_url:
-        # Lấy download URL
-        item_resp = requests.get(f"{GRAPH}/drives/{DRIVE_ID}/items/{f['id']}", headers=HEADERS)
-        download_url = item_resp.json().get("@microsoft.graph.downloadUrl")
+    # Lấy download URL
+    item_resp = requests.get(f"{GRAPH}/drives/{DRIVE_ID}/items/{f['id']}", headers=HEADERS)
+    download_url = item_resp.json().get("@microsoft.graph.downloadUrl")
 
     if not download_url:
         print(f"  ⚠ {name}: không lấy được URL tải")
@@ -93,9 +120,8 @@ for f in files:
 
 print(f"\n✅ Đã tải {downloaded} file về {KEYWORD_DIR}/")
 
-# Kiểm tra kw_map.json
 kw_path = os.path.join(KEYWORD_DIR, "kw_map.json")
 if os.path.isfile(kw_path):
     print(f"✅ kw_map.json: {os.path.getsize(kw_path):,} bytes")
 else:
-    print("❌ kw_map.json: KHÔNG TÌM THẤY trong thư mục SharePoint")
+    print("❌ kw_map.json không có trong SharePoint Keyword/")
