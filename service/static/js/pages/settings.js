@@ -149,8 +149,9 @@ window.SettingsPage = (() => {
           <select class="form-select" id="set-model">
             ${_models.length > 0
               ? _models.map(m => {
+                  const mId = typeof m === 'string' ? m : m.id || m.name;
                   const mName = typeof m === 'string' ? m : m.name || m.id;
-                  return `<option value="${esc(mName)}" ${mName === model ? 'selected' : ''}>${esc(mName)}</option>`;
+                  return `<option value="${esc(mId)}" ${mId === model ? 'selected' : ''}>${esc(mName)}</option>`;
                 }).join('')
               : `<option value="${esc(model)}">${esc(model || 'Không có model')}</option>`
             }

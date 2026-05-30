@@ -118,6 +118,8 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
                         "total_rows": job.get("total_rows", 0),
                         "rows_done": current_rows,
                         "percent": job.get("percent", 0),
+                        "step": job.get("step"),
+                        "step_status": job.get("step_status"),
                     },
                 })
 

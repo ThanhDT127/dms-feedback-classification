@@ -4,11 +4,11 @@
 
 window.FilesPage = (() => {
   const FOLDERS = [
-    { id: 'input',      label: 'Đầu vào',   icon: '📥' },
-    { id: 'output',     label: 'Đầu ra',    icon: '📤' },
-    { id: 'checkpoint', label: 'Checkpoint', icon: '💾' },
-    { id: 'keyword',    label: 'Từ khóa',   icon: '🔑' },
-    { id: 'model',      label: 'Model',      icon: '🤖' },
+    { id: 'input',      label: 'input',   icon: '📥' },
+    { id: 'output',     label: 'output',    icon: '📤' },
+    { id: 'checkpoint', label: 'checkpoint', icon: '💾' },
+    { id: 'keyword',    label: 'keyword',   icon: '🔑' },
+    { id: 'model',      label: 'model',      icon: '🤖' },
   ];
 
   let _activeFolder = 'input';
@@ -146,8 +146,26 @@ window.FilesPage = (() => {
     const countEl = document.getElementById('file-count');
     if (!tbody) return;
 
+    const isInput = _activeFolder === 'input';
+    const colSpan = isInput ? 6 : 5;
+
+    // Update the thead dynamically
+    const thead = document.querySelector('#file-table thead');
+    if (thead) {
+      thead.innerHTML = `
+        <tr>
+          <th style="width:40px;">#</th>
+          <th>Tên file</th>
+          <th>Kích thước</th>
+          <th>Ngày sửa đổi</th>
+          ${isInput ? '<th>Trạng thái</th>' : ''}
+          <th style="width:100px;">Hành động</th>
+        </tr>
+      `;
+    }
+
     if (!silent) {
-      tbody.innerHTML = '<tr><td colspan="6"><div class="text-center" style="padding:30px;"><span class="spinner"></span></div></td></tr>';
+      tbody.innerHTML = `<tr><td colspan="${colSpan}"><div class="text-center" style="padding:30px;"><span class="spinner"></span></div></td></tr>`;
     }
 
     try {
@@ -158,7 +176,7 @@ window.FilesPage = (() => {
 
       if (_files.length === 0) {
         tbody.innerHTML = `
-          <tr><td colspan="6">
+          <tr><td colspan="${colSpan}">
             <div class="empty-state">
               <div class="empty-state-icon">📭</div>
               <p class="empty-state-text">Thư mục trống</p>
@@ -185,7 +203,7 @@ window.FilesPage = (() => {
             </td>
             <td class="text-muted text-mono" style="font-size:12px;">${size}</td>
             <td class="text-muted" style="font-size:12px;">${escHtml(date)}</td>
-            <td>${status}</td>
+            ${isInput ? `<td>${status}</td>` : ''}
             <td>
               <button class="btn btn-ghost btn-sm" title="Xem" onclick="FilesPage.preview('${escAttr(name)}')">👁️</button>
             </td>
@@ -194,7 +212,7 @@ window.FilesPage = (() => {
       }).join('');
     } catch (e) {
       if (!silent) {
-        tbody.innerHTML = `<tr><td colspan="6"><div class="text-center text-red" style="padding:30px;">Lỗi tải file: ${escHtml(e.message)}</div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${colSpan}"><div class="text-center text-red" style="padding:30px;">Lỗi tải file: ${escHtml(e.message)}</div></td></tr>`;
       }
     }
   }
