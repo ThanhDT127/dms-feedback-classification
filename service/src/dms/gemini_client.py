@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import os
 from typing import Any, cast
@@ -98,6 +99,22 @@ class GeminiClient:
                 time.sleep(wait)
         raise GeminiError(str(last_err)) from last_err
 
+    def _call_with_timeout(self, fn, *args, **kwargs) -> Any:  # noqa: ANN001
+        """Execute *fn* with a timeout from settings.gemini_timeout_seconds.
+
+        Raises TimeoutError if the SDK call doesn't return within the limit.
+        Uses a thread so the calling thread (watcher loop) is not blocked forever.
+        """
+        timeout = getattr(self.settings, "gemini_timeout_seconds", 120.0)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(fn, *args, **kwargs)
+            try:
+                return future.result(timeout=timeout)
+            except concurrent.futures.TimeoutError:
+                raise TimeoutError(
+                    f"Gemini API call timed out after {timeout}s"
+                )
+
     def _generate_vertex(
         self,
         prompt: str,
@@ -122,7 +139,9 @@ class GeminiClient:
 
         if self._vertex_client is None:
             raise GeminiError("Vertex AI client is not initialized")
-        response = self._vertex_client.models.generate_content(**kwargs)
+        response = self._call_with_timeout(
+            self._vertex_client.models.generate_content, **kwargs
+        )
         return (getattr(response, "text", None) or "").strip()
 
     def _generate_apikey(self, prompt: str, temperature: float | None = None) -> str:
@@ -132,7 +151,8 @@ class GeminiClient:
         gen_config = {}
         if temperature is not None:
             gen_config["temperature"] = temperature
-        response = self._apikey_model.generate_content(
+        response = self._call_with_timeout(
+            self._apikey_model.generate_content,
             prompt,
             generation_config=gen_config or None,
         )
@@ -143,7 +163,8 @@ class GeminiClient:
         if self._apikey_model is None:
             raise GeminiError("Gemini API key client is not initialized")
         try:
-            response = self._apikey_model.generate_content(
+            response = self._call_with_timeout(
+                self._apikey_model.generate_content,
                 prompt,
                 generation_config={
                     "response_mime_type": "application/json",
@@ -152,8 +173,10 @@ class GeminiClient:
             )
             return (getattr(response, "text", None) or "").strip()
         except Exception:
-            response = self._apikey_model.generate_content(
+            response = self._call_with_timeout(
+                self._apikey_model.generate_content,
                 prompt,
                 generation_config={"temperature": temperature},
             )
             return (getattr(response, "text", None) or "").strip()
+

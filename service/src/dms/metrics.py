@@ -151,10 +151,8 @@ class MetricsCollector:
             "gemini_retries": self.gemini_retries,
         }
         try:
-            self._path.write_text(
-                json.dumps(data, indent=2, ensure_ascii=False, default=str),
-                encoding="utf-8",
-            )
+            from .utils import atomic_write_json
+            atomic_write_json(self._path, data)
         except Exception as exc:
             logger.warning("Failed to write metrics: %s", exc)
 

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 import traceback
 from datetime import datetime
 from pathlib import Path
 
 from .cleanup import RuntimeCleanup
+from .utils import atomic_write_json
 from .config_assets import ConfigAssetSyncService
 from .metrics import MetricsCollector
 from .notification import NotificationService
@@ -43,6 +45,7 @@ class Watcher:
         self.config_asset_sync = config_asset_sync
         self.cleanup = RuntimeCleanup(settings)
         self._last_sync_health: dict = {}
+        self._shutdown_event = threading.Event()
 
     def _load_seen(self) -> dict:
         if self.settings.seen_files_path.exists():
@@ -53,21 +56,13 @@ class Watcher:
         return {}
 
     def _save_seen(self, seen: dict) -> None:
-        self.settings.seen_files_path.parent.mkdir(parents=True, exist_ok=True)
-        self.settings.seen_files_path.write_text(
-            json.dumps(seen, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        atomic_write_json(self.settings.seen_files_path, seen)
 
     def _update_health(self, cycle: int = 0, queue_size: int = 0) -> None:
-        self.settings.health_file.parent.mkdir(parents=True, exist_ok=True)
         payload = self.metrics.get_health_data(cycle=cycle, queue_size=queue_size)
         if self._last_sync_health:
             payload["config_assets"] = self._last_sync_health
-        self.settings.health_file.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        atomic_write_json(self.settings.health_file, payload)
 
     def _sync_config_assets(self) -> None:
         if self.config_asset_sync is None:
@@ -279,9 +274,17 @@ class Watcher:
         logger.info("Found %d file(s) to process", len(new_files))
         processed = 0
         for item in new_files:
+            if self._shutdown_event.is_set():
+                logger.info("Shutdown requested; stopping mid-poll after current file")
+                break
             if self._process_file(item, seen):
                 processed += 1
         return processed
+
+    def request_shutdown(self) -> None:
+        """Request graceful shutdown. Safe to call from a signal handler."""
+        logger.info("Shutdown requested — will stop after current operation")
+        self._shutdown_event.set()
 
     def run_forever(self) -> None:
         logger.info("=" * 60)
@@ -294,7 +297,7 @@ class Watcher:
         logger.info("Loaded %d previously seen files", len(seen))
 
         cycle = 0
-        while True:
+        while not self._shutdown_event.is_set():
             cycle += 1
             logger.info("--- Poll cycle %d ---", cycle)
             self.metrics.record_poll()
@@ -315,5 +318,12 @@ class Watcher:
             self.metrics.flush()
             self._update_health(cycle=cycle)
             self.cleanup.cleanup_housekeeping()
+
+            if self._shutdown_event.is_set():
+                break
+
             logger.info("Sleeping %d seconds...", self.settings.poll_interval_seconds)
-            time.sleep(self.settings.poll_interval_seconds)
+            # Use Event.wait() instead of time.sleep() so SIGTERM wakes us immediately
+            self._shutdown_event.wait(timeout=self.settings.poll_interval_seconds)
+
+        logger.info("Watcher exited gracefully")

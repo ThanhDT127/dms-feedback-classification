@@ -154,16 +154,28 @@ async def classify_file(request: Request, file: UploadFile):
 
     job_id = str(uuid.uuid4())
 
-    # Save uploaded file
+    # Save uploaded file — use only basename to prevent path traversal
+    safe_filename = Path(file.filename).name
+    if not safe_filename:
+        raise HTTPException(status_code=400, detail="Tên file không hợp lệ")
+
     input_dir = WORK_DIR / "input"
     input_dir.mkdir(parents=True, exist_ok=True)
-    input_path = input_dir / f"{job_id}_{file.filename}"
+    input_path = input_dir / f"{job_id}_{safe_filename}"
 
+    MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
     try:
-        content = await file.read()
+        content = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File quá lớn. Giới hạn {MAX_UPLOAD_BYTES // (1024 * 1024)}MB.",
+            )
         input_path.write_bytes(content)
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Lỗi lưu file: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Lỗi lưu file. Vui lòng thử lại.") from exc
 
     # Prepare output path
     output_dir = WORK_DIR / "output"

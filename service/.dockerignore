@@ -1,9 +1,36 @@
+# Secrets & credentials
 .env
+.env.*
+testvertex.json
+*-key.json
+*-sa.json
+
+# Python artifacts
 __pycache__/
 *.pyc
-.git/
-.gitignore
-work/
+*.pyo
 *.egg-info/
 dist/
 build/
+
+# Git
+.git/
+.gitignore
+.dockerignore
+
+# Test & dev tools
+tests/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Runtime data (mounted as volumes)
+work/
+logs/
+scripts/
+pipeline/
+
+# Docker config (not needed in image)
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile

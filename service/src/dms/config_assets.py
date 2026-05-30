@@ -161,9 +161,8 @@ class ConfigAssetSyncService:
         return {"assets": {}, "last_success_at": None}
 
     def save_state(self, state: dict) -> None:
-        path = self.settings.config_assets_state_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        from .utils import atomic_write_json
+        atomic_write_json(self.settings.config_assets_state_path, state)
 
     @staticmethod
     def _item_version(item: dict) -> dict[str, str]:

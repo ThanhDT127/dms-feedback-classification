@@ -12,6 +12,13 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
     && python -m pip install --no-cache-dir . \
     && python -c "import dms"
 
+# Create non-root user for security
+RUN groupadd -r dms && useradd -r -g dms -d /app -s /sbin/nologin dms \
+    && mkdir -p /app/data/work /app/data/logs \
+    && chown -R dms:dms /app
+
+USER dms
+
 HEALTHCHECK --interval=60s --timeout=5s --start-period=30s --retries=3 \
     CMD python -c "import json,time,datetime; d=json.load(open('/app/data/work/health.json')); \
     lp=datetime.datetime.fromisoformat(d['last_poll']); \
