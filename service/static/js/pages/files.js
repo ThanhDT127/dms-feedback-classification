@@ -79,9 +79,13 @@ window.FilesPage = (() => {
 
       <!-- Folder Tree -->
       <div class="card mt-6 animate-in animate-in-delay-3">
-        <div class="card-header">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <span class="card-title"><span class="icon">🌳</span> Cấu trúc thư mục</span>
-          <button class="btn btn-ghost btn-sm" onclick="FilesPage.loadTree()">🔄</button>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick="FilesPage.expandAllTree(true)" style="font-size:11px; padding: 2px 6px;">➕ Mở rộng hết</button>
+            <button class="btn btn-ghost btn-sm" onclick="FilesPage.expandAllTree(false)" style="font-size:11px; padding: 2px 6px;">➖ Thu gọn hết</button>
+            <button class="btn btn-ghost btn-sm" onclick="FilesPage.loadTree()" title="Làm mới">🔄</button>
+          </div>
         </div>
         <div id="folder-tree" style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);max-height:300px;overflow-y:auto;">
           Đang tải...
@@ -322,7 +326,7 @@ window.FilesPage = (() => {
       if (typeof data === 'string') {
         el.innerHTML = `<pre style="line-height:1.8;padding:4px 0;">${escHtml(data)}</pre>`;
       } else if (data && typeof data === 'object') {
-        el.innerHTML = `<pre style="line-height:1.8;padding:4px 0;">${renderTreeObj(data, '')}</pre>`;
+        el.innerHTML = renderTreeObj(data);
       } else {
         el.textContent = 'Không có dữ liệu';
       }
@@ -331,22 +335,24 @@ window.FilesPage = (() => {
     }
   }
 
-  function renderTreeObj(obj, prefix) {
-    let result = '';
-    const keys = Object.keys(obj);
-    keys.forEach((key, i) => {
-      const isLast = i === keys.length - 1;
-      const connector = isLast ? '└── ' : '├── ';
-      const childPrefix = isLast ? '    ' : '│   ';
-      const val = obj[key];
+  function expandAllTree(isOpen) {
+    const details = document.querySelectorAll('#folder-tree details');
+    details.forEach(d => {
+      if (isOpen) {
+        d.setAttribute('open', '');
+      } else {
+        d.removeAttribute('open');
+      }
+    });
+  }
 
-      if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-        result += `${prefix}${connector}📁 ${escHtml(key)}\n`;
-        result += renderTreeObj(val, prefix + childPrefix);
-      } else if (Array.isArray(val)) {
-        result += `${prefix}${connector}📁 ${escHtml(key)}\n`;
-        // val is array of {path, files:[...]} objects from API
-        const allFiles = [];
+  function renderTreeObj(obj) {
+    let html = '<div class="tree-root" style="padding: 4px; display: flex; flex-direction: column; gap: 8px;">';
+    const keys = Object.keys(obj);
+    keys.forEach(key => {
+      const val = obj[key];
+      const allFiles = [];
+      if (Array.isArray(val)) {
         val.forEach(item => {
           if (item && typeof item === 'object' && Array.isArray(item.files)) {
             item.files.forEach(f => allFiles.push(f.name || f));
@@ -354,15 +360,29 @@ window.FilesPage = (() => {
             allFiles.push(item);
           }
         });
-        allFiles.forEach((file, j) => {
-          const itemLast = j === allFiles.length - 1;
-          result += `${prefix}${childPrefix}${itemLast ? '└── ' : '├── '}📄 ${escHtml(String(file))}\n`;
-        });
-      } else {
-        result += `${prefix}${connector}📄 ${escHtml(key)}${val ? ` (${val})` : ''}\n`;
       }
+      
+      const isInput = key === 'input';
+      html += `
+        <details ${isInput ? 'open' : ''} style="cursor: pointer; background: rgba(255,255,255,0.01); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px;">
+          <summary style="font-weight: 600; color: var(--text-primary); font-size: 13px; display: flex; align-items: center; gap: 6px; user-select: none;">
+            <span style="font-size: 14px;">📁</span> ${escHtml(key)} <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">(${allFiles.length} file)</span>
+          </summary>
+          <ul style="list-style: none; padding-left: 20px; margin: 8px 0 0 0; border-left: 1px dashed var(--border); display: flex; flex-direction: column; gap: 6px;">
+            ${allFiles.length > 0 
+              ? allFiles.map(file => `
+                  <li style="font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+                    <span>📄</span> <span class="tree-file-link" style="color: var(--accent-blue); text-decoration: underline;" onclick="FilesPage.preview('${escAttr(String(file))}')">${escHtml(String(file))}</span>
+                  </li>
+                `).join('')
+              : `<li style="font-style: italic; color: var(--text-muted); font-size: 12px; padding: 2px 0;">Thư mục trống</li>`
+            }
+          </ul>
+        </details>
+      `;
     });
-    return result;
+    html += '</div>';
+    return html;
   }
 
 
@@ -409,6 +429,6 @@ window.FilesPage = (() => {
 
   return {
     render, destroy, switchFolder, loadFiles, preview, closePreview,
-    loadTree, refresh
+    loadTree, refresh, expandAllTree
   };
 })();

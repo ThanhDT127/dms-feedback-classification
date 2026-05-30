@@ -57,24 +57,25 @@ window.WS = (() => {
 
     _dispatch(data) {
       const type = data.type || data.event || '';
+      const payload = (data && data.hasOwnProperty('data')) ? data.data : data;
       switch (type) {
         case 'progress':
-          if (this.handlers.onProgress) this.handlers.onProgress(data);
+          if (this.handlers.onProgress) this.handlers.onProgress(payload);
           break;
         case 'batch_result':
-          if (this.handlers.onBatchResult) this.handlers.onBatchResult(data);
+          if (this.handlers.onBatchResult) this.handlers.onBatchResult(payload);
           break;
         case 'complete':
-          if (this.handlers.onComplete) this.handlers.onComplete(data);
+          if (this.handlers.onComplete) this.handlers.onComplete(payload);
           break;
         case 'error':
-          if (this.handlers.onError) this.handlers.onError(data);
+          if (this.handlers.onError) this.handlers.onError(payload);
           break;
         case 'log':
-          if (this.handlers.onLogMessage) this.handlers.onLogMessage(data);
+          if (this.handlers.onLogMessage) this.handlers.onLogMessage(payload);
           break;
         default:
-          if (this.handlers.onMessage) this.handlers.onMessage(data);
+          if (this.handlers.onMessage) this.handlers.onMessage(payload);
       }
     }
 
