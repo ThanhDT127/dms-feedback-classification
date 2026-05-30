@@ -66,15 +66,20 @@ def setup_logging(
     )
     root.addHandler(console_handler)
 
-    file_handler = RotatingFileHandler(
-        str(log_path),
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8",
-    )
-    file_handler.setLevel(file_level)
-    file_handler.setFormatter(JsonFormatter())
-    root.addHandler(file_handler)
+    try:
+        file_handler = RotatingFileHandler(
+            str(log_path),
+            maxBytes=max_bytes,
+            backupCount=backup_count,
+            encoding="utf-8",
+        )
+        file_handler.setLevel(file_level)
+        file_handler.setFormatter(JsonFormatter())
+        root.addHandler(file_handler)
+    except PermissionError:
+        logging.getLogger("dms-watcher").warning(
+            "Cannot write log file %s (permission denied) — using console only", log_path
+        )
 
     for noisy in ("urllib3", "msal", "azure", "google", "httpcore"):
         logging.getLogger(noisy).setLevel(logging.WARNING)

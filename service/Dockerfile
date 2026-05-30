@@ -13,13 +13,11 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
     && python -m pip install --no-cache-dir . \
     && python -c "import dms"
 
-# Create non-root user for security.
-# Directories are created here so they exist when no volume is mounted.
-# When volumes ARE mounted (e.g. ./logs:/app/data/logs), the entrypoint
-# fixes ownership at runtime before dropping privileges.
+# Create non-root user + fix entrypoint line endings (CRLF→LF for Windows→Linux)
 RUN groupadd -r dms && useradd -r -g dms -d /app -s /sbin/nologin dms \
-    && mkdir -p /app/data/work /app/data/logs \
+    && mkdir -p /app/data/work /app/data/logs /app/data/Keyword \
     && chown -R dms:dms /app \
+    && sed -i 's/\r$//' /entrypoint.sh \
     && chmod +x /entrypoint.sh
 
 HEALTHCHECK --interval=60s --timeout=5s --start-period=30s --retries=3 \
