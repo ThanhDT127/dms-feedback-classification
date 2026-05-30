@@ -107,6 +107,9 @@ class Settings(BaseSettings):
             )
         self.gemini_backend = backend
 
+        # Normalize model name: "Gemini 2.5 Flash Lite" → "gemini-2.5-flash-lite"
+        self.gemini_model = self.gemini_model.strip().lower().replace(" ", "-")
+
         if backend == "vertex" and not self.gcp_project_id:
             raise ValueError("GCP_PROJECT_ID is required when GEMINI_BACKEND=vertex")
         if backend == "apikey" and not self.gemini_api_key:
