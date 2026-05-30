@@ -76,8 +76,101 @@ window.ClassifyPage = (() => {
 
     switch (_mode) {
       case 'text': el.innerHTML = renderTextMode(); break;
-      case 'file': el.innerHTML = renderFileMode(); break;
-      case 'batch': el.innerHTML = renderBatchMode(); break;
+      case 'file': 
+        el.innerHTML = renderFileMode(); 
+        if (_currentJob) {
+          restoreActiveJobUI(_currentJob);
+          // Reconnect WebSocket if the job is still active
+          if ((_currentJob.status === 'running' || _currentJob.status === 'queued') && (!_wsClient || !_wsClient.isOpen())) {
+            connectJobWS(_currentJob.job_id || _currentJob.id);
+          }
+        }
+        break;
+      case 'batch': 
+        el.innerHTML = renderBatchMode(); 
+        if (_batchFiles && _batchFiles.length > 0) {
+          document.getElementById('batch-queue')?.classList.remove('hidden');
+          renderBatchTable();
+        }
+        break;
+    }
+  }
+
+  function restoreActiveJobUI(job) {
+    if (!job) return;
+
+    // Show/hide UI sections
+    const dropzone = document.getElementById('classify-dropzone');
+    const info = document.getElementById('file-info');
+    const config = document.getElementById('file-config');
+    const progress = document.getElementById('file-progress');
+    const results = document.getElementById('file-results');
+
+    if (dropzone) dropzone.classList.add('hidden');
+    if (config) config.classList.add('hidden');
+    if (info) {
+      info.classList.remove('hidden');
+      document.getElementById('file-info-name').textContent = job.filename || 'Excel File';
+      document.getElementById('file-info-size').textContent = '';
+    }
+    if (progress) progress.classList.remove('hidden');
+    if (results) results.classList.remove('hidden');
+
+    // Populate results table
+    const tbody = document.getElementById('file-results-tbody');
+    const countEl = document.getElementById('result-count');
+    if (tbody && job.results) {
+      tbody.innerHTML = '';
+      job.results.forEach((r, idx) => {
+        const num = idx + 1;
+        const tr = document.createElement('tr');
+        tr.className = 'animate-in';
+        tr.innerHTML = `
+          <td class="text-muted">${num}</td>
+          <td class="wrap" style="max-width:300px;font-size:12px;">${esc(r.text || r.content || '—').substring(0, 150)}...</td>
+          <td style="font-size:12px;">${esc(r.product || r.product_name || '—')}</td>
+          <td style="font-size:12px;">
+            ${(r.labels || []).map(l => `<span class="chip" style="margin:1px;">${esc(typeof l === 'string' ? l : l.label || l.name)}</span>`).join(' ') || '—'}
+          </td>
+          <td><span class="badge ${sentimentBadge(r.sentiment)}">${esc(r.sentiment || '—')}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      if (countEl) countEl.textContent = `${job.results.length} dòng`;
+    }
+
+    if (job.status === 'completed') {
+      updateFileProgress({
+        rows_done: job.total_rows || job.rows_done || 0,
+        rows_total: job.total_rows || job.rows_done || 0,
+        speed: 0,
+        eta: 'Hoàn thành'
+      });
+      updateFileSteps(4, 'done');
+      const dl = document.getElementById('btn-download');
+      if (dl) dl.classList.remove('hidden');
+    } else if (job.status === 'error') {
+      const errMsg = job.error || 'Lỗi không xác định';
+      const bar = document.getElementById('file-progress-bar');
+      if (bar) {
+        bar.style.width = '100%';
+        bar.style.backgroundColor = 'var(--accent-red)';
+      }
+      const txt = document.getElementById('file-progress-text');
+      if (txt) txt.textContent = `Thất bại: ${errMsg}`;
+      const pctEl = document.getElementById('file-progress-pct');
+      if (pctEl) pctEl.textContent = 'Lỗi';
+      
+      updateFileSteps(1, 'failed');
+    } else {
+      // 'running' or 'queued'
+      updateFileProgress({
+        rows_done: job.rows_done,
+        rows_total: job.total_rows,
+        speed: 0,
+        eta: job.status === 'queued' ? 'Đang chờ xếp hàng...' : 'Đang xử lý...'
+      });
+      updateFileSteps(job.step || 1, job.step_status || 'running');
     }
   }
 
@@ -379,10 +472,12 @@ window.ClassifyPage = (() => {
      ============================================================ */
 
   function renderFileMode() {
+    const isJobActive = _currentJob && (_currentJob.status === 'running' || _currentJob.status === 'queued' || _currentJob.status === 'completed' || _currentJob.status === 'error');
+
     return `
       <div class="card animate-in">
         <!-- Dropzone -->
-        <div class="dropzone" id="classify-dropzone"
+        <div class="dropzone ${isJobActive ? 'hidden' : ''}" id="classify-dropzone"
              ondragover="ClassifyPage.fileDragOver(event)"
              ondragleave="ClassifyPage.fileDragLeave(event)"
              ondrop="ClassifyPage.fileDrop(event)"
@@ -395,14 +490,14 @@ window.ClassifyPage = (() => {
         </div>
 
         <!-- Selected file info -->
-        <div id="file-info" class="hidden mt-4">
+        <div id="file-info" class="${!isJobActive ? 'hidden' : ''} mt-4">
           <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg-tertiary);border-radius:var(--radius-md);border:1px solid var(--border);">
             <span style="font-size:24px;">📊</span>
             <div style="flex:1;">
-              <div style="font-weight:600;" id="file-info-name">—</div>
+              <div style="font-weight:600;" id="file-info-name">${esc(_currentJob ? _currentJob.filename : '—')}</div>
               <div class="text-muted" style="font-size:12px;" id="file-info-size">—</div>
             </div>
-            <button class="btn btn-ghost btn-sm" onclick="ClassifyPage.clearFile()">✕</button>
+            ${isJobActive ? '' : '<button class="btn btn-ghost btn-sm" onclick="ClassifyPage.clearFile()">✕</button>'}
           </div>
         </div>
 
@@ -427,7 +522,7 @@ window.ClassifyPage = (() => {
       </div>
 
       <!-- Progress -->
-      <div id="file-progress" class="hidden mt-6">
+      <div id="file-progress" class="${!isJobActive ? 'hidden' : ''} mt-6">
         <div class="card animate-in">
           <div class="card-header">
             <span class="card-title"><span class="icon">📊</span> Tiến trình phân loại</span>
@@ -475,7 +570,7 @@ window.ClassifyPage = (() => {
       </div>
 
       <!-- Live Results Table -->
-      <div id="file-results" class="hidden mt-6">
+      <div id="file-results" class="${!isJobActive ? 'hidden' : ''} mt-6">
         <div class="card animate-in">
           <div class="card-header">
             <span class="card-title"><span class="icon">📋</span> Kết quả phân loại</span>
@@ -579,15 +674,48 @@ window.ClassifyPage = (() => {
         if (data.step) {
           updateFileSteps(data.step, data.step_status);
         }
+        if (_currentJob) {
+          _currentJob.rows_done = data.rows_done;
+          _currentJob.total_rows = data.total_rows;
+          _currentJob.step = data.step;
+          _currentJob.step_status = data.step_status;
+        }
       },
       onBatchResult: (data) => {
         appendBatchResults(data);
+        if (_currentJob) {
+          if (!_currentJob.results) _currentJob.results = [];
+          const rows = data.rows || data.results || [data];
+          _currentJob.results.push(...rows);
+        }
       },
       onComplete: (data) => {
         onJobComplete(data);
+        if (_currentJob) {
+          _currentJob.status = 'completed';
+          _currentJob.rows_done = data.rows_done;
+        }
       },
       onError: (data) => {
-        Toast.error('Lỗi job: ' + (data.message || 'Unknown'));
+        const errMsg = data.error || data.message || 'Lỗi không xác định';
+        Toast.error('Lỗi job: ' + errMsg);
+        if (_currentJob) {
+          _currentJob.status = 'error';
+          _currentJob.error = errMsg;
+        }
+        
+        // Show error visually
+        const bar = document.getElementById('file-progress-bar');
+        if (bar) {
+          bar.style.width = '100%';
+          bar.style.backgroundColor = 'var(--accent-red)';
+        }
+        const txt = document.getElementById('file-progress-text');
+        if (txt) txt.textContent = `Thất bại: ${errMsg}`;
+        const pctEl = document.getElementById('file-progress-pct');
+        if (pctEl) pctEl.textContent = 'Lỗi';
+        
+        updateFileSteps(1, 'failed');
       },
       onMessage: (data) => {
         if (data.step) {
@@ -598,6 +726,7 @@ window.ClassifyPage = (() => {
   }
 
   async function checkActiveJob() {
+    if (_currentJob) return;
     try {
       const jobs = await API.getJobs();
       if (!Array.isArray(jobs) || jobs.length === 0) return;
@@ -968,9 +1097,7 @@ window.ClassifyPage = (() => {
       _wsClient.close();
       _wsClient = null;
     }
-    _currentJob = null;
-    _selectedFile = null;
-    _batchFiles = [];
+    // Preserve _currentJob, _selectedFile, and _batchFiles so that state is maintained when switching tabs
   }
 
   return {
