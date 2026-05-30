@@ -916,6 +916,34 @@ window.ClassifyPage = (() => {
 
     const dl = document.getElementById('btn-download');
     if (dl) dl.classList.remove('hidden');
+    document.getElementById('btn-reset-job')?.classList.remove('hidden');
+
+    // Show output info bar
+    const jobId = _currentJob?.job_id || _currentJob?.id || data.job_id;
+    const outputPath = data.output_path || _currentJob?.output_path || '';
+    const duration = data.duration_seconds ? `${Math.round(data.duration_seconds)}s` : '';
+    const progressWrap = document.getElementById('file-progress')?.querySelector('.card');
+    if (progressWrap && jobId) {
+      let infoBar = document.getElementById('output-info-bar');
+      if (!infoBar) {
+        infoBar = document.createElement('div');
+        infoBar.id = 'output-info-bar';
+        infoBar.style.cssText = 'margin-top:12px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--accent-green);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;';
+        progressWrap.appendChild(infoBar);
+      }
+      infoBar.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:var(--accent-green);font-size:18px;">✅</span>
+          <div>
+            <div style="font-weight:600;font-size:13px;">Phân loại hoàn tất${duration ? ' — ' + duration : ''}</div>
+            ${outputPath ? `<div class="text-muted" style="font-size:11px;margin-top:2px;">📁 ${esc(outputPath.split('/').pop() || outputPath.split('\\\\').pop())}</div>` : ''}
+          </div>
+        </div>
+        <a href="/api/classify/jobs/${jobId}/download" class="btn btn-success btn-sm" target="_blank" style="text-decoration:none;">
+          📥 Tải file kết quả (.xlsx)
+        </a>
+      `;
+    }
 
     if (_wsClient) {
       _wsClient.close();
