@@ -164,6 +164,7 @@ window.ClassifyPage = (() => {
       updateFileSteps(4, 'done');
       const dl = document.getElementById('btn-download');
       if (dl) dl.classList.remove('hidden');
+      document.getElementById('btn-reset-job')?.classList.remove('hidden');
     } else if (job.status === 'error') {
       const errMsg = job.error || 'Lỗi không xác định';
       const bar = document.getElementById('file-progress-bar');
@@ -177,6 +178,7 @@ window.ClassifyPage = (() => {
       if (pctEl) pctEl.textContent = 'Lỗi';
       
       updateFileSteps(1, 'failed');
+      document.getElementById('btn-reset-job')?.classList.remove('hidden');
     } else {
       // 'running' or 'queued'
       updateFileProgress({
@@ -549,6 +551,7 @@ window.ClassifyPage = (() => {
               <button class="btn btn-secondary btn-sm" id="btn-pause" onclick="ClassifyPage.togglePause()">⏸️ Tạm dừng</button>
               <button class="btn btn-danger btn-sm" onclick="ClassifyPage.stopClassify()">⏹️ Dừng</button>
               <button class="btn btn-success btn-sm hidden" id="btn-download" onclick="ClassifyPage.downloadResult()">📥 Tải kết quả</button>
+              <button class="btn btn-primary btn-sm hidden" id="btn-reset-job" onclick="ClassifyPage.resetJob()">🔄 Phân loại lại</button>
             </div>
           </div>
 
@@ -744,6 +747,8 @@ window.ClassifyPage = (() => {
         if (pctEl) pctEl.textContent = 'Lỗi';
         
         updateFileSteps(1, 'failed');
+        // Show reset button on error
+        document.getElementById('btn-reset-job')?.classList.remove('hidden');
       },
       onMessage: (data) => {
         if (data.step) {
@@ -922,6 +927,23 @@ window.ClassifyPage = (() => {
       _wsClient = null;
     }
     Toast.warning('Đã dừng phân loại');
+    // Show reset button
+    document.getElementById('btn-reset-job')?.classList.remove('hidden');
+  }
+
+  function resetJob() {
+    // Close WS if still open
+    if (_wsClient) {
+      _wsClient.close();
+      _wsClient = null;
+    }
+    // Clear job state
+    _currentJob = null;
+    _selectedFile = null;
+    _isPaused = false;
+    // Re-render file mode fresh
+    renderMode();
+    Toast.info('Đã reset. Chọn file mới để phân loại.');
   }
 
   function downloadResult() {
@@ -1132,7 +1154,7 @@ window.ClassifyPage = (() => {
     render, destroy, setMode,
     updateCharCount, clearInput, classifyText,
     fileDragOver, fileDragLeave, fileDrop, handleFile, clearFile,
-    startFileClassify, togglePause, stopClassify, downloadResult,
+    startFileClassify, togglePause, stopClassify, downloadResult, resetJob,
     batchDrop, handleBatchFiles, startBatch, clearBatch
   };
 })();
