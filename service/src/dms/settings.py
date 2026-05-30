@@ -9,8 +9,15 @@ from pydantic import Field, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .exceptions import ConfigurationError
+import os
 
-SERVICE_DIR = Path(__file__).resolve().parents[2]
+if os.environ.get("SERVICE_DIR"):
+    SERVICE_DIR = Path(os.environ["SERVICE_DIR"])
+elif Path("/app").is_dir() and (Path("/app/src") or Path("/app/static")).exists():
+    SERVICE_DIR = Path("/app")
+else:
+    SERVICE_DIR = Path(__file__).resolve().parents[2]
+
 
 
 class Settings(BaseSettings):

@@ -9,6 +9,7 @@ services:
     env_file:
       - .env
     environment:
+      - SERVICE_DIR=/app
       - DATA_DIR=/app/data
       - MODEL_DIR=/app/data/Model
       - WORK_DIR=/app/data/work
@@ -40,6 +41,7 @@ services:
     env_file:
       - .env
     environment:
+      - SERVICE_DIR=/app
       - DATA_DIR=/app/data
       - MODEL_DIR=/app/data/Model
       - WORK_DIR=/app/data/work
