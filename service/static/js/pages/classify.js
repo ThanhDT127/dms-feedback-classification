@@ -156,10 +156,11 @@ window.ClassifyPage = (() => {
 
     if (job.status === 'completed') {
       updateFileProgress({
-        rows_done: job.total_rows || job.rows_done || 0,
-        total_rows: job.total_rows || job.rows_done || 0,
+        rows_done: job.total_rows ?? job.rows_done ?? 0,
+        total_rows: job.total_rows ?? job.rows_done ?? 0,
         speed: 0,
-        eta: 'Hoàn thành'
+        eta: 'Hoàn thành',
+        status: 'completed'
       });
       updateFileSteps(4, 'done');
       const dl = document.getElementById('btn-download');
@@ -182,8 +183,8 @@ window.ClassifyPage = (() => {
     } else {
       // 'running' or 'queued'
       updateFileProgress({
-        rows_done: job.rows_done,
-        total_rows: job.total_rows,
+        rows_done: job.rows_done ?? 0,
+        total_rows: job.total_rows ?? 0,
         speed: 0,
         eta: job.status === 'queued' ? 'Đang chờ xếp hàng...' : 'Đang xử lý...'
       });
@@ -833,9 +834,9 @@ window.ClassifyPage = (() => {
   }
 
   function updateFileProgress(data) {
-    const done = data.rows_done || data.processed || 0;
-    const total = data.total_rows || data.total || 1;
-    const pct = Math.round((done / total) * 100);
+    const done = data.rows_done ?? data.processed ?? 0;
+    const total = data.total_rows ?? data.total ?? 0;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     const speed = data.speed || 0;
     const eta = data.eta || '—';
 
@@ -845,8 +846,15 @@ window.ClassifyPage = (() => {
     const etaEl = document.getElementById('file-eta');
     const speedEl = document.getElementById('file-speed');
 
-    if (bar) bar.style.width = pct + '%';
-    if (text) text.textContent = `${done} / ${total} dòng`;
+    if (bar) bar.style.width = (pct || 0) + '%';
+    // Show helpful message when waiting for first batch
+    if (text) {
+      if (done === 0 && total > 0 && data.status !== 'completed') {
+        text.textContent = `Đang gọi AI xử lý... (0 / ${total} dòng)`;
+      } else {
+        text.textContent = `${done} / ${total} dòng`;
+      }
+    }
     if (pctEl) pctEl.textContent = pct + '%';
     if (etaEl) etaEl.textContent = `ETA: ${eta}`;
     if (speedEl) speedEl.textContent = `${speed.toFixed(1)} dòng/phút`;
@@ -897,7 +905,7 @@ window.ClassifyPage = (() => {
 
   function onJobComplete(data) {
     Toast.success('Phân loại hoàn tất!');
-    updateFileProgress({ rows_done: data.total_rows || data.total || 0, total_rows: data.total_rows || data.total || 0, speed: 0, eta: 'Xong' });
+    updateFileProgress({ rows_done: data.total_rows ?? data.total ?? 0, total_rows: data.total_rows ?? data.total ?? 0, speed: 0, eta: 'Xong', status: 'completed' });
     updateFileSteps(4, 'done');
 
     const dl = document.getElementById('btn-download');
