@@ -45,21 +45,8 @@ async def get_settings():
         else:
             masked[key] = value
 
-    # Add computed paths if full settings are available
-    settings = deps.get_settings()
-    if settings is not None:
-        masked["_computed"] = {
-            "service_dir": str(SERVICE_DIR),
-            "keyword_dir": str(settings.keyword_dir),
-            "model_dir": str(settings.model_dir),
-            "work_dir": str(settings.work_dir),
-            "log_dir": str(settings.log_dir),
-            "kw_map_path": str(settings.kw_map_path),
-            "df_products_path": str(settings.df_products_path),
-            "seen_files_path": str(settings.seen_files_path),
-        }
-
     return masked
+
 
 
 # ---------- Prompt templates ----------

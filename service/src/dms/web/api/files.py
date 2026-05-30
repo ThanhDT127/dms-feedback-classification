@@ -39,6 +39,27 @@ def _file_info(path: Path) -> dict:
     }
 
 
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+def _validate_safe_path(base_dir: Path, filename: str) -> Path:
+    """Resolve candidate path and ensure it stays within base_dir.
+
+    Raises HTTPException 400 if filename contains path traversal.
+    Returns the safe resolved path.
+    """
+    # Strip directory components first (e.g. '../../evil.xlsx' → 'evil.xlsx')
+    safe_name = Path(filename).name
+    if not safe_name:
+        raise HTTPException(status_code=400, detail="Tên file không hợp lệ")
+    candidate = (base_dir / safe_name).resolve()
+    try:
+        candidate.relative_to(base_dir.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Tên file không hợp lệ")  # noqa: B904
+    return candidate
+
+
 # ---------- Fixed routes FIRST (before /{folder} path parameter) ----------
 
 
@@ -52,7 +73,6 @@ async def get_folder_tree():
             if not dir_path.is_dir():
                 continue
             dir_entry = {
-                "path": str(dir_path),
                 "files": [],
             }
             for item in sorted(dir_path.iterdir()):
@@ -90,22 +110,30 @@ async def upload_file(file: UploadFile):
 
     input_dir = WORK_DIR / "input"
     input_dir.mkdir(parents=True, exist_ok=True)
-    dest = input_dir / file.filename
+
+    # Validate safe path (strip directory traversal)
+    dest = _validate_safe_path(input_dir, file.filename)
 
     try:
-        content = await file.read()
+        content = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File quá lớn. Giới hạn {MAX_UPLOAD_BYTES // (1024 * 1024)}MB.",
+            )
         dest.write_bytes(content)
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=f"Lỗi lưu file: {exc}",
+            detail="Lỗi lưu file. Vui lòng thử lại.",
         ) from exc
 
     return {
-        "filename": file.filename,
+        "filename": dest.name,
         "size": len(content),
-        "path": str(dest),
-        "message": f"Đã upload thành công: {file.filename}",
+        "message": f"Đã upload thành công: {dest.name}",
     }
 
 
@@ -165,7 +193,15 @@ async def preview_file(folder: str, filename: str, max_rows: int = 20):
 
     file_path: Path | None = None
     for dir_path in dirs:
-        candidate = dir_path / filename
+        # Validate path traversal before looking up file
+        safe_name = Path(filename).name
+        if not safe_name:
+            raise HTTPException(status_code=400, detail="Tên file không hợp lệ")
+        candidate = (dir_path / safe_name).resolve()
+        try:
+            candidate.relative_to(dir_path.resolve())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Tên file không hợp lệ")  # noqa: B904
         if candidate.is_file():
             file_path = candidate
             break

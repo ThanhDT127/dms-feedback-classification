@@ -32,11 +32,17 @@ def create_app() -> FastAPI:
         version="1.0.0",
     )
 
-    # --- CORS (permissive for development) ---
+    # --- CORS ---
+    # Configure via CORS_ALLOWED_ORIGINS env var (comma-separated).
+    # Defaults to "*" for internal deployments. Set explicit origins in production
+    # if the service is exposed to the internet.
+    import os
+    cors_origins_raw = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
+    cors_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=cors_origins != ["*"],
         allow_methods=["*"],
         allow_headers=["*"],
     )

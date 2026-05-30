@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import signal
 
 from .auth import AuthProvider
 from .config_assets import ConfigAssetSyncService
@@ -93,6 +94,15 @@ def main() -> None:
     runtime_settings = _build_runtime_settings(settings, config_asset_sync)
     logger.info("Baseline model ready from %s", runtime_settings.model_dir)
     logger.info("Composition root ready")
+
+    # Register graceful shutdown handlers (SIGTERM from docker stop, SIGINT from Ctrl+C)
+    def _handle_shutdown(signum, frame):  # noqa: ANN001
+        logger.info("Received signal %d — requesting graceful shutdown", signum)
+        watcher.request_shutdown()
+
+    signal.signal(signal.SIGTERM, _handle_shutdown)
+    signal.signal(signal.SIGINT, _handle_shutdown)
+
     watcher.run_forever()
 
 

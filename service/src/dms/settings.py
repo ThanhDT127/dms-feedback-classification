@@ -13,7 +13,7 @@ import os
 
 if os.environ.get("SERVICE_DIR"):
     SERVICE_DIR = Path(os.environ["SERVICE_DIR"])
-elif Path("/app").is_dir() and (Path("/app/src") or Path("/app/static")).exists():
+elif Path("/app").is_dir() and (Path("/app/src").exists() or Path("/app/static").exists()):
     SERVICE_DIR = Path("/app")
 else:
     SERVICE_DIR = Path(__file__).resolve().parents[2]
@@ -60,11 +60,14 @@ class Settings(BaseSettings):
     rate_gap_sec: float = 4.0
     bm25_min_score: float = 5.0
     http_timeout_seconds: float = 30.0
+    gemini_timeout_seconds: float = Field(120.0, alias="GEMINI_TIMEOUT_SECONDS")
+    cors_allowed_origins: str = Field("*", alias="CORS_ALLOWED_ORIGINS")
     enable_sharepoint_config_sync: bool = Field(True, alias="ENABLE_SHAREPOINT_CONFIG_SYNC")
     enable_runtime_cleanup: bool = Field(True, alias="ENABLE_RUNTIME_CLEANUP")
     cleanup_output_ttl_days: int = Field(7, alias="CLEANUP_OUTPUT_TTL_DAYS")
     cleanup_log_ttl_days: int = Field(7, alias="CLEANUP_LOG_TTL_DAYS")
     cleanup_staging_ttl_hours: int = Field(24, alias="CLEANUP_STAGING_TTL_HOURS")
+
 
     data_dir: Path = Field(default_factory=lambda: SERVICE_DIR, alias="DATA_DIR")
     keyword_dir_override: Path | None = Field(default=None, alias="KEYWORD_DIR")
@@ -219,9 +222,10 @@ def get_settings() -> Settings:
 
 def update_env_file(updates: dict[str, str]) -> None:
     """Update or append key-value pairs in the .env file while preserving comments and order."""
+    from .utils import atomic_write_text
     env_path = SERVICE_DIR / ".env"
     if not env_path.exists():
-        env_path.write_text("", encoding="utf-8")
+        atomic_write_text(env_path, "")
 
     lines = env_path.read_text(encoding="utf-8").splitlines()
     updated_keys = set()
@@ -249,4 +253,5 @@ def update_env_file(updates: dict[str, str]) -> None:
         if key not in updated_keys:
             new_lines.append(f"{key}={val}")
 
-    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    atomic_write_text(env_path, "\n".join(new_lines) + "\n")
+
