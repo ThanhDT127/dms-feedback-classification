@@ -262,10 +262,13 @@ async def update_settings(payload: dict):
     """Cập nhật cài đặt hệ thống vào file .env một cách an toàn."""
     env_file = SERVICE_DIR / ".env"
     
-    # 1. Back up current .env content
+    # 1. Back up current .env content and os.environ values
     old_env_content = ""
     if env_file.exists():
         old_env_content = env_file.read_text(encoding="utf-8")
+        
+    import os
+    old_os_env = {env_key: os.environ.get(env_key) for env_key in MAP.values()}
         
     try:
         # Prepare updates mapping
@@ -292,8 +295,10 @@ async def update_settings(payload: dict):
         if not updates:
             return {"success": True, "message": "Không có thay đổi nào được áp dụng."}
             
-        # 2. Write updates to .env file
+        # 2. Write updates to .env file and update current process's environment variables
         update_env_file(updates)
+        for env_key, env_val in updates.items():
+            os.environ[env_key] = env_val
         
         # 3. Validate by trying to load Settings
         deps.reset()
@@ -302,9 +307,14 @@ async def update_settings(payload: dict):
         return {"success": True, "message": "Đã lưu cấu hình thành công."}
         
     except Exception as exc:
-        # 4. Rollback to original .env content
+        # 4. Rollback to original .env content and os.environ
         if old_env_content:
             env_file.write_text(old_env_content, encoding="utf-8")
+        for env_key, old_val in old_os_env.items():
+            if old_val is None:
+                os.environ.pop(env_key, None)
+            else:
+                os.environ[env_key] = old_val
         deps.reset()
         
         logger.error("Lỗi lưu cấu hình: %s", exc)
@@ -312,6 +322,7 @@ async def update_settings(payload: dict):
             status_code=400,
             detail=f"Cấu hình không hợp lệ. Đã khôi phục cài đặt cũ. Chi tiết lỗi: {exc}",
         )
+
 
 
 @router.put("/prompt")
