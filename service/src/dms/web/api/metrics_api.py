@@ -10,14 +10,19 @@ from pathlib import Path
 
 from fastapi import APIRouter, Query
 
-from ...settings import SERVICE_DIR
+from ...settings import get_settings
 
 logger = logging.getLogger("dms-web")
 
 router = APIRouter(prefix="/api", tags=["metrics"])
 
-WORK_DIR = SERVICE_DIR / "work"
-LOG_DIR = SERVICE_DIR / "logs"
+
+def _work_dir() -> Path:
+    return get_settings().work_dir
+
+
+def _log_dir() -> Path:
+    return get_settings().log_dir
 
 
 # ---------- Health ----------
@@ -26,7 +31,8 @@ LOG_DIR = SERVICE_DIR / "logs"
 @router.get("/health")
 async def get_health():
     """Trả về trạng thái hoạt động của dịch vụ."""
-    health_path = WORK_DIR / "health.json"
+    health_path = _work_dir() / "health.json"
+    logger.info("Health check: work_dir=%s, health_path=%s, exists=%s", _work_dir(), health_path, health_path.is_file())
     if health_path.is_file():
         try:
             return json.loads(health_path.read_text(encoding="utf-8"))
@@ -58,8 +64,8 @@ async def get_health():
 @router.get("/metrics")
 async def get_metrics():
     """Trả về số liệu thống kê vận hành."""
-    metrics_path = WORK_DIR / "metrics.json"
-    seen_path = WORK_DIR / "seen_files.json"
+    metrics_path = _work_dir() / "metrics.json"
+    seen_path = _work_dir() / "seen_files.json"
 
     data = {}
     if metrics_path.is_file():
@@ -104,7 +110,7 @@ async def get_metrics():
 @router.get("/metrics/daily")
 async def get_daily_metrics():
     """Trả về tổng hợp theo ngày từ daily-summary.jsonl."""
-    summary_path = LOG_DIR / "daily-summary.jsonl"
+    summary_path = _log_dir() / "daily-summary.jsonl"
     if not summary_path.is_file():
         return []
     entries = []
@@ -127,13 +133,13 @@ async def get_daily_metrics():
 
 def _find_latest_log() -> Path | None:
     """Find the most recent log file in the logs directory."""
-    if not LOG_DIR.is_dir():
+    if not _log_dir().is_dir():
         return None
-    log_files = sorted(LOG_DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    log_files = sorted(_log_dir().glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
     if log_files:
         return log_files[0]
     # Fallback: try .log files
-    log_files = sorted(LOG_DIR.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+    log_files = sorted(_log_dir().glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
     return log_files[0] if log_files else None
 
 
