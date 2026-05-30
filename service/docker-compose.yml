@@ -18,7 +18,7 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/data/sa-key.json
     volumes:
       - ./.env:/app/.env
-      - ./Keyword:/app/data/Keyword:ro
+      - ./Keyword:/app/data/Keyword
       - ./Model:/app/data/Model:ro
       - ./testvertex.json:/app/data/sa-key.json:ro
       - ./work:/app/data/work
@@ -50,7 +50,7 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/data/sa-key.json
     volumes:
       - ./.env:/app/.env
-      - ./Keyword:/app/data/Keyword:ro
+      - ./Keyword:/app/data/Keyword
       - ./Model:/app/data/Model:ro
       - ./testvertex.json:/app/data/sa-key.json:ro
       - ./work:/app/data/work
