@@ -303,9 +303,18 @@ window.FilesPage = (() => {
         result += renderTreeObj(val, prefix + childPrefix);
       } else if (Array.isArray(val)) {
         result += `${prefix}${connector}📁 ${escHtml(key)}\n`;
-        val.forEach((item, j) => {
-          const itemLast = j === val.length - 1;
-          result += `${prefix}${childPrefix}${itemLast ? '└── ' : '├── '}📄 ${escHtml(String(item))}\n`;
+        // val is array of {path, files:[...]} objects from API
+        const allFiles = [];
+        val.forEach(item => {
+          if (item && typeof item === 'object' && Array.isArray(item.files)) {
+            item.files.forEach(f => allFiles.push(f.name || f));
+          } else {
+            allFiles.push(item);
+          }
+        });
+        allFiles.forEach((file, j) => {
+          const itemLast = j === allFiles.length - 1;
+          result += `${prefix}${childPrefix}${itemLast ? '└── ' : '├── '}📄 ${escHtml(String(file))}\n`;
         });
       } else {
         result += `${prefix}${connector}📄 ${escHtml(key)}${val ? ` (${val})` : ''}\n`;
