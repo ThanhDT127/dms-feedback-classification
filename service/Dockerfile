@@ -9,7 +9,7 @@ COPY src/ ./src/
 COPY static/ ./static/
 
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
-    && python -m pip install --no-cache-dir . \
+    && python -m pip install --no-cache-dir -e . \
     && python -c "import dms"
 
 HEALTHCHECK --interval=60s --timeout=5s --start-period=30s --retries=3 \

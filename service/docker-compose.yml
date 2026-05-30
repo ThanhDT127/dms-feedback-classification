@@ -18,6 +18,7 @@ services:
       - GCP_SERVICE_ACCOUNT_JSON=/app/data/sa-key.json
       - GOOGLE_APPLICATION_CREDENTIALS=/app/data/sa-key.json
     volumes:
+      - ./src:/app/src
       - ./.env:/app/.env
       - ./Keyword:/app/data/Keyword
       - ./Model:/app/data/Model:ro
@@ -58,6 +59,7 @@ services:
       - GCP_SERVICE_ACCOUNT_JSON=/app/data/sa-key.json
       - GOOGLE_APPLICATION_CREDENTIALS=/app/data/sa-key.json
     volumes:
+      - ./src:/app/src
       - ./.env:/app/.env
       - ./Keyword:/app/data/Keyword
       - ./Model:/app/data/Model:ro
