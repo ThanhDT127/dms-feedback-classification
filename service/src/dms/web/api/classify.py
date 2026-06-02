@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 import uuid
 from datetime import datetime
 from pathlib import Path
 
-import pandas as pd
 from fastapi import APIRouter, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field

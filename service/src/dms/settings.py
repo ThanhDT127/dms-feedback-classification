@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -9,7 +10,6 @@ from pydantic import Field, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .exceptions import ConfigurationError
-import os
 
 if os.environ.get("SERVICE_DIR"):
     SERVICE_DIR = Path(os.environ["SERVICE_DIR"])

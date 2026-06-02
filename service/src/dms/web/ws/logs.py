@@ -112,7 +112,7 @@ async def ws_live_logs(websocket: WebSocket):
                 try:
                     current_size = current_log_file.stat().st_size
                     if current_size > last_position:
-                        with open(current_log_file, "r", encoding="utf-8") as f:
+                        with open(current_log_file, encoding="utf-8") as f:
                             f.seek(last_position)
                             new_data = f.read()
                             last_position = f.tell()

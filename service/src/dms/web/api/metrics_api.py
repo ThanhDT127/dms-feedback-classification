@@ -35,7 +35,10 @@ async def get_health():
     logger.info("Health check: work_dir=%s, health_path=%s, exists=%s", _work_dir(), health_path, health_path.is_file())
     if health_path.is_file():
         try:
-            return json.loads(health_path.read_text(encoding="utf-8"))
+            data = json.loads(health_path.read_text(encoding="utf-8"))
+            if "model" not in data:
+                data["model"] = get_settings().gemini_model
+            return data
         except Exception as exc:
             logger.warning("Lỗi đọc health.json: %s", exc)
 
@@ -53,6 +56,7 @@ async def get_health():
             "failed_24h": 0,
             "success_rate": "N/A",
         },
+        "model": get_settings().gemini_model,
         "web_api": True,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
     }
@@ -109,23 +113,51 @@ async def get_metrics():
 
 @router.get("/metrics/daily")
 async def get_daily_metrics():
-    """Trả về tổng hợp theo ngày từ daily-summary.jsonl."""
+    """Trả về tổng hợp theo ngày cho biểu đồ frontend."""
+    daily_counts = {}
+
+    # 1. Đọc từ daily-summary.jsonl trước
     summary_path = _log_dir() / "daily-summary.jsonl"
-    if not summary_path.is_file():
-        return []
-    entries = []
-    try:
-        for line in summary_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                entries.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    except Exception as exc:
-        logger.warning("Lỗi đọc daily-summary.jsonl: %s", exc)
-    return entries
+    if summary_path.is_file():
+        try:
+            for line in summary_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                    date_str = entry.get("date")
+                    if date_str:
+                        daily_counts[date_str] = entry.get("files_processed", 0)
+                except json.JSONDecodeError:
+                    continue
+        except Exception as exc:
+            logger.warning("Lỗi đọc daily-summary.jsonl: %s", exc)
+
+    # 2. Đọc thêm từ seen_files.json để lấy các ngày gần đây và ngày hôm nay (real-time)
+    seen_path = _work_dir() / "seen_files.json"
+    if seen_path.is_file():
+        try:
+            seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
+            seen_counts = {}
+            for _fid, info in seen_data.items():
+                if info.get("status") == "done":
+                    processed_at = info.get("processed_at", "")
+                    if processed_at and "T" in processed_at:
+                        date_str = processed_at.split("T")[0]
+                        seen_counts[date_str] = seen_counts.get(date_str, 0) + 1
+            
+            # Gộp và ghi đè số lớn nhất từ seen_files vào daily_counts
+            for date_str, count in seen_counts.items():
+                daily_counts[date_str] = max(daily_counts.get(date_str, 0), count)
+        except Exception as exc:
+            logger.warning("Lỗi đọc seen_files.json trong daily metrics: %s", exc)
+
+    # 3. Sắp xếp danh sách ngày và tạo mảng trả về cho biểu đồ
+    sorted_dates = sorted(daily_counts.keys())
+    counts = [daily_counts[d] for d in sorted_dates]
+
+    return {"dates": sorted_dates, "counts": counts}
 
 
 # ---------- Logs ----------

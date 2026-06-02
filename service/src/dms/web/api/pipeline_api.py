@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException
@@ -99,7 +98,8 @@ async def get_brands():
 
     try:
         kw_map = json.loads(kw_map_path.read_text(encoding="utf-8"))
-        return brand_hints(kw_map)
+        hints = brand_hints(kw_map)
+        return list(hints.keys())
     except Exception as exc:
         raise HTTPException(
             status_code=500,
