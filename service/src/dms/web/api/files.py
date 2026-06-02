@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 from fastapi import APIRouter, HTTPException, UploadFile
 
-from ...settings import SERVICE_DIR, get_settings
+from ...settings import get_settings
 from ..deps import get_sharepoint_client
 
 logger = logging.getLogger("dms-web")
@@ -243,7 +243,7 @@ JSON_EXTS = {".json"}
 TEXT_EXTS = {".txt", ".log", ".md", ".yaml", ".yml", ".cfg", ".ini", ".toml"}
 
 
-def _safe_dataframe_records(df: "pd.DataFrame") -> list[dict]:
+def _safe_dataframe_records(df: pd.DataFrame) -> list[dict]:
     """Convert a DataFrame to JSON-safe list of dicts.
 
     Replaces NaN/Inf/-Inf with empty strings so ``json.dumps`` never crashes

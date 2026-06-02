@@ -5,19 +5,18 @@ from __future__ import annotations
 import json
 import logging
 import threading
-import time
 import traceback
 from datetime import datetime
 from pathlib import Path
 
 from .cleanup import RuntimeCleanup
-from .utils import atomic_write_json
 from .config_assets import ConfigAssetSyncService
 from .metrics import MetricsCollector
 from .notification import NotificationService
 from .pipeline.runner import PipelineRunner
 from .settings import Settings
 from .sharepoint import SharePointClient
+from .utils import atomic_write_json
 
 logger = logging.getLogger("dms-watcher")
 MAX_FILE_RETRIES = 3
@@ -60,6 +59,7 @@ class Watcher:
 
     def _update_health(self, cycle: int = 0, queue_size: int = 0) -> None:
         payload = self.metrics.get_health_data(cycle=cycle, queue_size=queue_size)
+        payload["model"] = self.settings.gemini_model
         if self._last_sync_health:
             payload["config_assets"] = self._last_sync_health
         atomic_write_json(self.settings.health_file, payload)
@@ -155,7 +155,8 @@ class Watcher:
 
             rows = result.get("total_rows", 0)
             duration = result.get("duration_seconds", 0)
-            self.metrics.record_success(file_name, rows, duration)
+            label_dist = result.get("label_distribution", {})
+            self.metrics.record_success(file_name, rows, duration, label_dist)
             if getattr(self.settings, "notify_on_success", True):
                 self.notification_service.send_success(file_name, result)
             self.cleanup.cleanup_success_artifacts(

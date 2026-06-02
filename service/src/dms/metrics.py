@@ -27,6 +27,7 @@ class MetricsCollector:
         self.gemini_calls = 0
         self.gemini_retries = 0
         self.errors_by_type: dict[str, int] = defaultdict(int)
+        self.label_distribution: dict[str, int] = defaultdict(int)
 
         self.daily_polls = 0
         self.daily_processed = 0
@@ -62,8 +63,12 @@ class MetricsCollector:
         self.errors_by_type = defaultdict(int, data.get("errors_by_type", {}))
         self.last_success = data.get("last_success")
         self.last_error = data.get("last_error")
+        self.label_distribution = defaultdict(int, data.get("label_distribution", {}))
 
-    def record_success(self, file_name: str, rows: int, duration: float) -> None:
+        if not self.label_distribution and self.files_processed > 0:
+            self._scan_existing_outputs()
+
+    def record_success(self, file_name: str, rows: int, duration: float, label_dist: dict[str, int] | None = None) -> None:
         self.files_processed += 1
         self.total_rows += rows
         self.total_processing_seconds += duration
@@ -72,6 +77,10 @@ class MetricsCollector:
         self.daily_processed += 1
         self.daily_rows += rows
         self.daily_processing_seconds += duration
+
+        if label_dist:
+            for lbl, cnt in label_dist.items():
+                self.label_distribution[lbl] += cnt
 
         self.last_success = {
             "file": file_name,
@@ -147,6 +156,7 @@ class MetricsCollector:
             "last_success": self.last_success,
             "last_error": self.last_error,
             "errors_by_type": dict(self.errors_by_type),
+            "label_distribution": dict(self.label_distribution),
             "gemini_calls": self.gemini_calls,
             "gemini_retries": self.gemini_retries,
         }
@@ -222,3 +232,29 @@ class MetricsCollector:
         self.daily_processing_seconds = 0.0
         self.daily_gemini_calls = 0
         self.daily_gemini_retries = 0
+
+    def _scan_existing_outputs(self) -> None:
+        try:
+            import pandas as pd
+
+            from .pipeline.issue_classifier import MINOR_ORDER
+            
+            output_dir = self._path.parent / "output"
+            if not output_dir.is_dir():
+                return
+                
+            logger.info("Starting one-time migration to build label_distribution from work/output")
+            for path in output_dir.glob("*.xlsx"):
+                try:
+                    df = pd.read_excel(path)
+                    for col in MINOR_ORDER:
+                        if col in df.columns:
+                            col_series = df[col].dropna()
+                            count = sum(1 for val in col_series if str(val).strip() != "")
+                            self.label_distribution[col] += count
+                except Exception as exc:
+                    logger.warning("One-time scan failed for %s: %s", path, exc)
+            
+            logger.info("One-time scan populated label distribution: %s", dict(self.label_distribution))
+        except Exception as exc:
+            logger.warning("Failed during one-time scan of output files: %s", exc)

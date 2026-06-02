@@ -218,6 +218,13 @@ class PipelineRunner:
             except Exception as exc:
                 logger.warning("Cannot read previous output: %s", exc)
 
+        label_counts = {m: 0 for m in MINOR_ORDER}
+        for row in rows_out:
+            for minor in MINOR_ORDER:
+                val = row.get(minor, "")
+                if val and str(val).strip() != "":
+                    label_counts[minor] += 1
+
         texts = df_all[text_col].fillna("").astype(str).tolist()
         n_total = len(texts)
         if progress_callback is not None:
@@ -291,6 +298,8 @@ class PipelineRunner:
                         base_row[minor] = brand_disp if brand_disp else "x"
                     else:
                         base_row[minor] = "x" if labels_minor.get(minor, False) else ""
+                    if labels_minor.get(minor, False):
+                        label_counts[minor] += 1
                 base_row["Sentiment"] = sentiment
 
                 llm_val = (rag.get("LLM_Extracted", "") or "").strip()
@@ -368,6 +377,7 @@ class PipelineRunner:
             "processed_rows": len(rows_out),
             "output_path": str(output_path),
             "duration_seconds": round(duration, 1),
+            "label_distribution": label_counts,
         }
 
     @staticmethod
