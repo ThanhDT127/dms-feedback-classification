@@ -85,7 +85,6 @@ async def get_metrics():
     data["total_files"] = success_cnt + failed_cnt
     data["success_files"] = success_cnt
     data["failed_files"] = failed_cnt
-    data["avg_processing_time"] = data.get("avg_processing_seconds", 0.0)
 
     # Đọc seen_files.json để trả về danh sách recent_files động
     recent_files = []
@@ -107,6 +106,13 @@ async def get_metrics():
             recent_files.sort(key=lambda x: x["timestamp"], reverse=True)
         except Exception as exc:
             logger.warning("Lỗi đọc seen_files.json trong metrics API: %s", exc)
+
+    # Tính toán trung bình thời gian thực tế chỉ cho các file có ghi nhận thời gian chạy > 0
+    durations = [f["duration_seconds"] for f in recent_files if f["duration_seconds"] > 0]
+    if durations:
+        data["avg_processing_time"] = round(sum(durations) / len(durations), 1)
+    else:
+        data["avg_processing_time"] = data.get("avg_processing_seconds", 0.0)
 
     data["recent_files"] = recent_files
     return data
