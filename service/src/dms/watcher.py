@@ -56,10 +56,110 @@ class Watcher:
 
     def _save_seen(self, seen: dict) -> None:
         atomic_write_json(self.settings.seen_files_path, seen)
+        try:
+            self.sharepoint_client.upload_checkpoint(self.settings.seen_files_path)
+        except Exception as exc:
+            logger.warning("Failed to upload seen_files.json to SharePoint Check_Point/: %s", exc)
+
+    def _restore_state_from_sharepoint(self) -> None:
+        try:
+            seen_missing = True
+            if self.settings.seen_files_path.exists():
+                try:
+                    seen_data = json.loads(self.settings.seen_files_path.read_text(encoding="utf-8"))
+                    if seen_data and len(seen_data) > 0:
+                        seen_missing = False
+                except Exception:
+                    pass
+
+            metrics_missing = True
+            if self.settings.metrics_path.exists():
+                try:
+                    metrics_data = json.loads(self.settings.metrics_path.read_text(encoding="utf-8"))
+                    if metrics_data and metrics_data.get("files_processed", 0) > 0:
+                        metrics_missing = False
+                except Exception:
+                    pass
+
+            if not seen_missing and not metrics_missing:
+                return
+
+            logger.info("Local state files missing or empty (seen_missing: %s, metrics_missing: %s). Attempting to restore from SharePoint Check_Point/...", seen_missing, metrics_missing)
+            ckpt_items = self.sharepoint_client.list_folder_items(self.settings.sp_checkpoint_folder)
+
+            for item in ckpt_items:
+                name = item.get("name")
+                file_id = item.get("id")
+                if name == "seen_files.json" and seen_missing:
+                    logger.info("Restoring seen_files.json from SharePoint...")
+                    self.settings.seen_files_path.parent.mkdir(parents=True, exist_ok=True)
+                    self.sharepoint_client.download_file(file_id, self.settings.seen_files_path)
+                    logger.info("Restoring seen_files.json complete")
+                elif name == "metrics.json" and metrics_missing:
+                    logger.info("Restoring metrics.json from SharePoint...")
+                    self.settings.metrics_path.parent.mkdir(parents=True, exist_ok=True)
+                    self.sharepoint_client.download_file(file_id, self.settings.metrics_path)
+                    logger.info("Restoring metrics.json complete")
+                    # Force metrics reload after download
+                    self.metrics._load()
+        except Exception as exc:
+            logger.warning("Failed to restore state files from SharePoint Check_Point/: %s", exc)
+
+    def _reconcile_state_with_sharepoint(self, seen: dict) -> None:
+        try:
+            logger.info("Starting self-healing state reconciliation with SharePoint...")
+            input_files = self.sharepoint_client.list_files()
+            output_files = self.sharepoint_client.list_folder_items(self.settings.sp_output_folder)
+
+            output_stems = set()
+            for out_f in output_files:
+                name = out_f.get("name", "")
+                if name.endswith(".xlsx"):
+                    stem = Path(name).stem
+                    if stem.endswith("_output"):
+                        stem = stem[:-7]
+                    output_stems.add(stem.lower())
+
+            logger.info("Found %d completed output files in SharePoint Output/", len(output_stems))
+            reconciled_count = 0
+
+            for inp_f in input_files:
+                file_id = inp_f.get("id")
+                file_name = inp_f.get("name", "")
+                if not file_name.endswith(".xlsx") or not file_id:
+                    continue
+
+                if file_id in seen:
+                    continue
+
+                inp_stem = Path(file_name).stem.lower()
+                if inp_stem in output_stems:
+                    logger.info("Self-healing: Matching output found for input %s. Registering as done.", file_name)
+                    seen[file_id] = {
+                        "name": file_name,
+                        "status": "done",
+                        "processed_at": datetime.now().isoformat(),
+                        "lastModifiedDateTime": inp_f.get("lastModifiedDateTime", ""),
+                        "total_rows": 0,
+                        "duration_seconds": 0.0,
+                        "label_distribution": {},
+                    }
+                    reconciled_count += 1
+
+            if reconciled_count > 0:
+                logger.info("Reconciliation complete. Marked %d missing files as done.", reconciled_count)
+                self._save_seen(seen)
+                # Force rebuild metrics after reconciliation
+                self.metrics._load()
+            else:
+                logger.info("Reconciliation complete. No new files matched.")
+        except Exception as exc:
+            logger.warning("Failed to reconcile state with SharePoint: %s", exc)
 
     def _update_health(self, cycle: int = 0, queue_size: int = 0) -> None:
         payload = self.metrics.get_health_data(cycle=cycle, queue_size=queue_size)
         payload["model"] = self.settings.gemini_model
+        payload["poll_interval"] = self.settings.poll_interval_seconds
         if self._last_sync_health:
             payload["config_assets"] = self._last_sync_health
         atomic_write_json(self.settings.health_file, payload)
@@ -148,8 +248,10 @@ class Watcher:
                 "name": file_name,
                 "status": "done",
                 "processed_at": datetime.now().isoformat(),
+                "lastModifiedDateTime": file_info.get("lastModifiedDateTime", ""),
                 "total_rows": result.get("total_rows", 0),
                 "duration_seconds": result.get("duration_seconds", 0),
+                "label_distribution": result.get("label_distribution", {}),
             }
             self._save_seen(seen)
 
@@ -157,6 +259,10 @@ class Watcher:
             duration = result.get("duration_seconds", 0)
             label_dist = result.get("label_distribution", {})
             self.metrics.record_success(file_name, rows, duration, label_dist)
+            try:
+                self.sharepoint_client.upload_checkpoint(self.settings.metrics_path)
+            except Exception as exc:
+                logger.warning("Failed to upload metrics.json to SharePoint Check_Point/: %s", exc)
             if getattr(self.settings, "notify_on_success", True):
                 self.notification_service.send_success(file_name, result)
             self.cleanup.cleanup_success_artifacts(
@@ -172,6 +278,10 @@ class Watcher:
             logger.error("Failed processing %s: %s", file_name, error_msg)
             logger.debug(traceback.format_exc())
             self.metrics.record_failure(file_name, error_type, str(exc))
+            try:
+                self.sharepoint_client.upload_checkpoint(self.settings.metrics_path)
+            except Exception as exc:
+                logger.warning("Failed to upload metrics.json to SharePoint Check_Point/: %s", exc)
 
             entry = seen.get(file_id, {"name": file_name, "failures": 0})
             entry["failures"] = entry.get("failures", 0) + 1
@@ -294,8 +404,10 @@ class Watcher:
         logger.info("Work directory: %s", self.settings.work_dir)
         logger.info("=" * 60)
 
+        self._restore_state_from_sharepoint()
         seen = self._load_seen()
         logger.info("Loaded %d previously seen files", len(seen))
+        self._reconcile_state_with_sharepoint(seen)
 
         cycle = 0
         while not self._shutdown_event.is_set():
@@ -317,6 +429,10 @@ class Watcher:
                 logger.debug(traceback.format_exc())
 
             self.metrics.flush()
+            try:
+                self.sharepoint_client.upload_checkpoint(self.settings.metrics_path)
+            except Exception as exc:
+                logger.warning("Failed to upload metrics.json to SharePoint Check_Point/: %s", exc)
             self._update_health(cycle=cycle)
             self.cleanup.cleanup_housekeeping()
 

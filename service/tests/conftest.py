@@ -33,8 +33,8 @@ class DummyAuthProvider:
 
 
 @pytest.fixture
-def settings(tmp_path: Path) -> Settings:
-    return Settings(
+def settings(tmp_path: Path, monkeypatch) -> Settings:
+    s = Settings(
         azure_tenant_id="tenant",
         azure_client_id="client",
         azure_client_secret="secret",
@@ -48,6 +48,8 @@ def settings(tmp_path: Path) -> Settings:
         notification_recipients_raw="alpha@example.com,beta@example.com",
         notification_sender_email="sender@example.com",
     )
+    monkeypatch.setattr("dms.settings.get_settings", lambda: s)
+    return s
 
 
 @pytest.fixture

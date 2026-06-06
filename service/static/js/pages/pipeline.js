@@ -15,64 +15,82 @@ window.PipelinePage = (() => {
     { id: 'output',   icon: '📤', label: 'Excel Output',        desc: 'Ghi kết quả ra file Excel đầu ra' },
   ];
 
-  const LABEL_HIERARCHY = [
-    {
-      name: 'Sản phẩm',
-      color: '#3b82f6',
-      labels: [
-        { name: 'Chất lượng sản phẩm', def: 'Vấn đề về chất lượng, lỗi sản phẩm, độ bền, hiệu suất' },
-        { name: 'Bao bì & nhãn mác', def: 'Vấn đề bao bì, đóng gói, nhãn mác sản phẩm' },
-        { name: 'Giao hàng & đóng gói', def: 'Vấn đề giao hàng, vận chuyển, đóng gói khi ship' },
-      ]
-    },
-    {
-      name: 'YC Công cụ BH',
-      color: '#22c55e',
-      labels: [
-        { name: 'Công cụ bán hàng', def: 'Yêu cầu về catalogue, mẫu sản phẩm, tài liệu bán hàng' },
-        { name: 'POSM / Trưng bày', def: 'Point-of-sale materials, vật phẩm trưng bày, banner' },
-        { name: 'Chương trình KM', def: 'Chương trình khuyến mại, ưu đãi, quà tặng' },
-      ]
-    },
-    {
-      name: 'Giá & Cơ chế',
-      color: '#f59e0b',
-      labels: [
-        { name: 'Giá bán', def: 'Phản hồi về giá bán lẻ, giá sỉ, giá cạnh tranh' },
-        { name: 'Chiết khấu / Hoa hồng', def: 'Chiết khấu, commission, hoa hồng đại lý' },
-        { name: 'Công nợ / Thanh toán', def: 'Công nợ, điều khoản thanh toán, trả chậm' },
-        { name: 'Cơ chế bán hàng', def: 'Chính sách bán hàng, quy trình đặt hàng' },
-      ]
-    },
-    {
-      name: 'Dịch vụ',
-      color: '#a855f7',
-      labels: [
-        { name: 'Thái độ nhân viên', def: 'Phản hồi về thái độ phục vụ, giao tiếp' },
-        { name: 'Tốc độ xử lý', def: 'Tốc độ phản hồi, xử lý đơn hàng, khiếu nại' },
-        { name: 'Hỗ trợ kỹ thuật', def: 'Hỗ trợ kỹ thuật, tư vấn sử dụng sản phẩm' },
-        { name: 'Chăm sóc khách hàng', def: 'Chăm sóc sau bán hàng, follow-up' },
-      ]
-    },
-    {
-      name: 'Đối thủ',
-      color: '#ef4444',
-      labels: [
-        { name: 'So sánh đối thủ', def: 'So sánh với sản phẩm/dịch vụ đối thủ cạnh tranh' },
-        { name: 'Sản phẩm đối thủ', def: 'Đề cập cụ thể sản phẩm đối thủ' },
-        { name: 'Giá đối thủ', def: 'So sánh giá với đối thủ cạnh tranh' },
-      ]
-    },
-    {
-      name: 'Khác',
-      color: '#64748b',
-      labels: [
-        { name: 'Góp ý chung', def: 'Góp ý chung về doanh nghiệp, định hướng' },
-        { name: 'Khen ngợi', def: 'Phản hồi tích cực, khen ngợi, hài lòng' },
-        { name: 'Khác', def: 'Các phản hồi không thuộc nhóm nào ở trên' },
-      ]
-    },
-  ];
+  let _labelHierarchy = [];
+
+  const GROUP_COLORS = {
+    'Sản phẩm': '#3b82f6',
+    'Yêu cầu công cụ BH': '#22c55e',
+    'Giá, cơ chế RD': '#f59e0b',
+    'Dịch vụ': '#a855f7',
+    'Hàng giả': '#ec4899',
+    'Website': '#06b6d4',
+    'Đối thủ cạnh tranh': '#ef4444',
+    'Tin trung lập': '#64748b'
+  };
+
+  async function loadLabelHierarchy() {
+    try {
+      const data = await API.getLabels();
+      const groupsMap = {};
+      const minorOrder = data.minor_order || Object.keys(data.minor_to_major || {});
+      const minorToMajor = data.minor_to_major || {};
+      const labelDefs = data.label_definitions || {};
+
+      for (const minor of minorOrder) {
+        const major = minorToMajor[minor];
+        if (major) {
+          if (!groupsMap[major]) {
+            groupsMap[major] = [];
+          }
+          groupsMap[major].push({
+            name: minor,
+            def: labelDefs[minor] || ''
+          });
+        }
+      }
+
+      _labelHierarchy = Object.entries(groupsMap).map(([name, labels]) => ({
+        name,
+        color: GROUP_COLORS[name] || '#64748b',
+        labels
+      }));
+    } catch (e) {
+      console.error("Failed to load pipeline labels", e);
+      _labelHierarchy = [
+        { name: 'Sản phẩm', color: '#3b82f6', labels: [
+          { name: 'Báo lỗi', def: 'Sản phẩm vật lý bị lỗi kỹ thuật, hỏng, cháy, không sáng, không hoạt động, lệch ren, rò điện, nứt vỡ thực tế. KHÔNG dùng cho phàn nàn về thiết kế, kích thước, độ dày/mỏng vỏ nhựa/thanh đồng, phích to vướng (các phàn nàn thiết kế này thuộc Y/c cải tiến).' },
+          { name: 'Báo CL tốt', def: 'Khen chất lượng sản phẩm tốt, bền, sáng tốt, ổn định, khách hài lòng.' },
+          { name: 'Y/c cải tiến', def: 'Yêu cầu chỉnh sửa hoặc phàn nàn về thiết kế, kích thước, tính năng, độ dày/mỏng của vỏ nhựa/thanh đồng, bao bì, mẫu mã, phích to vướng, kết cấu của sản phẩm HIỆN CÓ đang bán (như vỏ mỏng cần làm dày hơn, phích to cần làm nhỏ lại, thanh đồng mỏng cần làm dày).' },
+          { name: 'Đề xuất SPM', def: 'Đề xuất sản xuất SP MỚI chưa có: mã mới, kích thước mới, loại mới (\'ra thêm\', \'sản xuất thêm\', \'thêm loại\', \'có thêm\', \'mã mới\').' }
+        ]},
+        { name: 'Yêu cầu công cụ BH', color: '#22c55e', labels: [
+          { name: 'Bảng giá, Catalogue', def: 'Yêu cầu cung cấp bảng giá, báo giá, catalogue, tài liệu bán hàng.' },
+          { name: 'Bảng biển', def: 'Yêu cầu hỗ trợ biển hiệu, biển quảng cáo, bảng hiệu cửa hàng, POSM dạng biển.' },
+          { name: 'Kệ bóng, thử đèn,…', def: 'Yêu cầu kệ trưng bày, kệ bóng, tủ thử bóng, bộ test đèn, dụng cụ demo.' },
+          { name: 'Khác', def: 'Yêu cầu công cụ BH CỤ THỂ khác (áo đồng phục, tờ rơi, sổ tay, POSM) mà KHÔNG phải bảng giá, biển hiệu, hay kệ. KHÔNG dùng làm nhãn mặc định.' }
+        ]},
+        { name: 'Giá, cơ chế RD', color: '#f59e0b', labels: [
+          { name: 'Tốt/ ko tốt', def: 'Nhận xét về giá/cơ chế của RẠNG ĐÔNG: giá tốt/cao/rẻ, khó bán, dễ bán, cạnh tranh. Từ khóa: \'giá rẻ\', \'giá cao\', \'đắt hơn\', \'chiết khấu\', \'cơ chế\', \'khó bán\'.' },
+          { name: 'Trả thưởng', def: 'Nhắc CỤ THỂ đến tiền thưởng, quay số, gói quay, c2td, trả thưởng chậm của Rạng Đông.' },
+          { name: 'Đề xuất', def: 'ĐỀ NGHỊ thay đổi chính sách giá, cơ chế, chiết khấu, khuyến mãi CHUNG của RĐ. Khác Trả thưởng (hỏi thưởng cụ thể).' }
+        ]},
+        { name: 'Dịch vụ', color: '#a855f7', labels: [
+          { name: 'Bảo hành', def: 'Nói về QUY TRÌNH bảo hành, đổi trả, thời gian BH, hậu mãi — tức DỊCH VỤ. Khác Báo lỗi (nói về SP hỏng).' },
+          { name: 'HTPP', def: 'Hệ thống phân phối: xung đột kênh C1/C2, tràn vùng, nhà phân phối, đại lý.' },
+          { name: 'Hàng hoá', def: 'Logistics: tồn kho, thiếu hàng, giao hàng chậm, vận chuyển, đóng gói.' }
+        ]},
+        { name: 'Hàng giả', color: '#ec4899', labels: [{ name: 'Hàng giả', def: 'Nghi ngờ hàng GIẢ/NHÁI, giả mạo thương hiệu. KHÔNG dùng cho SP kém CL chính hãng (đó là Báo lỗi).' }]},
+        { name: 'Website', color: '#06b6d4', labels: [{ name: 'Website', def: 'Lỗi PHẦN MỀM: web, app, portal, DMS, đăng nhập, hệ thống chậm/đơ. KHÔNG dùng cho lỗi SP vật lý.' }]},
+        { name: 'Đối thủ cạnh tranh', color: '#ef4444', labels: [
+          { name: 'Hãng', def: 'Có nhắc đến hãng khác ngoài Rạng Đông (đối thủ cạnh tranh). Ghi tên hãng vào brand.' },
+          { name: 'Hoạt động', def: 'Hoạt động marketing, trưng bày, tặng kệ, event, roadshow, tài trợ CỦA ĐỐO THỦ.' },
+          { name: 'CTKM, giá, cơ chế', def: 'Giá bán, khuyến mãi, chiết khấu, chính sách bán hàng CỦA ĐỐI THỦ cạnh tranh.' },
+          { name: 'TT SP', def: 'Thông tin sản phẩm, mẫu mã, tính năng, thông số, catalogue CỦA ĐỐI THỦ cạnh tranh.' }
+        ]},
+        { name: 'Tin trung lập', color: '#64748b', labels: [{ name: 'Tin trung lập', def: 'Câu hoàn toàn trung tính, không khen/chê/đề xuất/yêu cầu gì. CHỈ gán khi không có nhãn nào khác.' }]}
+      ];
+    }
+  }
 
   function render() {
     const app = document.getElementById('app');
@@ -101,8 +119,8 @@ window.PipelinePage = (() => {
           <span class="card-title"><span class="icon">🏷️</span> Phân cấp nhãn (20 nhãn)</span>
           <span class="text-muted" style="font-size:12px;">Nhấn vào nhãn để xem định nghĩa</span>
         </div>
-        <div class="label-grid">
-          ${renderLabelHierarchy()}
+        <div class="label-grid" id="pipeline-label-grid">
+          <div class="text-center text-muted" style="padding:20px;grid-column: span 3;"><span class="spinner"></span> Đang tải phân cấp nhãn...</div>
         </div>
       </div>
 
@@ -227,7 +245,7 @@ window.PipelinePage = (() => {
   }
 
   function renderLabelHierarchy() {
-    return LABEL_HIERARCHY.map(group => `
+    return _labelHierarchy.map(group => `
       <div class="label-group">
         <div class="label-group-header" style="border-left:3px solid ${group.color};">
           ${group.name}
@@ -269,6 +287,11 @@ window.PipelinePage = (() => {
   }
 
   async function loadData() {
+    await loadLabelHierarchy();
+    const grid = document.getElementById('pipeline-label-grid');
+    if (grid) {
+      grid.innerHTML = renderLabelHierarchy();
+    }
     await Promise.allSettled([loadKeywords(), loadBrands()]);
   }
 

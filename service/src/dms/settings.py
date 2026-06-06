@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     gemini_timeout_seconds: float = Field(120.0, alias="GEMINI_TIMEOUT_SECONDS")
     cors_allowed_origins: str = Field("*", alias="CORS_ALLOWED_ORIGINS")
     enable_sharepoint_config_sync: bool = Field(True, alias="ENABLE_SHAREPOINT_CONFIG_SYNC")
-    enable_runtime_cleanup: bool = Field(True, alias="ENABLE_RUNTIME_CLEANUP")
+    enable_runtime_cleanup: bool = Field(False, alias="ENABLE_RUNTIME_CLEANUP")
     cleanup_output_ttl_days: int = Field(7, alias="CLEANUP_OUTPUT_TTL_DAYS")
     cleanup_log_ttl_days: int = Field(7, alias="CLEANUP_LOG_TTL_DAYS")
     cleanup_staging_ttl_hours: int = Field(24, alias="CLEANUP_STAGING_TTL_HOURS")

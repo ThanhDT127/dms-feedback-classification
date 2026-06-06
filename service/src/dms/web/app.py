@@ -93,6 +93,54 @@ def create_app() -> FastAPI:
         (work_dir / "checkpoint").mkdir(parents=True, exist_ok=True)
         log_dir = SERVICE_DIR / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
+
+        # Download seen_files.json and metrics.json from SharePoint if missing or empty
+        try:
+            from . import deps
+            import json
+            settings = deps.get_settings()
+            sp_client = deps.get_sharepoint_client()
+            if settings and sp_client:
+                seen_missing = True
+                if settings.seen_files_path.exists():
+                    try:
+                        seen_data = json.loads(settings.seen_files_path.read_text(encoding="utf-8"))
+                        if seen_data and len(seen_data) > 0:
+                            seen_missing = False
+                    except Exception:
+                        pass
+
+                metrics_missing = True
+                if settings.metrics_path.exists():
+                    try:
+                        metrics_data = json.loads(settings.metrics_path.read_text(encoding="utf-8"))
+                        if metrics_data and metrics_data.get("files_processed", 0) > 0:
+                            metrics_missing = False
+                    except Exception:
+                        pass
+
+                if seen_missing or metrics_missing:
+                    logger.info("Web server detected missing/empty local state (seen_missing: %s, metrics_missing: %s). Restoring from SharePoint Check_Point/...", seen_missing, metrics_missing)
+                    ckpt_items = sp_client.list_folder_items(settings.sp_checkpoint_folder)
+                    for item in ckpt_items:
+                        name = item.get("name")
+                        file_id = item.get("id")
+                        if name == "seen_files.json" and seen_missing:
+                            logger.info("Web server: Restoring seen_files.json...")
+                            sp_client.download_file(file_id, settings.seen_files_path)
+                            logger.info("Web server: Restoring seen_files.json complete")
+                        elif name == "metrics.json" and metrics_missing:
+                            logger.info("Web server: Restoring metrics.json...")
+                            sp_client.download_file(file_id, settings.metrics_path)
+                            logger.info("Web server: Restoring metrics.json complete")
+
+                    # Force reload of metrics in-memory cache
+                    metrics_collector = deps.get_metrics()
+                    if metrics_collector:
+                        metrics_collector._load()
+        except Exception as exc:
+            logger.warning("Web server failed to restore state from SharePoint Check_Point/: %s", exc)
+
         logger.info("DMS Web UI sẵn sàng tại http://0.0.0.0:8000")
 
     return app

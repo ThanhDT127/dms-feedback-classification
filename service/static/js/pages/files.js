@@ -41,14 +41,17 @@ window.FilesPage = (() => {
         <div style="display:flex;align-items:center;gap:8px;">
           <span id="file-count" class="text-secondary" style="font-size:13px;"></span>
         </div>
-        <div class="btn-group">
+        <div class="btn-group" style="display:flex;gap:8px;align-items:center;">
+          <input type="file" id="local-file-upload-input" style="display:none;" accept=".xlsx" onchange="FilesPage.handleUpload(this)">
+          <button id="btn-upload-file" class="btn btn-primary btn-sm" onclick="document.getElementById('local-file-upload-input').click()">📤 Tải file lên</button>
+          <button id="btn-sync-sharepoint" class="btn btn-secondary btn-sm" onclick="FilesPage.syncSharePoint()">☁️ Đồng bộ SharePoint</button>
           <button class="btn btn-secondary btn-sm" onclick="FilesPage.refresh()">🔄 Làm mới</button>
         </div>
       </div>
 
       <!-- File Table -->
       <div class="card" style="padding:0;overflow:hidden;">
-        <div class="table-wrap" style="max-height:450px;overflow-y:auto;">
+        <div class="table-wrap" style="max-height:450px;overflow-y:auto;overflow-x:auto;">
           <table class="table" id="file-table">
             <thead>
               <tr>
@@ -154,6 +157,11 @@ window.FilesPage = (() => {
     const isInput = _activeFolder === 'input';
     const colSpan = isInput ? 6 : 5;
 
+    const uploadBtn = document.getElementById('btn-upload-file');
+    if (uploadBtn) {
+      uploadBtn.style.display = isInput ? 'inline-block' : 'none';
+    }
+
     // Update the thead dynamically
     const thead = document.querySelector('#file-table thead');
     if (thead) {
@@ -164,7 +172,7 @@ window.FilesPage = (() => {
           <th>Kích thước</th>
           <th>Ngày sửa đổi</th>
           ${isInput ? '<th>Trạng thái</th>' : ''}
-          <th style="width:100px;">Hành động</th>
+          <th style="width:120px;">Hành động</th>
         </tr>
       `;
     }
@@ -205,6 +213,13 @@ window.FilesPage = (() => {
         const size = formatSize(f.size || 0);
         const date = f.modified || f.date || '—';
         const status = getStatusBadge(f.status);
+        const webUrl = f.web_url || '';
+
+        const cloudBtn = webUrl
+          ? `<a href="${escAttr(webUrl)}" target="_blank" class="btn btn-ghost btn-sm" title="Xem trên SharePoint" style="text-decoration:none;">☁️</a>`
+          : '';
+        const downloadUrl = `/api/files/${_activeFolder}/${encodeURIComponent(name)}/download`;
+        const downloadBtn = `<a href="${downloadUrl}" download class="btn btn-ghost btn-sm" title="Tải về" style="text-decoration:none;">📥</a>`;
 
         // No animation for silent (auto) refresh
         const animClass = silent ? '' : `class="animate-in" style="animation-delay:${i * 30}ms"`;
@@ -221,7 +236,11 @@ window.FilesPage = (() => {
             <td class="text-muted" style="font-size:12px;">${escHtml(date)}</td>
             ${isInput ? `<td>${status}</td>` : ''}
             <td>
-              <button class="btn btn-ghost btn-sm" title="Xem" onclick="FilesPage.preview('${escAttr(name)}')">👁️</button>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <button class="btn btn-ghost btn-sm" title="Xem" onclick="FilesPage.preview('${escAttr(name)}')">👁️</button>
+                ${downloadBtn}
+                ${cloudBtn}
+              </div>
             </td>
           </tr>
         `;
@@ -422,6 +441,46 @@ window.FilesPage = (() => {
     Toast.info('Đã làm mới danh sách file');
   }
 
+  async function handleUpload(inputEl) {
+    const file = inputEl.files[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      Toast.error('Chỉ chấp nhận file .xlsx');
+      inputEl.value = '';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    API.onLoading();
+    try {
+      const res = await API.uploadFile(formData);
+      Toast.success(res.message || 'Tải file lên thành công');
+      inputEl.value = '';
+      refresh();
+    } catch (e) {
+      Toast.error('Lỗi tải file: ' + e.message);
+      inputEl.value = '';
+    } finally {
+      API.offLoading();
+    }
+  }
+
+  async function syncSharePoint() {
+    API.onLoading();
+    try {
+      const res = await API.syncSharePoint();
+      Toast.success(res.message || 'Đồng bộ SharePoint thành công');
+      refresh();
+    } catch (e) {
+      Toast.error('Lỗi đồng bộ: ' + e.message);
+    } finally {
+      API.offLoading();
+    }
+  }
+
   function destroy() {
     _previewFile = null;
     stopRefresh();
@@ -441,6 +500,6 @@ window.FilesPage = (() => {
 
   return {
     render, destroy, switchFolder, loadFiles, preview, closePreview,
-    loadTree, refresh, expandAllTree
+    loadTree, refresh, expandAllTree, handleUpload, syncSharePoint
   };
 })();

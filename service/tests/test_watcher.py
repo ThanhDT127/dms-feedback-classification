@@ -98,6 +98,7 @@ def make_watcher(settings, files, should_fail=False, config_sync=None, runner_fa
 
 
 def test_watcher_marks_success_and_skips_done(settings):
+    settings.enable_runtime_cleanup = True
     watcher = make_watcher(settings, [{"id": "1", "name": "a.xlsx"}], should_fail=False)
     seen = {}
     processed = watcher.poll_once(seen)

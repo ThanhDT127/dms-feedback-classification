@@ -124,19 +124,26 @@ class SharePointClient:
         )
         return local_path
 
-    def upload_file(self, local_path: str | Path, remote_folder: str) -> dict:
+    def upload_file(
+        self,
+        local_path: str | Path,
+        remote_folder: str,
+        remote_filename: str | None = None,
+    ) -> dict:
+        from urllib.parse import quote
         local_path = Path(local_path)
+        filename = remote_filename or local_path.name
         folder_id = self.get_folder_id(remote_folder)
-        url = self._drive_url(f"items/{folder_id}:/{local_path.name}:/content")
+        url = self._drive_url(f"items/{folder_id}:/{quote(filename)}:/content")
         headers = self.auth.get_headers()
         upload_headers = {k: v for k, v in headers.items() if k != "Content-Type"}
         with local_path.open("rb") as handle:
             response = self.session.put(url, headers=upload_headers, data=handle)
         if response.status_code not in (200, 201):
             raise SharePointError(
-                f"Upload failed ({response.status_code}) for {local_path.name}: {response.text[:300]}"
+                f"Upload failed ({response.status_code}) for {filename}: {response.text[:300]}"
             )
-        logger.info("Uploaded %s -> %s/", local_path.name, remote_folder)
+        logger.info("Uploaded %s as %s -> %s/", local_path.name, filename, remote_folder)
         return response.json()
 
     def upload_output(self, local_path: str | Path) -> dict:

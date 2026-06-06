@@ -28,7 +28,7 @@ def client(tmp_path, monkeypatch):
 
     # Point SERVICE_DIR to tmp_path so FOLDER_MAP resolves there
     monkeypatch.setattr("dms.settings.SERVICE_DIR", tmp_path)
-    monkeypatch.setattr("dms.web.api.files.SERVICE_DIR", tmp_path)
+    monkeypatch.setattr("dms.web.api.files.SERVICE_DIR", tmp_path, raising=False)
     monkeypatch.setattr("dms.web.api.files.WORK_DIR", tmp_path / "work")
     monkeypatch.setattr("dms.web.api.files.FOLDER_MAP", {
         "input": [tmp_path / "work" / "input"],
@@ -194,3 +194,22 @@ class TestCorruptJSON:
         assert "parse_error" in data
         assert isinstance(data["content"], str)
         assert "{invalid json" in data["content"]
+
+
+class TestFileDownload:
+    def test_download_success(self, client, tmp_path):
+        """Should return FileResponse and correct media headers."""
+        text = "Hello Download"
+        path = tmp_path / "work" / "input" / "test_dl.txt"
+        path.write_text(text, encoding="utf-8")
+
+        response = client.get("/api/files/input/test_dl.txt/download")
+        assert response.status_code == 200
+        assert response.text == text
+        assert response.headers["content-type"] == "text/plain; charset=utf-8"
+
+    def test_download_not_found(self, client):
+        """Should return 404 for missing file."""
+        response = client.get("/api/files/input/nonexistent.txt/download")
+        assert response.status_code == 404
+

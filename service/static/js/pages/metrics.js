@@ -29,7 +29,7 @@ window.MetricsPage = (() => {
           <span class="card-title"><span class="icon">📊</span> Thống kê theo ngày</span>
           <button class="btn btn-ghost btn-sm" onclick="MetricsPage.loadMetrics()">🔄</button>
         </div>
-        <div style="height:260px;position:relative;">
+        <div style="height:260px;position:relative;" id="metrics-daily-chart-wrap">
           <canvas id="metrics-daily-chart"></canvas>
         </div>
       </div>
@@ -111,9 +111,7 @@ window.MetricsPage = (() => {
     if (!el) return;
 
     const online = !!health;
-    const uptime = health?.uptime || 0;
-    const hrs = Math.floor(uptime / 3600);
-    const mins = Math.floor((uptime % 3600) / 60);
+    const uptimeStr = health?.uptime || '—';
     const total = metrics?.total_files || 0;
     const success = metrics?.success_files || 0;
     const pollCycle = health?.poll_interval || 0;
@@ -134,7 +132,7 @@ window.MetricsPage = (() => {
       <div class="stat-card blue animate-in animate-in-delay-1">
         <div class="stat-card-top">
           <div>
-            <div class="stat-card-value">${hrs > 0 ? hrs + 'h ' : ''}${mins}m</div>
+            <div class="stat-card-value">${uptimeStr}</div>
             <div class="stat-card-label">Uptime</div>
           </div>
           <div class="stat-card-icon">⏱️</div>
@@ -162,7 +160,16 @@ window.MetricsPage = (() => {
   }
 
   function renderDailyChart(data) {
-    if (!data || !data.dates) return;
+    const wrap = document.getElementById('metrics-daily-chart-wrap');
+    if (!data || !data.dates || data.dates.length === 0) {
+      if (wrap) {
+        wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📊</div><p class="empty-state-text">Chưa có dữ liệu</p></div>';
+      }
+      return;
+    }
+    if (wrap && !document.getElementById('metrics-daily-chart')) {
+      wrap.innerHTML = '<canvas id="metrics-daily-chart"></canvas>';
+    }
     Charts.createBarChart('metrics-daily-chart', data.dates, data.counts, {
       label: 'Số file xử lý'
     });

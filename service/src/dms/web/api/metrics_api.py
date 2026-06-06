@@ -48,6 +48,7 @@ async def get_health():
         "last_poll": None,
         "uptime": "N/A",
         "current_cycle": 0,
+        "poll_interval": get_settings().poll_interval_seconds,
         "files_in_queue": 0,
         "last_success": None,
         "last_error": None,
@@ -116,48 +117,33 @@ async def get_daily_metrics():
     """Trả về tổng hợp theo ngày cho biểu đồ frontend."""
     daily_counts = {}
 
-    # 1. Đọc từ daily-summary.jsonl trước
-    summary_path = _log_dir() / "daily-summary.jsonl"
-    if summary_path.is_file():
-        try:
-            for line in summary_path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                    date_str = entry.get("date")
-                    if date_str:
-                        daily_counts[date_str] = entry.get("files_processed", 0)
-                except json.JSONDecodeError:
-                    continue
-        except Exception as exc:
-            logger.warning("Lỗi đọc daily-summary.jsonl: %s", exc)
-
-    # 2. Đọc thêm từ seen_files.json để lấy các ngày gần đây và ngày hôm nay (real-time)
     seen_path = _work_dir() / "seen_files.json"
     if seen_path.is_file():
         try:
             seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
-            seen_counts = {}
             for _fid, info in seen_data.items():
                 if info.get("status") == "done":
-                    processed_at = info.get("processed_at", "")
-                    if processed_at and "T" in processed_at:
-                        date_str = processed_at.split("T")[0]
-                        seen_counts[date_str] = seen_counts.get(date_str, 0) + 1
-            
-            # Gộp và ghi đè số lớn nhất từ seen_files vào daily_counts
-            for date_str, count in seen_counts.items():
-                daily_counts[date_str] = max(daily_counts.get(date_str, 0), count)
+                    # Lấy ngày sửa đổi cuối cùng trên SharePoint hoặc ngày xử lý
+                    date_src = info.get("lastModifiedDateTime") or info.get("processed_at") or ""
+                    if date_src:
+                        if "T" in date_src:
+                            date_str = date_src.split("T")[0]
+                        elif " " in date_src:
+                            date_str = date_src.split(" ")[0]
+                        else:
+                            date_str = date_src
+                        
+                        if re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+                            daily_counts[date_str] = daily_counts.get(date_str, 0) + 1
         except Exception as exc:
             logger.warning("Lỗi đọc seen_files.json trong daily metrics: %s", exc)
 
-    # 3. Sắp xếp danh sách ngày và tạo mảng trả về cho biểu đồ
+    # Sắp xếp danh sách ngày và tạo mảng trả về cho biểu đồ
     sorted_dates = sorted(daily_counts.keys())
     counts = [daily_counts[d] for d in sorted_dates]
 
     return {"dates": sorted_dates, "counts": counts}
+
 
 
 # ---------- Logs ----------

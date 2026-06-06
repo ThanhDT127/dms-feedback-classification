@@ -187,10 +187,13 @@ window.DashboardPage = (() => {
   }
 
   function renderDailyChart(data) {
-    if (!data || !data.dates) {
-      const wrap = document.getElementById('daily-chart-wrap');
+    const wrap = document.getElementById('daily-chart-wrap');
+    if (!data || !data.dates || data.dates.length === 0) {
       if (wrap) wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📊</div><p class="empty-state-text">Chưa có dữ liệu</p></div>';
       return;
+    }
+    if (wrap && !document.getElementById('chart-daily')) {
+      wrap.innerHTML = '<canvas id="chart-daily"></canvas>';
     }
     Charts.createBarChart('chart-daily', data.dates, data.counts, {
       label: 'Số file'
@@ -198,21 +201,19 @@ window.DashboardPage = (() => {
   }
 
   function renderLabelChart(data) {
-    if (!data || !data.label_distribution) {
-      const wrap = document.getElementById('label-chart-wrap');
+    const wrap = document.getElementById('label-chart-wrap');
+    if (!data || !data.label_distribution || Object.keys(data.label_distribution).length === 0) {
       if (wrap) wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🏷️</div><p class="empty-state-text">Chưa có dữ liệu</p></div>';
       return;
+    }
+
+    if (wrap && !document.getElementById('chart-labels')) {
+      wrap.innerHTML = '<canvas id="chart-labels"></canvas>';
     }
 
     const dist = data.label_distribution;
     const labels = Object.keys(dist);
     const values = Object.values(dist);
-
-    if (labels.length === 0) {
-      const wrap = document.getElementById('label-chart-wrap');
-      if (wrap) wrap.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🏷️</div><p class="empty-state-text">Chưa có dữ liệu</p></div>';
-      return;
-    }
 
     Charts.createDoughnutChart('chart-labels', labels, values);
   }
