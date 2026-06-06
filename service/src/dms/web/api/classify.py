@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -161,10 +161,17 @@ def _run_classification_job(
             settings = deps.get_settings()
             sp_client = deps.get_sharepoint_client()
             if sp_client and settings.sp_output_folder:
-                logger.info("Uploading completed job %s output to SharePoint: %s", job_id, output_path.name)
-                sp_client.upload_file(output_path, settings.sp_output_folder)
+                orig_filename = job.get("filename", "")
+                if orig_filename:
+                    orig_stem = Path(orig_filename).stem
+                    remote_filename = f"{orig_stem}_output.xlsx"
+                else:
+                    remote_filename = output_path.name
+                logger.info("Uploading completed job %s output to SharePoint: %s as %s", job_id, output_path.name, remote_filename)
+                res = sp_client.upload_file(output_path, settings.sp_output_folder, remote_filename=remote_filename)
                 job["sp_uploaded"] = True
                 job["sp_folder"] = settings.sp_output_folder
+                job["sp_web_url"] = res.get("webUrl")
         except Exception as exc:
             logger.warning("Không thể upload kết quả lên SharePoint cho job %s: %s", job_id, exc)
 
@@ -175,7 +182,11 @@ def _run_classification_job(
 
 
 @router.post("/file")
-async def classify_file(request: Request, file: UploadFile):
+async def classify_file(
+    request: Request,
+    file: UploadFile,
+    mode: str = Form("single"),
+):
     """Upload và phân loại file Excel trong background."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="Thiếu tên file")
@@ -219,6 +230,7 @@ async def classify_file(request: Request, file: UploadFile):
         "job_id": job_id,
         "status": "queued",
         "filename": file.filename,
+        "mode": mode,
         "input_path": str(input_path),
         "output_path": str(output_path),
         "total_rows": 0,
@@ -229,6 +241,7 @@ async def classify_file(request: Request, file: UploadFile):
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "started_at": None,
         "completed_at": None,
+        "sp_web_url": None,
     }
 
     # Start background thread
@@ -301,8 +314,86 @@ async def download_job_result(request: Request, job_id: str):
     if not output_path.is_file():
         raise HTTPException(status_code=404, detail="File kết quả không tồn tại trên hệ thống")
 
+    from urllib.parse import quote
+
+    orig_filename = job.get("filename", "")
+    if orig_filename:
+        orig_stem = Path(orig_filename).stem
+        remote_filename = f"{orig_stem}_output.xlsx"
+    else:
+        remote_filename = output_path.name
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="{remote_filename}"; filename*=utf-8\'\'{quote(remote_filename)}\''
+    }
+
     return FileResponse(
         path=output_path,
-        filename=output_path.name,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
     )
+
+
+@router.post("/jobs/{job_id}/sharepoint")
+async def upload_job_to_sharepoint(request: Request, job_id: str):
+    """Upload cả file input và output của job lên SharePoint."""
+    jobs: dict = request.app.state.jobs
+    job = jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy job: {job_id}")
+
+    if job["status"] != "completed":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job chưa hoàn thành. Trạng thái hiện tại: {job['status']}",
+        )
+
+    settings = deps.get_settings()
+    sp_client = deps.get_sharepoint_client()
+    if not settings or not sp_client:
+        raise HTTPException(
+            status_code=503,
+            detail="SharePoint client chưa được cấu hình.",
+        )
+
+    input_path = Path(job["input_path"])
+    output_path = Path(job["output_path"])
+
+    if not input_path.is_file():
+        raise HTTPException(status_code=404, detail="File đầu vào không tồn tại trên hệ thống")
+    if not output_path.is_file():
+        raise HTTPException(status_code=404, detail="File kết quả không tồn tại trên hệ thống")
+
+    try:
+        orig_filename = job.get("filename", "")
+        if orig_filename:
+            orig_stem = Path(orig_filename).stem
+            remote_input_name = orig_filename
+            remote_output_name = f"{orig_stem}_output.xlsx"
+        else:
+            remote_input_name = input_path.name
+            remote_output_name = output_path.name
+
+        # Upload input file to Input folder
+        logger.info("Manually uploading job %s input to SharePoint: %s as %s", job_id, input_path.name, remote_input_name)
+        sp_client.upload_file(input_path, settings.sp_input_folder, remote_filename=remote_input_name)
+
+        # Upload output file to Output folder
+        logger.info("Manually uploading job %s output to SharePoint: %s as %s", job_id, output_path.name, remote_output_name)
+        res_out = sp_client.upload_file(output_path, settings.sp_output_folder, remote_filename=remote_output_name)
+
+        job["sp_uploaded"] = True
+        job["sp_folder"] = settings.sp_output_folder
+        job["sp_web_url"] = res_out.get("webUrl")
+
+        return {
+            "message": "Đã tải thành công file input và output lên SharePoint",
+            "sp_web_url": res_out.get("webUrl"),
+        }
+    except Exception as exc:
+        logger.error("Lỗi upload SharePoint cho job %s: %s", job_id, exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Không thể upload lên SharePoint: {exc}",
+        ) from exc
+

@@ -8,7 +8,8 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, UploadFile, BackgroundTasks
+from fastapi.responses import FileResponse
 
 from ...settings import get_settings
 from ..deps import get_sharepoint_client
@@ -140,6 +141,98 @@ async def upload_file(file: UploadFile):
     }
 
 
+@router.post("/sync")
+async def sync_sharepoint():
+    """Đồng bộ thủ công hai chiều: tải về Input mới và đẩy lên Output mới."""
+    sp_client = get_sharepoint_client()
+    settings = get_settings()
+    if sp_client is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Không thể kết nối SharePoint (chưa cấu hình Azure credentials)",
+        )
+
+    downloads = 0
+    uploads = 0
+
+    # Đọc seen_files.json để đối chiếu tránh tải lại file đã xử lý xong
+    seen_data = {}
+    seen_path = settings.work_dir / "seen_files.json"
+    if seen_path.is_file():
+        try:
+            seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning("Lỗi đọc seen_files.json trong sync endpoint: %s", exc)
+
+    # 1. Tải về file Input mới
+    try:
+        sp_input_items = sp_client.list_folder_items(settings.sp_input_folder)
+        local_input_dir = settings.work_dir / "input"
+        local_input_dir.mkdir(parents=True, exist_ok=True)
+        
+        for item in sp_input_items:
+            if "folder" in item:
+                continue
+            name = item.get("name", "")
+            if not name.lower().endswith(".xlsx"):
+                continue
+            
+            # Kiểm tra xem file đã từng được xử lý chưa (dựa theo ID hoặc tên)
+            item_id = item.get("id")
+            if item_id and item_id in seen_data:
+                status = seen_data[item_id].get("status")
+                if status in ("done", "failed"):
+                    continue
+            
+            # Fallback đối chiếu theo tên file
+            already_processed = False
+            for fid, s_info in seen_data.items():
+                if s_info.get("name") == name and s_info.get("status") in ("done", "failed"):
+                    already_processed = True
+                    break
+            if already_processed:
+                continue
+
+            local_path = local_input_dir / name
+            if not local_path.exists():
+                logger.info("Manual Sync: Downloading new input file %s", name)
+                sp_client.download_file(item["id"], local_path)
+                downloads += 1
+    except Exception as exc:
+        logger.error("Lỗi đồng bộ Input từ SharePoint: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Lỗi tải file từ SharePoint: {exc}",
+        ) from exc
+
+    # 2. Đẩy lên file Output mới
+    try:
+        local_output_dir = settings.work_dir / "output"
+        if local_output_dir.is_dir():
+            sp_output_items = sp_client.list_folder_items(settings.sp_output_folder)
+            sp_output_names = {item["name"] for item in sp_output_items if "folder" not in item}
+            
+            for path in local_output_dir.iterdir():
+                if path.is_file() and path.suffix.lower() == ".xlsx":
+                    if path.name not in sp_output_names:
+                        logger.info("Manual Sync: Uploading completed output file %s", path.name)
+                        sp_client.upload_file(path, settings.sp_output_folder)
+                        uploads += 1
+    except Exception as exc:
+        logger.error("Lỗi đồng bộ Output lên SharePoint: %s", exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Lỗi đẩy file lên SharePoint: {exc}",
+        ) from exc
+
+    return {
+        "success": True,
+        "synced_downloaded": downloads,
+        "synced_uploaded": uploads,
+        "message": f"Đồng bộ SharePoint hoàn tất! Tải về {downloads} file đầu vào mới, tải lên {uploads} file kết quả mới.",
+    }
+
+
 # ---------- Path parameter routes LAST ----------
 
 
@@ -200,6 +293,7 @@ async def list_files(folder: str):
                     "source_dir": "SharePoint",
                     "status": status,
                     "id": item_id,
+                    "web_url": item.get("webUrl"),
                 })
             return files
         except Exception as exc:
@@ -230,6 +324,7 @@ async def list_files(folder: str):
                             status = s_info.get("status", "done")
                             break
                 info["status"] = status
+                info["web_url"] = None
                 files.append(info)
 
     return files
@@ -430,4 +525,99 @@ async def preview_file(folder: str, filename: str, max_rows: int = 20):
                 temp_downloaded_path.unlink()
             except Exception:
                 pass
+
+
+def cleanup_file(path: Path) -> None:
+    """Xóa file tạm trong thư mục staging sau khi tải về thành công."""
+    try:
+        if path.is_file():
+            path.unlink()
+            logger.info("Đã xóa file staging tạm thời: %s", path)
+    except Exception as exc:
+        logger.warning("Không thể xóa file staging tạm thời %s: %s", path, exc)
+
+
+@router.get("/{folder}/{filename}/download")
+async def download_file(folder: str, filename: str, background_tasks: BackgroundTasks):
+    """Tải file — hỗ trợ Excel, CSV, JSON, text (SharePoint Cloud hoặc Local Fallback)."""
+    folder_lower = folder.lower()
+    
+    # Quyết định xem có nên tải từ SharePoint không
+    sp_folder_map = {
+        "input": get_settings().sp_input_folder,
+        "output": get_settings().sp_output_folder,
+        "checkpoint": get_settings().sp_checkpoint_folder,
+    }
+    
+    sp_folder = sp_folder_map.get(folder_lower)
+    sp_client = get_sharepoint_client() if sp_folder else None
+    
+    file_path: Path | None = None
+    temp_downloaded_path: Path | None = None
+    
+    if sp_client is not None and sp_folder:
+        try:
+            items = sp_client.list_folder_items(sp_folder)
+            target_item = None
+            for item in items:
+                if item.get("name") == filename:
+                    target_item = item
+                    break
+            
+            if target_item:
+                staging_dir = WORK_DIR / "staging"
+                staging_dir.mkdir(parents=True, exist_ok=True)
+                
+                safe_name = Path(filename).name
+                temp_path = staging_dir / safe_name
+                
+                sp_client.download_file(target_item["id"], temp_path)
+                file_path = temp_path
+                temp_downloaded_path = temp_path
+        except Exception as exc:
+            logger.warning("Không thể tải file từ SharePoint cho %s: %s", filename, exc)
+
+    # Fallback Local
+    if file_path is None:
+        dirs = _get_folder_map().get(folder_lower)
+        if dirs is None:
+            raise HTTPException(status_code=400, detail=f"Thư mục không hợp lệ: {folder}")
+
+        for dir_path in dirs:
+            safe_name = Path(filename).name
+            if not safe_name:
+                raise HTTPException(status_code=400, detail="Tên file không hợp lệ")
+            candidate = (dir_path / safe_name).resolve()
+            try:
+                candidate.relative_to(dir_path.resolve())
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Tên file không hợp lệ")
+            if candidate.is_file():
+                file_path = candidate
+                break
+
+    if file_path is None or not file_path.is_file():
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy file: {filename}")
+
+    if temp_downloaded_path:
+        background_tasks.add_task(cleanup_file, temp_downloaded_path)
+
+    # Determine media type based on extension
+    ext = file_path.suffix.lower()
+    media_type = "application/octet-stream"
+    if ext in EXCEL_EXTS:
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    elif ext in CSV_EXTS:
+        media_type = "text/csv"
+    elif ext in JSON_EXTS:
+        media_type = "application/json"
+    elif ext in TEXT_EXTS:
+        media_type = "text/plain"
+
+    return FileResponse(
+        path=file_path,
+        filename=file_path.name,
+        media_type=media_type,
+    )
+
 

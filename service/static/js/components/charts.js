@@ -8,17 +8,18 @@ window.Charts = (() => {
   // Global Chart.js defaults for dark theme
   function applyDefaults() {
     if (!window.Chart) return;
-    Chart.defaults.color = '#8b8fa3';
-    Chart.defaults.borderColor = 'rgba(45, 49, 72, 0.5)';
+    Chart.defaults.color = '#cbd5e1';
+    Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.08)';
     Chart.defaults.font.family = "'Inter', sans-serif";
     Chart.defaults.font.size = 12;
     Chart.defaults.plugins.legend.labels.usePointStyle = true;
     Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
     Chart.defaults.plugins.legend.labels.padding = 16;
-    Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(26, 29, 40, 0.95)';
-    Chart.defaults.plugins.tooltip.titleColor = '#e4e6ed';
-    Chart.defaults.plugins.tooltip.bodyColor = '#8b8fa3';
-    Chart.defaults.plugins.tooltip.borderColor = '#2d3148';
+    Chart.defaults.plugins.legend.labels.color = '#cbd5e1';
+    Chart.defaults.plugins.tooltip.backgroundColor = '#071330';
+    Chart.defaults.plugins.tooltip.titleColor = '#ffffff';
+    Chart.defaults.plugins.tooltip.bodyColor = '#cbd5e1';
+    Chart.defaults.plugins.tooltip.borderColor = 'rgba(255, 255, 255, 0.12)';
     Chart.defaults.plugins.tooltip.borderWidth = 1;
     Chart.defaults.plugins.tooltip.cornerRadius = 8;
     Chart.defaults.plugins.tooltip.padding = 10;
@@ -45,8 +46,8 @@ window.Charts = (() => {
     if (!ctx) return null;
 
     const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.8)');
-    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.1)');
+    gradient.addColorStop(0, 'rgba(34, 197, 94, 0.85)');
+    gradient.addColorStop(1, 'rgba(34, 197, 94, 0.05)');
 
     const chart = new Chart(ctx, {
       type: 'bar',
@@ -56,7 +57,7 @@ window.Charts = (() => {
           label: options.label || 'Số file',
           data,
           backgroundColor: gradient,
-          borderColor: 'rgba(59, 130, 246, 0.9)',
+          borderColor: 'rgba(34, 197, 94, 0.95)',
           borderWidth: 1,
           borderRadius: 6,
           borderSkipped: false,
@@ -83,7 +84,7 @@ window.Charts = (() => {
           y: {
             beginAtZero: true,
             grid: {
-              color: 'rgba(45, 49, 72, 0.3)',
+              color: 'rgba(255, 255, 255, 0.06)',
               drawBorder: false
             },
             ticks: {
@@ -106,7 +107,7 @@ window.Charts = (() => {
     if (!ctx) return null;
 
     const defaultColors = [
-      '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7',
+      '#22c55e', '#f59e0b', '#c084fc', '#3b82f6', '#ef4444',
       '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1',
       '#14b8a6', '#e11d48', '#eab308', '#8b5cf6', '#10b981',
       '#f43f5e', '#0ea5e9', '#d946ef', '#fbbf24', '#64748b'
@@ -121,7 +122,7 @@ window.Charts = (() => {
         datasets: [{
           data,
           backgroundColor: bgColors,
-          borderColor: '#1a1d28',
+          borderColor: '#071330',
           borderWidth: 2,
           hoverOffset: 8,
         }]
@@ -153,7 +154,8 @@ window.Charts = (() => {
                       lineWidth: 0,
                       hidden: false,
                       index: i,
-                      pointStyle: 'circle'
+                      pointStyle: 'circle',
+                      fontColor: '#cbd5e1'
                     };
                   });
                 }
@@ -190,7 +192,7 @@ window.Charts = (() => {
           x: { grid: { display: false } },
           y: {
             beginAtZero: true,
-            grid: { color: 'rgba(45,49,72,0.3)', drawBorder: false },
+            grid: { color: 'rgba(255, 255, 255, 0.06)', drawBorder: false },
             ticks: { precision: 0 }
           }
         },

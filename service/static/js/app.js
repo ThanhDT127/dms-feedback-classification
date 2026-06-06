@@ -61,7 +61,7 @@ window.App = (() => {
 
     // Update document title
     const def = PAGES[pageName];
-    document.title = `DMS — ${def.title}`;
+    document.title = `Phân loại phản hồi vấn đề — ${def.title}`;
 
     // Update sidebar active
     if (window.Sidebar) {

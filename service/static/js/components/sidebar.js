@@ -4,13 +4,13 @@
 
 window.Sidebar = (() => {
   const NAV_ITEMS = [
-    { id: 'dashboard', icon: '📊', label: 'Tổng quan' },
-    { id: 'files',     icon: '📂', label: 'Quản lý file' },
     { id: 'classify',  icon: '⚡', label: 'Phân loại' },
-    { id: 'settings',  icon: '⚙️', label: 'Cài đặt' },
-    { id: 'pipeline',  icon: '🔬', label: 'Pipeline' },
+    { id: 'files',     icon: '📂', label: 'Quản lý file' },
+    { id: 'dashboard', icon: '📊', label: 'Tổng quan' },
     { id: 'metrics',   icon: '📈', label: 'Thống kê' },
+    { id: 'pipeline',  icon: '🔬', label: 'Pipeline' },
     { id: 'qa',        icon: '🛡️', label: 'Visual QA' },
+    { id: 'settings',  icon: '⚙️', label: 'Cài đặt' },
   ];
 
   let _statusInterval = null;
@@ -22,10 +22,10 @@ window.Sidebar = (() => {
     sidebar.innerHTML = `
       <div class="sidebar-brand">
         <div class="sidebar-brand-logo">
-          <div class="sidebar-brand-icon">D</div>
+          <img class="sidebar-brand-avatar" src="assets/avatar.png" alt="Avatar">
           <div>
-            <h1>DMS</h1>
-            <p>Phân loại phản hồi</p>
+            <h1>Phân loại phản hồi</h1>
+            <p>vấn đề khách hàng</p>
           </div>
         </div>
       </div>

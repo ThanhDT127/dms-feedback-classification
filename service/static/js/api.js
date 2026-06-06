@@ -94,6 +94,8 @@ window.API = (() => {
   function getLogs()             { return get('/logs'); }
   function syncKeywordsToSP()    { return post('/pipeline/sync-keywords-to-sp'); }
   function syncProductsToSP()    { return post('/pipeline/sync-products-to-sp'); }
+  function syncSharePoint()      { return post('/files/sync'); }
+  function uploadJobToSharePoint(jobId) { return post(`/classify/jobs/${jobId}/sharepoint`); }
 
   return {
     get, post, put, del, upload,
@@ -103,6 +105,6 @@ window.API = (() => {
     uploadFile, classifyText, classifyFile, getJobs,
     getSettings, putSettings, getPrompt, getModels, testConnection,
     getLabels, getKeywords, getBrands, getLogs,
-    syncKeywordsToSP, syncProductsToSP
+    syncKeywordsToSP, syncProductsToSP, syncSharePoint, uploadJobToSharePoint
   };
 })();
