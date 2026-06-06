@@ -1820,3 +1820,25 @@ button, input, select, textarea {
   border: 1px solid var(--border);
   color: var(--accent-purple);
 }
+
+/* --- Table Preview Scaling and Horizontal Scroll --- */
+.table-preview-wrapper {
+  overflow-x: auto !important;
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  margin-top: 10px;
+}
+.table-preview {
+  font-size: 13.5px !important;
+  width: 100%;
+  border-collapse: collapse;
+}
+.table-preview th,
+.table-preview td {
+  min-width: 140px;
+}
+.table-preview td:not(.wrap) {
+  white-space: nowrap !important;
+}
