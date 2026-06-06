@@ -220,6 +220,23 @@ work/seen_files.json
 
 Nếu thiếu file này, VM mới không biết file SharePoint nào đã xử lý trước đó.
 
+## Giao diện Web Dashboard (Web UI)
+
+Hệ thống cung cấp giao diện Web UI tại cổng `8501` (http://localhost:8501) giúp người vận hành quản lý trực quan:
+- **Tổng quan (Dashboard):** Xem biểu đồ sử dụng CPU/Memory, log trực tiếp (log stream) và thông tin health check.
+- **Phân loại (Classify):** Chạy phân loại theo lô (batch processing), giám sát thanh tiến trình thời gian thực và tải trực tiếp file kết quả.
+- **Quản lý file:** Upload file lên server local, liệt kê file trên SharePoint và thực hiện đồng bộ hóa thủ công.
+- **Thống kê (Metrics):** Xem biểu đồ số file xử lý theo ngày và phân bổ nhãn phân loại (doughnut chart).
+- **Cấu hình & Thử nghiệm:** Chỉnh sửa cấu hình hệ thống (.env), cập nhật từ điển từ khóa và chạy thử nghiệm phân loại nhanh.
+
+## Phục hồi lịch sử thống kê (Reconstruct History)
+
+Nếu biểu đồ thống kê hiển thị sai lệch ngày hoặc trống dữ liệu nhãn trên môi trường Production mới:
+```bash
+docker compose exec watcher python scripts/reconstruct_history.py
+```
+Script sẽ tự động quét metadata SharePoint và các file đầu ra Excel lịch sử để dựng lại file state cục bộ, đồng thời sao lưu trực tiếp lên thư mục `Check_Point/` của SharePoint để tự động đồng bộ cho các VM tiếp theo.
+
 ## Dọn file tạm runtime
 
 Sau khi một file xử lý thành công, upload thành công, và được đánh dấu `done`, service xóa các file tạm:
@@ -238,4 +255,6 @@ State được bảo vệ:
 
 ## Tài liệu vận hành chi tiết
 
-Xem [OPERATIONS.vi.md](OPERATIONS.vi.md) cho hướng dẫn deploy, cấu hình, migrate state, troubleshoot và bảo trì.
+Xem chi tiết trong:
+- [OPERATIONS.vi.md](OPERATIONS.vi.md) - Hướng dẫn deploy, cấu hình chi tiết, phục hồi lịch sử, xử lý sự cố.
+- [service/README.md](service/README.md) - Tài liệu kiến trúc và hướng dẫn dành cho lập trình viên.

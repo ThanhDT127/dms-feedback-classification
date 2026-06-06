@@ -220,6 +220,23 @@ work/seen_files.json
 
 Without it, the new VM does not know which SharePoint files were already processed.
 
+## Web Dashboard Interface (Web UI)
+
+The system provides a Web Dashboard on port `8501` (http://localhost:8501) for visual operators to manage:
+- **Dashboard (Overview):** Monitor host CPU/Memory metrics, stream live logs, and view health check statuses.
+- **Classify:** Trigger manual batch classification jobs, watch live progress bars, and download output results.
+- **File Management:** Upload spreadsheets to local staging, view SharePoint document directories, and trigger manual synchronization.
+- **Metrics:** Track daily processing histories (bar chart) and view categorizations (doughnut chart).
+- **Configuration & Sandboxing:** Edit `.env` variables online, reload keyword map assets, and dry-run feedback strings.
+
+## Historical Data Reconstruction (Reconstruct History)
+
+If the metrics dashboard shows out-of-sync dates or an empty category doughnut chart on a fresh production VM, run:
+```bash
+docker compose exec watcher python scripts/reconstruct_history.py
+```
+This utility scans SharePoint metadata and downloaded output workbooks to rebuild the local cache states and backups them to the `Check_Point/` directory on SharePoint for automatic sync on future instances.
+
 ## Runtime Cleanup
 
 After a file is successfully processed, uploaded, and marked `done`, the service removes local temporary files:
@@ -238,4 +255,6 @@ Protected state is preserved:
 
 ## Detailed Operations
 
-See [OPERATIONS.md](OPERATIONS.md) for deployment, configuration, state migration, troubleshooting, and maintenance procedures.
+For more details, see:
+- [OPERATIONS.md](OPERATIONS.md) - Deployments, configurations, history reconstruction, troubleshooting.
+- [service/README.md](service/README.md) - Architecture and developer guide.

@@ -395,3 +395,100 @@ Never commit:
 - `logs/`
 
 If a secret was exposed, rotate it in Azure or GCP before relying on the environment.
+
+## 12. Metrics Mechanism & Historical Data Reconstruction (Reconstruct History)
+
+### 12.1. Statistics Storage and Display Mechanism
+The system utilizes two local state files in the `service/work/` directory to track file processing and power the Dashboard charts:
+1. **`seen_files.json`**: Tracks input files from SharePoint that are completed or currently processing.
+   - Format: `{"<sharepoint_item_id>": {"name": "<file_name>", "status": "done", "lastModifiedDateTime": "2026-05-14T08:30:00Z", "processed_at": "2026-05-14T08:35:00Z", ...}}`
+   - The **"Files by Date"** bar chart in the UI displays data grouped by the `lastModifiedDateTime` field (the actual modification date of the file on SharePoint) with a fallback to the `processed_at` field (when the container processed the file).
+2. **`metrics.json`**: Stores overall operational metrics (uptime, success rate, processed counts) and specifically tracks category count distribution in the `label_distribution` attribute.
+   - The **"Label Distribution"** doughnut chart is plotted directly from this `label_distribution` object.
+
+### 12.2. Root Causes of Missing/Incorrect Stats on Production
+When deploying to a clean VM or restarting containers from scratch, you may observe the following issues:
+- **Files by Date lumped together:** All historical files appear under a single date (the day the new VM was launched).
+- **Empty Label Distribution chart:** The chart displays `No data available` or remains empty.
+
+**Specific Causes:**
+1. **Stateless Output Files:** Docker containers do not permanently store output Excel files (`*_output.xlsx`) locally. After uploading them successfully to SharePoint, they are deleted to optimize space. Therefore, the startup check cannot scan local Excel outputs to calculate label distributions, resulting in an empty doughnut chart.
+2. **Missing `lastModifiedDateTime` in Old Caches:** Older versions of the service or temporary caches did not save the `lastModifiedDateTime` attribute in `seen_files.json`. Fallback to `processed_at` makes all historical entries group under the new container's launch day.
+3. **Local Cache Presence Prevents Auto-Healing Sync:** At startup, both the web server and watcher attempt to download `seen_files.json` and `metrics.json` from SharePoint's `Check_Point/` directory if they are missing or empty. However, **if these files already exist in the local `work/` directory on the host (even if outdated or incomplete), the download is skipped**, leaving the system with incorrect/stale data.
+
+### 12.3. Detailed Workflow of the Reconstruct History Script
+To resolve these display anomalies without reprocessing the original Excel sheets (which would incur high Vertex AI/Gemini API costs), the `service/scripts/reconstruct_history.py` script automates the recovery workflow:
+
+```mermaid
+graph TD
+    A[Start: Run Script] --> B[Connect to SharePoint via Graph API]
+    B --> C[Fetch metadata from Input folder]
+    C --> D[Update lastModifiedDateTime in seen_files.json]
+    D --> E[List files in SharePoint Output folder]
+    E --> F[Download each *_output.xlsx to temp local directory]
+    F --> G[Use Pandas to read label columns in MINOR_ORDER]
+    G --> H[Aggregate label counts into metrics.json]
+    H --> I[Save local seen_files.json & metrics.json]
+    I --> J[Upload reconstructed backups to SharePoint Check_Point/]
+    J --> K[End: Reconstructed Successfully]
+```
+
+1. **Restore Modification Timestamps:** Queries the SharePoint `Input/` folder, retrieves the correct `lastModifiedDateTime` for all recognized files, and updates `seen_files.json`.
+2. **Recalculate Label Distributions:** Temporarily downloads all completed `*_output.xlsx` files from SharePoint `Output/` to a temporary directory. It reads the Excel sheets from header row 2 (skipping descriptions), counts categorizations for all columns specified in `MINOR_ORDER`, and merges them into the `metrics.json` file.
+3. **Centralized Backup:** Automatically uploads these updated state files to SharePoint's `Check_Point/` folder. Consequently, any new VM or developer instance starting up will download these corrected states and render correct charts immediately.
+
+### 12.4. Production Sync & Recovery Procedure (Step-by-Step)
+
+Follow these steps on your Production VM to sync changes and restore metrics:
+
+#### Step 1: Pull the latest codebase
+Navigate to the repository folder on your production host and pull the latest changes:
+```bash
+git pull origin master
+```
+*Note: This brings in the UI layout fixes, docker compose static mounts, and the `reconstruct_history.py` script.*
+
+#### Step 2: Shut down the running Docker containers
+Stop the current containers to prevent file lock issues:
+```bash
+cd service
+docker compose down
+```
+
+#### Step 3: Remove stale local cache files
+Delete the local JSON caches to trigger auto-healing sync from SharePoint upon startup:
+```bash
+# On Windows PowerShell:
+Remove-Item -Path .\work\seen_files.json -ErrorAction Ignore
+Remove-Item -Path .\work\metrics.json -ErrorAction Ignore
+
+# On Linux/macOS:
+rm -f work/seen_files.json work/metrics.json
+```
+
+#### Step 4: Restart the Docker containers
+Start the containers in detached mode:
+```bash
+docker compose up -d
+```
+Upon startup, the missing local cache files will trigger the web and watcher services to download the complete reconstructed `seen_files.json` and `metrics.json` directly from SharePoint `Check_Point/`.
+
+#### Step 5: Force Reconstruction (Optional - if SharePoint checkpoint is outdated)
+If you need to manually force a fresh scan of all files on the production server:
+1. Execute the script inside the running `watcher` container:
+   ```bash
+   docker compose exec watcher python scripts/reconstruct_history.py
+   ```
+2. Restart the `web` container to reload the newly updated cache:
+   ```bash
+   docker compose restart web
+   ```
+
+#### Step 6: Verify the charts
+Open the Web UI Dashboard (e.g., `http://<production-ip>:8501/#/metrics`) and verify:
+- The **"Files by Date"** bar chart lists items on their actual historical modification dates.
+- The **"Label Distribution"** doughnut chart is populated with distinct category slices.
+- Verify container logs for any errors:
+  ```bash
+  docker compose logs -f watcher
+  ```
