@@ -19,6 +19,7 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/data/sa-key.json
     volumes:
       - ./src:/app/src
+      - ./scripts:/app/scripts:ro
       - ./.env:/app/.env
       - ./Keyword:/app/data/Keyword
       - ./Model:/app/data/Model:ro
