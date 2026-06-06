@@ -7,9 +7,10 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+import io
 import pandas as pd
 from fastapi import APIRouter, HTTPException, UploadFile, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from ...settings import get_settings
 from ..deps import get_sharepoint_client
@@ -126,6 +127,31 @@ async def upload_file(file: UploadFile):
                 detail=f"File quá lớn. Giới hạn {MAX_UPLOAD_BYTES // (1024 * 1024)}MB.",
             )
         dest.write_bytes(content)
+        
+        # Validate Excel structure: must contain a column containing "nội dung" or "noi dung"
+        try:
+            df = pd.read_excel(dest, nrows=0)
+            has_content_col = any(
+                "nội dung" in str(col).lower() or "noi dung" in str(col).lower()
+                for col in df.columns
+            )
+            if not has_content_col:
+                if dest.is_file():
+                    dest.unlink()
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cột dữ liệu không hợp lệ. File Excel tải lên bắt buộc phải chứa cột có tên 'Nội dung' hoặc 'noi dung' chứa thông tin phản hồi.",
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            if dest.is_file():
+                dest.unlink()
+            raise HTTPException(
+                status_code=400,
+                detail=f"File Excel không hợp lệ hoặc bị lỗi định dạng: {exc}",
+            ) from exc
+
     except HTTPException:
         raise
     except Exception as exc:
@@ -139,6 +165,34 @@ async def upload_file(file: UploadFile):
         "size": len(content),
         "message": f"Đã upload thành công: {dest.name}",
     }
+
+
+@router.get("/template")
+async def get_template():
+    """Tải file template Excel mẫu cho việc phân loại phản hồi."""
+    try:
+        df = pd.DataFrame({
+            "Nội dung": [
+                "Ví dụ: Ứng dụng chạy rất mượt nhưng đôi khi bị lag nhẹ khi tải dữ liệu lớn.",
+                "Ví dụ: Tôi không thể đăng nhập vào tài khoản của mình từ sáng nay."
+            ]
+        })
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False)
+        output.seek(0)
+        
+        headers = {
+            'Content-Disposition': 'attachment; filename="template_dms.xlsx"'
+        }
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers
+        )
+    except Exception as exc:
+        logger.error("Lỗi tạo file template: %s", exc)
+        raise HTTPException(status_code=500, detail="Không thể tạo file template") from exc
 
 
 @router.post("/sync")

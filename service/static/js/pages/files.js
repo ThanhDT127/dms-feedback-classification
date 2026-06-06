@@ -4,11 +4,11 @@
 
 window.FilesPage = (() => {
   const FOLDERS = [
-    { id: 'input',      label: 'input',   icon: '📥' },
-    { id: 'output',     label: 'output',    icon: '📤' },
-    { id: 'checkpoint', label: 'checkpoint', icon: '💾' },
-    { id: 'keyword',    label: 'keyword',   icon: '🔑' },
-    { id: 'model',      label: 'model',      icon: '🤖' },
+    { id: 'input',      label: 'Đầu vào',   icon: '📥' },
+    { id: 'output',     label: 'Kết quả',    icon: '📤' },
+    { id: 'checkpoint', label: 'Lưu vết', icon: '💾' },
+    { id: 'keyword',    label: 'Từ khóa',   icon: '🔑' },
+    { id: 'model',      label: 'Mô hình',      icon: '🤖' },
   ];
 
   let _activeFolder = 'input';
@@ -47,6 +47,22 @@ window.FilesPage = (() => {
           <button id="btn-sync-sharepoint" class="btn btn-secondary btn-sm" onclick="FilesPage.syncSharePoint()">☁️ Đồng bộ SharePoint</button>
           <button class="btn btn-secondary btn-sm" onclick="FilesPage.refresh()">🔄 Làm mới</button>
         </div>
+      </div>
+
+      <!-- Upload format warning & template link -->
+      <div id="upload-hint-container" style="margin-top:-8px; margin-bottom:16px; font-size:13px; display:none; flex-direction:column; gap:8px; background:rgba(245,158,11,0.05); border:1px solid rgba(245,158,11,0.2); border-radius:var(--radius-md); padding:12px; width:100%;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+          <span style="color:var(--accent-amber); font-weight:500; display:flex; align-items:center; gap:6px;">
+            ⚠️ Định dạng Excel yêu cầu: Cột văn bản bắt buộc phải chứa chữ "Nội dung" hoặc "noi dung".
+          </span>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px;" onclick="FilesPage.previewTemplate()">👁️ Xem cấu trúc mẫu</button>
+            <a href="/api/files/template" download class="btn btn-ghost btn-sm" style="font-size:12px; padding:4px 10px; color:var(--text-secondary);"><span style="text-decoration:underline;">Tải file mẫu (.xlsx)</span></a>
+          </div>
+        </div>
+        <p style="font-size:12px; color:var(--text-muted); margin:0; line-height:1.5;">
+          Hệ thống sẽ quét cột này để phân loại. Các cột thông tin đi kèm (như Tên, Ngày, Mã phản hồi...) sẽ được tự động giữ nguyên và đi kèm trong kết quả phân loại xuất ra.
+        </p>
       </div>
 
       <!-- File Table -->
@@ -162,6 +178,11 @@ window.FilesPage = (() => {
       uploadBtn.style.display = isInput ? 'inline-block' : 'none';
     }
 
+    const uploadHint = document.getElementById('upload-hint-container');
+    if (uploadHint) {
+      uploadHint.style.display = isInput ? 'flex' : 'none';
+    }
+
     // Update the thead dynamically
     const thead = document.querySelector('#file-table thead');
     if (thead) {
@@ -182,7 +203,12 @@ window.FilesPage = (() => {
     }
 
     try {
-      const data = await API.getFiles(_activeFolder);
+      const promises = [API.getFiles(_activeFolder)];
+      if (_activeFolder === 'output') {
+        promises.push(API.getMetrics().catch(() => null));
+      }
+
+      const [data, metrics] = await Promise.all(promises);
       const newFiles = Array.isArray(data) ? data : (data.files || []);
 
       // Smart refresh: skip re-render if data unchanged
@@ -193,7 +219,14 @@ window.FilesPage = (() => {
       _lastFilesHash = newHash;
       _files = newFiles;
 
-      if (countEl) countEl.textContent = `${_files.length} file`;
+      if (countEl) {
+        if (_activeFolder === 'output' && metrics) {
+          const totalProcessed = metrics.total_files || 0;
+          countEl.innerHTML = `${_files.length} file <span style="font-size:12px;color:var(--text-muted);margin-left:8px;">💡 Thư mục Kết quả chứa ${_files.length} file vật lý trên SharePoint (bao gồm cả các bản nháp/chạy lại), trong đó Dashboard ghi nhận ${totalProcessed} file input gốc đã được xử lý hoàn tất.</span>`;
+        } else {
+          countEl.textContent = `${_files.length} file`;
+        }
+      }
 
       if (_files.length === 0) {
         tbody.innerHTML = `
@@ -325,14 +358,16 @@ window.FilesPage = (() => {
     if (!rows || rows.length === 0) return '<p class="text-muted text-center">Không có dữ liệu</p>';
 
     const hdr = headers || Object.keys(rows[0]);
-    let html = '<div style="overflow-x:auto;"><table class="table" style="font-size:12px;">';
+    let html = '<div class="table-preview-wrapper"><table class="table table-preview">';
     html += '<thead><tr>' + hdr.map(h => `<th>${escHtml(String(h))}</th>`).join('') + '</tr></thead>';
     html += '<tbody>';
     rows.slice(0, 20).forEach(row => {
       html += '<tr>';
       hdr.forEach(h => {
         const val = Array.isArray(row) ? row[hdr.indexOf(h)] : (row[h] ?? '');
-        html += `<td class="wrap" style="max-width:300px;">${escHtml(String(val))}</td>`;
+        const isContentCol = String(h).toLowerCase().includes('nội dung') || String(h).toLowerCase().includes('noi dung');
+        const tdClass = isContentCol ? 'wrap' : '';
+        html += `<td class="${tdClass}">${escHtml(String(val))}</td>`;
       });
       html += '</tr>';
     });
@@ -346,6 +381,54 @@ window.FilesPage = (() => {
   function closePreview() {
     document.getElementById('preview-panel')?.classList.add('hidden');
     _previewFile = null;
+  }
+
+  function previewTemplate() {
+    const panel = document.getElementById('preview-panel');
+    const body = document.getElementById('preview-body');
+    const nameEl = document.getElementById('preview-filename');
+    if (!panel || !body) return;
+
+    panel.classList.remove('hidden');
+    nameEl.textContent = `📄 Cấu trúc file Excel mẫu (Template)`;
+    _previewFile = 'template';
+
+    const columns = ["Nội dung phản hồi", "Người gửi", "Ghi chú (Tùy chọn)"];
+    const rows = [
+      {
+        "Nội dung phản hồi": "Ứng dụng chạy rất mượt nhưng đôi khi bị lag nhẹ khi tải dữ liệu lớn.",
+        "Người gửi": "Nguyễn Văn A",
+        "Ghi chú (Tùy chọn)": "Góp ý giao diện"
+      },
+      {
+        "Nội dung phản hồi": "Tôi không thể đăng nhập vào tài khoản từ sáng nay, báo lỗi kết nối.",
+        "Người gửi": "Trần Thị B",
+        "Ghi chú (Tùy chọn)": "Lỗi kỹ thuật"
+      }
+    ];
+
+    let html = `
+      <div style="margin-bottom:16px; font-size:13px; color:var(--text-secondary); line-height:1.6; background:rgba(255,255,255,0.02); padding:14px; border-radius:var(--radius-md); border:1px solid var(--border);">
+        <p style="margin:0 0 8px 0; font-weight:600; color:var(--text-primary);">📌 Hướng dẫn chuẩn bị file Excel tải lên:</p>
+        <ul style="margin:0; padding-left:20px; display:flex; flex-direction:column; gap:6px;">
+          <li>Bắt buộc phải chứa <strong>cột nội dung</strong> có tiêu đề chứa từ <code style="color:var(--accent-amber);background:rgba(245,158,11,0.1);padding:2px 4px;border-radius:4px;font-family:var(--font-mono);">"Nội dung"</code> hoặc <code style="color:var(--accent-amber);background:rgba(245,158,11,0.1);padding:2px 4px;border-radius:4px;font-family:var(--font-mono);">"noi dung"</code> (Ví dụ: <i>Nội dung phản hồi, Nội dung vấn đề, noi_dung...</i>).</li>
+          <li>Các cột thông tin bổ sung đi kèm (như <i>Người gửi, Ngày tháng, ID, Chi nhánh...</i>) <strong>sẽ được hệ thống tự động giữ nguyên và xuất ra trong file kết quả phân loại</strong>.</li>
+          <li>File tải lên phải thuộc định dạng Excel <code style="color:var(--accent-blue);background:rgba(59,130,246,0.1);padding:2px 4px;border-radius:4px;font-family:var(--font-mono);">.xlsx</code>.</li>
+        </ul>
+      </div>
+    `;
+    
+    html += renderPreviewTable(rows, columns);
+    
+    html += `
+      <div style="margin-top:16px; display:flex; gap:10px; align-items:center;">
+        <a href="/api/files/template" download class="btn btn-primary btn-sm" style="text-decoration:none;">📥 Tải file mẫu (.xlsx)</a>
+        <button class="btn btn-secondary btn-sm" onclick="FilesPage.closePreview()">✕ Đóng</button>
+      </div>
+    `;
+
+    body.innerHTML = html;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   async function loadTree() {
@@ -393,11 +476,13 @@ window.FilesPage = (() => {
         });
       }
       
+      const folderObj = FOLDERS.find(f => f.id === key);
+      const displayLabel = folderObj ? folderObj.label : key;
       const isInput = key === 'input';
       html += `
         <details ${isInput ? 'open' : ''} style="cursor: pointer; background: rgba(255,255,255,0.01); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px;">
           <summary style="font-weight: 600; color: var(--text-primary); font-size: 13px; display: flex; align-items: center; gap: 6px; user-select: none;">
-            <span style="font-size: 14px;">📁</span> ${escHtml(key)} <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">(${allFiles.length} file)</span>
+            <span style="font-size: 14px;">📁</span> ${escHtml(displayLabel)} <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">(${allFiles.length} file)</span>
           </summary>
           <ul style="list-style: none; padding-left: 20px; margin: 8px 0 0 0; border-left: 1px dashed var(--border); display: flex; flex-direction: column; gap: 6px;">
             ${allFiles.length > 0 
@@ -499,7 +584,7 @@ window.FilesPage = (() => {
   function escAttr(s) { return s.replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
 
   return {
-    render, destroy, switchFolder, loadFiles, preview, closePreview,
+    render, destroy, switchFolder, loadFiles, preview, closePreview, previewTemplate,
     loadTree, refresh, expandAllTree, handleUpload, syncSharePoint
   };
 })();
