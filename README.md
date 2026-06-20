@@ -1,260 +1,246 @@
-# DMS Feedback Classification Service
+# ⚡ DMS Feedback Classification Service
 
 English documentation. Vietnamese version: [README.vi.md](README.vi.md).
 
-## What This Service Does
+[![Python Version](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Docker Compose](https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Tests Passed](https://img.shields.io/badge/tests-93%20passed-success?style=flat-square&logo=pytest&logoColor=white)]()
 
-The service watches a SharePoint `Input/` folder for Excel feedback files, classifies each row, uploads the enriched workbook to SharePoint `Output/`, uploads processing checkpoints to `Check_Point/`, and sends notifications.
+An enterprise-grade hybrid Machine Learning and Large Language Model (Gemini) feedback classification pipeline. It automatically pulls Excel sheets from Microsoft SharePoint, extracts product metadata, matches models using a custom RAG system, groups feedback issues into 21 categories, sends Microsoft Teams/email alerts, and serves an interactive real-time operations dashboard.
 
-Current classification flow:
+---
 
-```text
-SharePoint Input/
-  -> Docker watcher
-  -> local baseline model from Model/
-  -> keyword and product assets from Keyword/
-  -> Gemini refinement through Vertex AI or API key
-  -> SharePoint Output/ and Check_Point/
-```
+## 📌 Table of Contents
 
-## Repository Layout
+* [About The Project](#about-the-project)
+* [Built With](#built-with)
+* [Directory Structure](#directory-structure)
+* [Label Taxonomy (21 Categories)](#label-taxonomy-21-categories)
+* [Spreadsheet Schema & Column Mapping](#spreadsheet-schema--column-mapping)
+* [Getting Started](#getting-started)
+  * [Prerequisites](#prerequisites)
+  * [Local Environment Setup](#local-environment-setup)
+  * [Running with Docker Compose](#running-with-docker-compose)
+* [Local Testing with Sample Data](#local-testing-with-sample-data)
+* [Technical Design & Architecture](#technical-design--architecture)
+  * [Hybrid ML & LLM Classification](#1-hybrid-ml--llm-classification)
+  * [Custom BM25 + LLM RAG Matching](#2-custom-bm25--llm-rag-matching)
+  * [Self-Healing State Reconciliation](#3-self-healing-state-reconciliation)
+* [Testing & Quality Assurance](#testing--quality-assurance)
+* [Data Privacy & Sanitization](#data-privacy--sanitization)
+* [Detailed Operations](#detailed-operations)
+
+---
+
+## 📖 About The Project
+
+Processing raw market and customer feedback at scale presents two core challenges: maintaining high accuracy across complex domain-specific terminology (e.g. lighting and electrical products) and integrating seamlessly with corporate storage systems like Microsoft SharePoint. 
+
+The **DMS Feedback Classification Service** addresses this by deploying a containerized poller that watches for new uploads, runs them through a dual-stage ML/LLM classifier, writes the enriched data into a styled spreadsheet, and pushes checkpoints and email/Teams alerts to users. It features an integrated Vanilla JS Single Page Application (SPA) dashboard to track telemetry, view running jobs, sync remote configs, and dry-run sentences.
+
+---
+
+## 🛠️ Built With
+
+Below are the primary technologies and tools used to build this service:
+
+[![My Skills](https://skillicons.dev/icons?i=py,docker,fastapi,gcp,azure,git,vscode,githubactions,markdown,svg)](https://skillicons.dev)
+
+* **Backend Framework:** FastAPI & Uvicorn (async REST API endpoints, WebSockets log streaming).
+* **AI & LLM SDKs:** Google GenAI (Gemini 2.5 Flash Lite Vertex/API support), scikit-learn (TF-IDF + OvR Logistic Regression).
+* **Data Processing & IR:** pandas, openpyxl, rank-bm25 (BM25 Okapi), rapidfuzz (Levenshtein match fallbacks).
+* **OAuth & Integration:** Microsoft MSAL (Microsoft Authentication Library for Graph API requests).
+* **DevOps:** Docker Multi-stage builds, Docker Compose.
+
+---
+
+## 📂 Directory Structure
 
 ```text
 DMS/
-  service/
-    src/dms/                 application package
-    Keyword/                 committed reference assets
-    Model/                   committed baseline model artifacts
-    work/                    runtime state, ignored by git
-    logs/                    runtime logs, ignored by git
-    .env.example             template, committed
-    .env                     real environment, ignored by git
-    testvertex.json          real GCP service account key, ignored by git
-    Dockerfile
-    docker-compose.yml
-  README.md
-  README.vi.md
-  OPERATIONS.md
-  OPERATIONS.vi.md
+├── LICENSE                    # MIT License
+├── README.md                  # English Documentation
+├── README.vi.md               # Vietnamese Documentation
+├── OPERATIONS.md              # Detailed Operations & Troubleshooting Guide
+├── OPERATIONS.vi.md           # Detailed Operations (Vietnamese)
+├── openspec/                  # Architectural Specs (31 detailed BDD specs)
+│   └── specs/
+│       ├── issue-llm-classification/spec.md
+│       ├── sharepoint-watcher/spec.md
+│       └── ...
+├── sample_data/               # Sample data for offline verification
+│   └── sample_feedback.xlsx   # 10 mock customer feedback rows
+└── service/                   # Main Service Root
+    ├── Dockerfile             # Production container definition
+    ├── docker-compose.yml     # Multi-container orchestration (Watcher & Web UI)
+    ├── pyproject.toml         # PEP 518 packaging and tool configuration
+    ├── requirements.txt       # Hardened pip requirements
+    ├── Keyword/               # Committed product catalogs & keyword maps
+    ├── Model/                 # Pre-trained ML baseline model artifacts (TF-IDF, LogReg)
+    ├── src/
+    │   └── dms/               # Main Application Package
+    │       ├── pipeline/      # Core AI Processing Pipeline
+    │       │   ├── issue_classifier.py  # Structured LLM + post-processors
+    │       │   ├── rag_product.py       # BM25 + LLM RAG extraction
+    │       │   └── runner.py            # Execution coordinator & checkpointing
+    │       ├── web/           # FastAPI backend
+    │       │   ├── api/       # REST API endpoints (Files, Settings, Classify)
+    │       │   └── app.py     # FastAPI application lifecycle
+    │       ├── watcher.py     # SharePoint polling & self-healing sync
+    │       └── settings.py    # Pydantic-settings configuration
+    ├── static/                # Web Dashboard Frontend (Vanilla JS SPA)
+    └── tests/                 # Unit & Integration Test Suite (93 test cases)
 ```
 
-## What Is Committed
+---
 
-Committed to GitHub:
+## 🏷️ Label Taxonomy (21 Categories)
 
-- source code under `service/src/dms/`
-- Docker files
-- `service/Keyword/`
-- `service/Model/`
-- `.env.example`
-- documentation
+The classification pipeline maps market and customer feedback into **21 minor categories** grouped under **7 major categories**:
 
-Not committed:
+| Major Category | Minor Category | Business Description / Guidelines |
+| :--- | :--- | :--- |
+| **Sản phẩm** | Báo lỗi | Physical errors, failures, burnt, broken components. |
+| | Báo CL tốt | Praises for good quality, brightness, durability. |
+| | Y/c cải tiến | Feature requests, design/structural complaints (e.g. casing thickness). |
+| | Đề xuất SPM | Proposals for entirely new products/models not currently manufactured. |
+| **Yêu cầu công cụ BH** | Bảng giá, Catalogue | Requests for catalogs, brochures, pricing tables. |
+| | Bảng biển | Requests for outdoor store signs, advertising boards. |
+| | Kệ bóng, thử đèn,… | Requests for demonstration boards, test racks, display shelves. |
+| | Khác | Other POSM/sale tools (e.g. uniforms, notebooks). |
+| **Giá, cơ chế RD** | Tốt/ ko tốt | Price competitiveness, margins, discounts of Rạng Đông. |
+| | Trả thưởng | Queries or issues regarding bonuses, lucky draws, C2TD rewards. |
+| | Đề xuất | Policy proposals for generic price adjustments or promos. |
+| **Dịch vụ** | Bảo hành | Warranty process, return policy speed, after-sales service. |
+| | HTPP | Distribution system issues, territorial conflicts, dealer disputes. |
+| | Hàng hoá | Logistics, delivery delays, packaging, inventory shortages. |
+| **Hàng giả** | Hàng giả | Counterfeit/fake products suspect reports. |
+| **Website** | Website | App/web platform bugs, portal login errors, DMS failures. |
+| **Đối thủ cạnh tranh** | Hãng | Competitor name tracking (populated with competitor name). |
+| | Hoạt động | Competitor marketing events, store roadshows. |
+| | CTKM, giá, cơ chế | Competitor promotional campaigns, discounts, pricing policies. |
+| | TT SP | Competitor catalog releases, product specifications. |
+| **Tin trung lập** | Tin trung lập | Neutral texts (no praise, complaints, or specific requests). |
 
-- `service/.env`
-- `service/testvertex.json`
-- `service/work/`
-- `service/logs/`
+---
 
-`work/` is runtime state. It is not source code and should not be shared through git.
+## 📊 Spreadsheet Schema & Column Mapping
 
-## Required Runtime Inputs
+The pipeline automatically scans and enriches input workbooks:
+1. **Input Column Detection:** The script auto-detects the column containing customer comments (scans headers for aliases like `Nội dung phản hồi`, `Nội dung`, etc.).
+2. **Output Column Placement:**
+   * **Product Metadata (Inserted beside the text column):**
+     * `Sản phẩm`: Product category (e.g. LED bulb).
+     * `Dòng SP`: Product line (e.g. Bulb).
+     * `Model`: Catalog model code (e.g. AT10 9W).
+     * `Lớp` & `Điểm`: Internal ML baseline score outputs.
+   * **Telemetry (Appended at the end):**
+     * `Sentiment`: Value mapped to `Tích cực`, `Tiêu cực`, or empty.
+     * `LLM_Extracted`: raw terms extracted by LLM.
+     * `BM25_Score`: RAG confidence match score.
+   * **Labels (Appended at the end):** 21 separate columns matching the **Minor Categories** above, populated with `x` if triggered (or the competitor name under the `Hãng` column).
 
-After cloning on a new machine, you must provide:
+---
 
-- `service/.env`
-- `service/testvertex.json` if using Vertex AI
+## 🚀 Getting Started
 
-The repo already includes:
+### Prerequisites
+* [Docker & Docker Compose](https://www.docker.com/) (recommended)
+* Python 3.11+ (if running bare metal)
 
-- `service/Keyword/`
-- `service/Model/`
+### Local Environment Setup
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/ThanhDT127/dms-feedback-classification.git
+   cd dms-feedback-classification/service
+   ```
+2. Create your local config file:
+   ```bash
+   cp .env.example .env
+   ```
+3. Edit `.env` with your credentials (SharePoint Drive IDs, GCP Client IDs, or Gemini API keys).
+4. If using Google Vertex AI (recommended for production), place your service account key file at:
+   ```text
+   service/testvertex.json
+   ```
 
-## Gemini Backend Options
-
-The service supports two Gemini backends.
-
-### Option 1: Vertex AI
-
-Use this for production.
-
-Required `.env` values:
-
-```env
-GEMINI_BACKEND=vertex
-GEMINI_MODEL=gemini-2.5-flash-lite
-GCP_PROJECT_ID=your-gcp-project-id
-GCP_LOCATION=global
-GCP_SERVICE_ACCOUNT_JSON=/app/data/sa-key.json
-```
-
-Also place the real service account key at:
-
-```text
-service/testvertex.json
-```
-
-Docker mounts it as:
-
-```text
-/app/data/sa-key.json
-```
-
-### Option 2: Gemini API key
-
-Use this only if you intentionally run without Vertex AI.
-
-Required `.env` values:
-
-```env
-GEMINI_BACKEND=apikey
-GEMINI_MODEL=gemini-2.5-flash-lite
-GEMINI_API_KEY=your-api-key
-```
-
-When `GEMINI_BACKEND=apikey`, `GCP_PROJECT_ID` and `testvertex.json` are not used by the Gemini client.
-
-## SharePoint Requirements
-
-Required `.env` values:
-
-```env
-AZURE_TENANT_ID=...
-AZURE_CLIENT_ID=...
-AZURE_CLIENT_SECRET=...
-SHAREPOINT_DRIVE_ID=...
-SHAREPOINT_ROOT_FOLDER_ID=...
-```
-
-The Azure app registration needs application permissions with admin consent:
-
-- `Files.ReadWrite.All`
-- `Mail.Send` if email notifications are used
-
-The configured SharePoint root folder should contain:
-
-```text
-Input/
-Output/
-Check_Point/
-Keyword/
-Model/
-```
-
-`Keyword/` and `Model/` on SharePoint are used when SharePoint config sync is enabled.
-
-## Runtime State Files
-
-The service creates these files automatically in `service/work/`.
-
-| File | Created by | Purpose |
-|------|------------|---------|
-| `seen_files.json` | watcher | remembers SharePoint file IDs already processed |
-| `metrics.json` | metrics collector | stores counters, success rate, timing |
-| `health.json` | watcher | stores current service health |
-| `config_assets_state.json` | config asset sync | remembers remote asset metadata |
-| `config_assets/active/` | config asset sync | last known good `Keyword/` and `Model/` snapshot |
-
-You do not manually create these files for a new empty runtime. The service creates them when it starts.
-
-If you move production to a new VM and do not want old SharePoint files to be processed again, copy `service/work/` from the old machine before starting the new container.
-
-## Quick Start On A New VM
-
-```powershell
-git clone https://github.com/ThanhDT127/dms-feedback-classification.git
-cd dms-feedback-classification\service
-copy .env.example .env
-```
-
-Then edit `.env` and place `testvertex.json` if using Vertex AI.
-
-Start the service:
-
-```powershell
+### Running with Docker Compose
+To boot up the watcher and the web dashboard:
+```bash
 docker compose up -d
+```
+Check running services:
+```bash
 docker compose ps
+```
+Stream logs:
+```bash
 docker compose logs -f
 ```
+The Web Dashboard will be available at: **http://localhost:8501**
 
-Check runtime status:
+---
 
-```powershell
-Get-Content .\work\health.json
-Get-Content .\work\metrics.json
-```
+## 🧪 Local Testing with Sample Data
 
-## Moving Without Reprocessing Old Files
+To verify the classification flow offline without connecting to SharePoint:
+1. Ensure your `.env` has a valid `GEMINI_API_KEY` (or `testvertex.json` is set).
+2. Open the Web Dashboard at **http://localhost:8501**.
+3. Navigate to the **File Management** tab and upload the mock file:
+   * [service/sample_data/sample_feedback.xlsx](sample_data/sample_feedback.xlsx)
+4. Go to the **Classify** tab, trigger a manual run, and watch the live progress bar and classification logs.
+5. Download the final enriched workbook once processing completes.
 
-On the old machine:
+---
 
-```powershell
-cd D:\Works\DMS\service
-```
+## 📐 Technical Design & Architecture
 
-Copy these to the new VM:
+### 1. Hybrid ML & LLM Classification
+The service implements a hybrid classification model:
+* **Stage 1 (ML Baseline):** Uses local TF-IDF vectorizers (character & word n-grams) combined with a One-Vs-Rest Logistic Regression classifier to calculate preliminary probability scores.
+* **Stage 2 (LLM Refinement):** Sends the comment and baseline candidates to Gemini 2.5 Flash Lite. The LLM evaluates semantic boundary rules (e.g. "Báo lỗi" vs "Y/c cải tiến") and outputs structured JSON.
+* **Stage 3 (Post-Processing):** Python-based guardrails validate the JSON output (e.g. stripping competitor labels if no competitor brand is found, and removing "Tin trung lập" if any other issue label is triggered).
 
-```text
-.env
-testvertex.json
-work/
-```
+### 2. Custom BM25 + LLM RAG Matching
+To match slang, abbreviations, or misspelled product names in comments to Rạng Đông's product catalog:
+1. **LLM Extraction:** Gemini extracts raw product and model terms from the comment (using a batch-processed prompt to minimize token count).
+2. **Dual-Index BM25 Search:** Performs lookup in the product catalog using two BM25 indexes: one on raw text and another on unaccented text (`unidecode`).
+3. **Keyword Fallback:** If BM25 scores fall below the safety threshold, Level 2 and Level 3 regex search rules are used as a fallback to match general product categories.
 
-On the new VM, place them under:
+### 3. Self-Healing State Reconciliation
+To prevent reprocessing files on container restart or VM migration:
+* On startup, the watcher polls SharePoint for processed outputs in the `Output/` folder.
+* It cross-references file metadata with local caches (`seen_files.json`) and registers missing entries, creating a robust, distributed state sync.
 
-```text
-dms-feedback-classification/service/
-```
+---
 
-Then run:
+## 🧪 Testing & Quality Assurance
 
-```powershell
-docker compose up -d
-```
+Unit and integration tests are managed via `pytest`. All external HTTP calls and Gemini APIs are cleanly mocked.
 
-The critical file is:
+To run the test suite:
+1. Navigate to the service folder:
+   ```bash
+   cd service
+   ```
+2. Run pytest:
+   ```bash
+   python -m pytest
+   ```
+The test suite consists of **93 test cases** verifying watcher logic, settings validation, path security, Excel parsing, and pipeline runtimes.
 
-```text
-work/seen_files.json
-```
+---
 
-Without it, the new VM does not know which SharePoint files were already processed.
+## 🔒 Data Privacy & Sanitization
 
-## Web Dashboard Interface (Web UI)
+> [!IMPORTANT]
+> All customer comments, model numbers, distributor lists, and GCP/Azure credentials present in this repository are synthetic, mocked, or fully sanitized to comply with enterprise data protection and privacy policies.
 
-The system provides a Web Dashboard on port `8501` (http://localhost:8501) for visual operators to manage:
-- **Dashboard (Overview):** Monitor host CPU/Memory metrics, stream live logs, and view health check statuses.
-- **Classify:** Trigger manual batch classification jobs, watch live progress bars, and download output results.
-- **File Management:** Upload spreadsheets to local staging, view SharePoint document directories, and trigger manual synchronization.
-- **Metrics:** Track daily processing histories (bar chart) and view categorizations (doughnut chart).
-- **Configuration & Sandboxing:** Edit `.env` variables online, reload keyword map assets, and dry-run feedback strings.
+---
 
-## Historical Data Reconstruction (Reconstruct History)
+## 📖 Detailed Operations
 
-If the metrics dashboard shows out-of-sync dates or an empty category doughnut chart on a fresh production VM, run:
-```bash
-docker compose exec watcher python scripts/reconstruct_history.py
-```
-This utility scans SharePoint metadata and downloaded output workbooks to rebuild the local cache states and backups them to the `Check_Point/` directory on SharePoint for automatic sync on future instances.
-
-## Runtime Cleanup
-
-After a file is successfully processed, uploaded, and marked `done`, the service removes local temporary files:
-
-- `work/input/<file>.xlsx`
-- `work/output/<file>_output.xlsx`
-- `work/checkpoint/<file>.json`
-
-Protected state is preserved:
-
-- `work/seen_files.json`
-- `work/metrics.json`
-- `work/health.json`
-- `work/config_assets_state.json`
-- `work/config_assets/active/`
-
-## Detailed Operations
-
-For more details, see:
-- [OPERATIONS.md](OPERATIONS.md) - Deployments, configurations, history reconstruction, troubleshooting.
-- [service/README.md](service/README.md) - Architecture and developer guide.
+* [OPERATIONS.md](OPERATIONS.md) - Complete instructions for production deployment, config asset synchronization, history reconstruction scripts, and troubleshooting.
+* [service/README.md](service/README.md) - Deep dive into developer setup, dependency injection details, and API design.
