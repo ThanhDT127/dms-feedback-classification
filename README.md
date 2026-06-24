@@ -1,14 +1,22 @@
 # ⚡ DMS Feedback Classification Service
 
-English documentation. Vietnamese version: [README.vi.md](README.vi.md).
+<p align="center">
+  <a href="#readme"><img src="https://capsule-render.vercel.app/api?type=waving&color=0:4facfe,100:00f2fe&height=220&section=header&text=DMS%20Feedback%20Classifier&fontSize=45&fontColor=ffffff&animation=fadeIn" alt="Header Banner" /></a>
+</p>
 
-[![Python Version](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Docker Compose](https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
-[![Tests Passed](https://img.shields.io/badge/tests-93%20passed-success?style=flat-square&logo=pytest&logoColor=white)]()
+<p align="center">
+  <a href="#readme"><img src="https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?style=flat-square&logo=python&logoColor=white" alt="Python Version" /></a>
+  <a href="#readme"><img src="https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" /></a>
+  <a href="#readme"><img src="https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" /></a>
+  <a href="#readme"><img src="https://img.shields.io/badge/tests-93%20passed-success?style=flat-square&logo=pytest&logoColor=white" alt="Tests Passed" /></a>
+</p>
 
-An enterprise-grade hybrid Machine Learning and Large Language Model (Gemini) feedback classification pipeline. It automatically pulls Excel sheets from Microsoft SharePoint, extracts product metadata, matches models using a custom RAG system, groups feedback issues into 21 categories, sends Microsoft Teams/email alerts, and serves an interactive real-time operations dashboard.
+<p align="center">
+  English documentation. Vietnamese version: <a href="README.vi.md">README.vi.md</a>.
+</p>
+
+**DMS Feedback Classification Service** is an enterprise-grade hybrid Machine Learning and Large Language Model (Gemini) feedback classification pipeline. It automatically pulls Excel sheets from Microsoft SharePoint, extracts product metadata, matches models using a custom RAG system, groups feedback issues into 21 categories, sends Microsoft Teams/email alerts, and serves an interactive real-time operations dashboard.
 
 ---
 
@@ -20,21 +28,15 @@ An enterprise-grade hybrid Machine Learning and Large Language Model (Gemini) fe
 * [Label Taxonomy (21 Categories)](#label-taxonomy-21-categories)
 * [Spreadsheet Schema & Column Mapping](#spreadsheet-schema--column-mapping)
 * [Getting Started](#getting-started)
-  * [Prerequisites](#prerequisites)
-  * [Local Environment Setup](#local-environment-setup)
-  * [Running with Docker Compose](#running-with-docker-compose)
 * [Local Testing with Sample Data](#local-testing-with-sample-data)
 * [Technical Design & Architecture](#technical-design--architecture)
-  * [Hybrid ML & LLM Classification](#1-hybrid-ml--llm-classification)
-  * [Custom BM25 + LLM RAG Matching](#2-custom-bm25--llm-rag-matching)
-  * [Self-Healing State Reconciliation](#3-self-healing-state-reconciliation)
 * [Testing & Quality Assurance](#testing--quality-assurance)
 * [Data Privacy & Sanitization](#data-privacy--sanitization)
 * [Detailed Operations](#detailed-operations)
 
 ---
 
-## 📖 About The Project
+## <a name="about-the-project"></a>📖 About The Project
 
 Processing raw market and customer feedback at scale presents two core challenges: maintaining high accuracy across complex domain-specific terminology (e.g. lighting and electrical products) and integrating seamlessly with corporate storage systems like Microsoft SharePoint. 
 
@@ -42,11 +44,11 @@ The **DMS Feedback Classification Service** addresses this by deploying a contai
 
 ---
 
-## 🛠️ Built With
+## <a name="built-with"></a>🛠️ Built With
 
-Below are the primary technologies and tools used to build this service:
-
-[![My Skills](https://skillicons.dev/icons?i=py,docker,fastapi,gcp,azure,git,vscode,githubactions,markdown,svg)](https://skillicons.dev)
+<p align="left">
+  <a href="#built-with"><img src="https://skillicons.dev/icons?i=py,docker,fastapi,gcp,azure,git,vscode,githubactions,markdown,svg" alt="My Skills" /></a>
+</p>
 
 * **Backend Framework:** FastAPI & Uvicorn (async REST API endpoints, WebSockets log streaming).
 * **AI & LLM SDKs:** Google GenAI (Gemini 2.5 Flash Lite Vertex/API support), scikit-learn (TF-IDF + OvR Logistic Regression).
@@ -56,7 +58,7 @@ Below are the primary technologies and tools used to build this service:
 
 ---
 
-## 📂 Directory Structure
+## <a name="directory-structure"></a>📂 Directory Structure
 
 ```text
 DMS/
@@ -96,7 +98,7 @@ DMS/
 
 ---
 
-## 🏷️ Label Taxonomy (21 Categories)
+## <a name="label-taxonomy-21-categories"></a>🏷️ Label Taxonomy (21 Categories)
 
 The classification pipeline maps market and customer feedback into **21 minor categories** grouped under **7 major categories**:
 
@@ -126,7 +128,7 @@ The classification pipeline maps market and customer feedback into **21 minor ca
 
 ---
 
-## 📊 Spreadsheet Schema & Column Mapping
+## <a name="spreadsheet-schema--column-mapping"></a>📊 Spreadsheet Schema & Column Mapping
 
 The pipeline automatically scans and enriches input workbooks:
 1. **Input Column Detection:** The script auto-detects the column containing customer comments (scans headers for aliases like `Nội dung phản hồi`, `Nội dung`, etc.).
@@ -144,7 +146,7 @@ The pipeline automatically scans and enriches input workbooks:
 
 ---
 
-## 🚀 Getting Started
+## <a name="getting-started"></a>🚀 Getting Started
 
 ### Prerequisites
 * [Docker & Docker Compose](https://www.docker.com/) (recommended)
@@ -183,7 +185,7 @@ The Web Dashboard will be available at: **http://localhost:8501**
 
 ---
 
-## 🧪 Local Testing with Sample Data
+## <a name="local-testing-with-sample-data"></a>🧪 Local Testing with Sample Data
 
 To verify the classification flow offline without connecting to SharePoint:
 1. Ensure your `.env` has a valid `GEMINI_API_KEY` (or `testvertex.json` is set).
@@ -195,7 +197,58 @@ To verify the classification flow offline without connecting to SharePoint:
 
 ---
 
-## 📐 Technical Design & Architecture
+## <a name="technical-design--architecture"></a>📐 Technical Design & Architecture
+
+The following diagram illustrates the dataflow and architecture of the feedback classification service:
+
+```mermaid
+graph TD
+    subgraph Input ["Source / Inputs"]
+        SP[SharePoint Folder]
+        Web[Web Dashboard Upload]
+    end
+
+    subgraph Watcher ["SharePoint Watcher"]
+        Poll[Polling Timer 60s]
+        Reconcile[State Reconciliation <br/> seen_files.json]
+    end
+
+    subgraph Service ["DMS Core Service (FastAPI)"]
+        Runner[Pipeline Coordinator / Runner]
+        
+        subgraph Pipeline ["AI Processing Pipeline"]
+            ML[Stage 1: ML Baseline <br/> TF-IDF + Logistic Regression]
+            LLM[Stage 2: LLM Refinement <br/> Gemini 2.5 Flash Lite]
+            RAG[Stage 3: Product RAG <br/> BM25 Okapi + RapidFuzz]
+            Post[Stage 4: Post-Processing <br/> Guardrail Validation]
+        end
+        
+        DB[(Local Cache / Excel DB)]
+    end
+
+    subgraph Outputs ["Outputs & Notifications"]
+        Excel[Enriched Excel Report]
+        Teams[MS Teams Webhook Notification]
+        Email[SMTP Email Notification]
+    end
+
+    SP -->|New File Detected| Poll
+    Poll -->|Trigger Job| Runner
+    Web -->|Manual Job Upload| Runner
+    
+    Runner -->|Load Comments| ML
+    ML -->|Category Candidates| LLM
+    LLM -->|Extract Terms| RAG
+    RAG -->|Matched Catalog Models| Post
+    Post -->|Final Labels & Metadata| Runner
+    
+    Runner -->|Save State| Reconcile
+    Runner -->|Save Local Copy| DB
+    Runner -->|Upload Enriched File| SP
+    Runner -->|Generate| Excel
+    Runner -->|Alert| Teams
+    Runner -->|Alert| Email
+```
 
 ### 1. Hybrid ML & LLM Classification
 The service implements a hybrid classification model:
@@ -216,7 +269,7 @@ To prevent reprocessing files on container restart or VM migration:
 
 ---
 
-## 🧪 Testing & Quality Assurance
+## <a name="testing-quality-assurance"></a>🧪 Testing & Quality Assurance
 
 Unit and integration tests are managed via `pytest`. All external HTTP calls and Gemini APIs are cleanly mocked.
 
@@ -233,14 +286,14 @@ The test suite consists of **93 test cases** verifying watcher logic, settings v
 
 ---
 
-## 🔒 Data Privacy & Sanitization
+## <a name="data-privacy--sanitization"></a>🔒 Data Privacy & Sanitization
 
 > [!IMPORTANT]
 > All customer comments, model numbers, distributor lists, and GCP/Azure credentials present in this repository are synthetic, mocked, or fully sanitized to comply with enterprise data protection and privacy policies.
 
 ---
 
-## 📖 Detailed Operations
+## <a name="detailed-operations"></a>📖 Detailed Operations
 
 * [OPERATIONS.md](OPERATIONS.md) - Complete instructions for production deployment, config asset synchronization, history reconstruction scripts, and troubleshooting.
 * [service/README.md](service/README.md) - Deep dive into developer setup, dependency injection details, and API design.

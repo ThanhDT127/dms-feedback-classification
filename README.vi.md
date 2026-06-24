@@ -1,40 +1,42 @@
 # ⚡ Dịch vụ phân loại phản hồi DMS
 
-Tài liệu tiếng Việt. Bản tiếng Anh: [README.md](README.md).
+<p align="center">
+  <a href="#readme"><img src="https://capsule-render.vercel.app/api?type=waving&color=0:4facfe,100:00f2fe&height=220&section=header&text=Ph%C3%A2n%20lo%E1%BA%A1i%20ph%E1%BA%A3n%20h%E1%BB%93i%20DMS&fontSize=45&fontColor=ffffff&animation=fadeIn" alt="Header Banner" /></a>
+</p>
 
-[![Python Version](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Docker Compose](https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com/)
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
-[![Tests Passed](https://img.shields.io/badge/tests-93%20passed-success?style=flat-square&logo=pytest&logoColor=white)]()
+<p align="center">
+  <a href="#readme"><img src="https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?style=flat-square&logo=python&logoColor=white" alt="Python Version" /></a>
+  <a href="#readme"><img src="https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" /></a>
+  <a href="#readme"><img src="https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" /></a>
+  <a href="#readme"><img src="https://img.shields.io/badge/tests-93%20passed-success?style=flat-square&logo=pytest&logoColor=white" alt="Tests Passed" /></a>
+</p>
 
-Một hệ thống phân loại phản hồi thị trường và khách hàng hybrid Machine Learning & LLM (Gemini) chuẩn doanh nghiệp. Dịch vụ tự động quét các file Excel mới từ Microsoft SharePoint, trích xuất thông tin sản phẩm và đối chiếu model bằng luồng RAG tùy chỉnh, phân loại 21 nhãn vấn đề phản hồi, gửi thông báo qua Teams/Email và cung cấp một giao diện Web Dashboard quản trị thời gian thực trực quan.
+<p align="center">
+  Tài liệu tiếng Việt. Bản tiếng Anh: <a href="README.md">README.md</a>.
+</p>
+
+**Dịch vụ phân loại phản hồi DMS** là một hệ thống phân loại phản hồi thị trường và khách hàng hybrid Machine Learning & LLM (Gemini) chuẩn doanh nghiệp. Dịch vụ tự động quét các file Excel mới từ Microsoft SharePoint, trích xuất thông tin sản phẩm và đối chiếu model bằng luồng RAG tùy chỉnh, phân loại 21 nhãn vấn đề phản hồi, gửi thông báo qua Teams/Email và cung cấp một giao diện Web Dashboard quản trị thời gian thực trực quan.
 
 ---
 
 ## 📌 Mục lục
 
-* [Giới thiệu dự án](#-giới-thiệu-dự-án)
-* [Công nghệ sử dụng](#-công-nghệ-sử-dụng)
-* [Cấu trúc thư mục](#-cấu-trúc-thư-mục)
-* [Danh mục nhãn phân loại (21 Phân loại con)](#-danh-mục-nhãn-phân-loại-21-phân-loại-con)
-* [Cấu trúc Cột và Dữ liệu Excel](#-cấu-trúc-cột-và-dữ-liệu-excel)
-* [Khởi động nhanh](#-khởi-động-nhanh)
-  * [Điều kiện bắt buộc](#điều-kiện-bắt-buộc)
-  * [Thiết lập môi trường local](#thiết-lập-môi-trường-local)
-  * [Chạy bằng Docker Compose](#chạy-bằng-docker-compose)
-* [Chạy thử cục bộ với dữ liệu mẫu](#-chạy-thử-cục-bộ-với-dữ-liệu-mẫu)
-* [Thiết kế kỹ thuật & Kiến trúc](#-thiết-kế-kỹ-thuật--kiến-trúc)
-  * [Phân loại Hybrid ML & LLM](#1-phân-loại-hybrid-ml--llm)
-  * [Luồng đối chiếu RAG BM25 + LLM](#2-luồng-đối-chiếu-rag-bm25--llm)
-  * [Đồng bộ trạng thái tự phục hồi (Self-Healing)](#3-đồng-bộ-trạng-thái-tự-phục-hồi-self-healing)
-* [Kiểm thử & Bảo đảm chất lượng](#-kiểm-thử--bảo-đảm-chất-lượng)
-* [Bảo mật và Làm sạch Dữ liệu](#-bảo-mật-và-làm-sạch-dữ-liệu)
-* [Tài liệu vận hành chi tiết](#-tài-liệu-vận-hành-chi-tiết)
+* [Giới thiệu dự án](#gioi-thieu-du-an)
+* [Công nghệ sử dụng](#cong-nghe-su-dung)
+* [Cấu trúc thư mục](#cau-truc-thu-muc)
+* [Danh mục nhãn phân loại (21 Phân loại con)](#danh-muc-nhan-phan-loai)
+* [Cấu trúc Cột và Dữ liệu Excel](#cau-truc-cot-va-du-lieu-excel)
+* [Khởi động nhanh](#khoi-dong-nhanh)
+* [Chạy thử cục bộ với dữ liệu mẫu](#chay-thu-cuc-bo-voi-du-lieu-mau)
+* [Thiết kế kỹ thuật & Kiến trúc](#thiet-ke-ky-thuat-kien-truc)
+* [Kiểm thử & Bảo đảm chất lượng](#kiem-thu-bao-dam-chat-luong)
+* [Bảo mật và Làm sạch Dữ liệu](#bao-mat-va-lam-sach-du-lieu)
+* [Tài liệu vận hành chi tiết](#tai-lieu-van-hanh-chi-tiet)
 
 ---
 
-## 📖 Giới thiệu dự án
+## <a name="gioi-thieu-du-an"></a>📖 Giới thiệu dự án
 
 Xử lý phản hồi thị trường trên quy mô lớn gặp phải hai thách thức chính: duy trì độ chính xác cao đối với các thuật ngữ chuyên ngành (như lĩnh vực chiếu sáng, thiết bị điện) và tích hợp mượt mà với hệ thống lưu trữ doanh nghiệp như Microsoft SharePoint.
 
@@ -42,11 +44,11 @@ Xử lý phản hồi thị trường trên quy mô lớn gặp phải hai thác
 
 ---
 
-## 🛠️ Công nghệ sử dụng
+## <a name="cong-nghe-su-dung"></a>🛠️ Công nghệ sử dụng
 
-Dưới đây là các công nghệ cốt lõi cấu thành nên dự án:
-
-[![My Skills](https://skillicons.dev/icons?i=py,docker,fastapi,gcp,azure,git,vscode,githubactions,markdown,svg)](https://skillicons.dev)
+<p align="left">
+  <a href="#cong-nghe-su-dung"><img src="https://skillicons.dev/icons?i=py,docker,fastapi,gcp,azure,git,vscode,githubactions,markdown,svg" alt="My Skills" /></a>
+</p>
 
 * **Framework Backend:** FastAPI & Uvicorn (REST API không đồng bộ, WebSockets stream log thời gian thực).
 * **Mô hình AI & LLM:** Google GenAI (Gemini 2.5 Flash Lite Vertex/API support), scikit-learn (TF-IDF + OvR Logistic Regression).
@@ -56,7 +58,7 @@ Dưới đây là các công nghệ cốt lõi cấu thành nên dự án:
 
 ---
 
-## 📂 Cấu trúc thư mục
+## <a name="cau-truc-thu-muc"></a>📂 Cấu trúc thư mục
 
 ```text
 DMS/
@@ -90,157 +92,206 @@ DMS/
     │       │   └── app.py     # Vòng đời ứng dụng FastAPI
     │       ├── watcher.py     # Poller SharePoint & tự động phục hồi state
     │       └── settings.py    # Cấu hình Pydantic-settings
-    ├── static/                # Giao diện Web Dashboard (Vanilla JS SPA)
-    └── tests/                 # Bộ kiểm thử Unit & Integration (93 test cases)
 ```
 
 ---
 
-## 🏷️ Danh mục nhãn phân loại (21 Phân loại con)
+## <a name="danh-muc-nhan-phan-loai"></a>🏷️ Danh mục nhãn phân loại (21 Phân loại con)
 
-Hệ thống phân loại phản hồi của thị trường thành **21 nhãn phân loại con** thuộc **7 nhóm nhãn lớn**:
+Đường ống AI phân loại phản hồi thị trường thành **21 phân loại con** thuộc **7 nhóm lớn**:
 
-| Nhóm lớn | Nhãn con | Mô tả chi tiết / Hướng dẫn phân loại |
+| Nhóm lớn | Phân loại con | Mô tả nghiệp vụ / Hướng dẫn gắn nhãn |
 | :--- | :--- | :--- |
-| **Sản phẩm** | Báo lỗi | Sản phẩm bị lỗi vật lý, hỏng hóc kỹ thuật, cháy bóng, hỏng chấn lưu, nứt vỡ. |
-| | Báo CL tốt | Khen ngợi chất lượng sản phẩm tốt, độ bền cao, ánh sáng ổn định, khách hàng ưng ý. |
-| | Y/c cải tiến | Góp ý, phàn nàn về thiết kế, kích thước, độ dày mỏng của vỏ/thanh đồng, vỏ hộp. |
-| | Đề xuất SPM | Đề xuất sản xuất mã sản phẩm mới, công suất mới chưa được Rạng Đông sản xuất. |
-| **Yêu cầu công cụ BH** | Bảng giá, Catalogue | Yêu cầu gửi bảng giá, catalogue, tài liệu thông số kỹ thuật. |
-| | Bảng biển | Đăng ký hoặc hỏi tiến độ lắp đặt biển hiệu quảng cáo, bảng quảng cáo đại lý. |
-| | Kệ bóng, thử đèn,… | Yêu cầu kệ trưng bày, kệ test bóng, tủ bóng thử đèn. |
-| | Khác | Yêu cầu các POSM khác như áo đồng phục, sổ tay, tờ rơi bán hàng. |
-| **Giá, cơ chế RD** | Tốt/ ko tốt | Nhận xét về tính cạnh tranh của giá cả, mức chiết khấu, dễ/khó bán của Rạng Đông. |
-| | Trả thưởng | Hỏi hoặc phản ánh về tiền thưởng, chương trình c2td, chương trình quay số. |
-| | Đề xuất | Đề nghị thay đổi chính sách giá, chương trình khuyến mãi chung của công ty. |
-| **Dịch vụ** | Bảo hành | Quy trình đổi trả hàng bảo hành, thời gian bảo hành, thái độ phục vụ hậu mãi. |
-| | HTPP | Tranh chấp kênh phân phối, đại lý tràn vùng lấn vùng bán phá giá. |
-| | Hàng hoá | Vấn đề kho vận, logistics: giao thiếu hàng, sai quy cách, đóng gói hỏng, giao chậm. |
-| **Hàng giả** | Hàng giả | Nghi ngờ hàng giả, hàng nhái thương hiệu Rạng Đông trên thị trường. |
-| **Website** | Website | Lỗi phần mềm/app: lỗi cổng đăng nhập portal, app DMS bị đơ, không lên đơn được. |
-| **Đối thủ cạnh tranh** | Hãng | Ghi nhận tên của thương hiệu đối thủ cạnh tranh được nhắc tới trong câu. |
-| | Hoạt động | Chương trình marketing, truyền thông, tặng quà, trưng bày của đối thủ. |
-| | CTKM, giá, cơ chế | Khuyến mãi chiết khấu, giá bán của sản phẩm đối thủ cạnh tranh. |
-| | TT SP | Mẫu mã sản phẩm mới, thông số kỹ thuật, catalogue của đối thủ. |
-| **Tin trung lập** | Tin trung lập | Các câu trung tính, không chứa ý kiến khen chê hay yêu cầu cụ thể. |
+| **Sản phẩm** | Báo lỗi | Lỗi vật lý, linh kiện cháy/hỏng, lỗi hoạt động của thiết bị. |
+| | Báo CL tốt | Khen ngợi sản phẩm chất lượng tốt, độ sáng cao, bền bỉ. |
+| | Y/c cải tiến | Đề xuất sửa đổi thiết kế, thay đổi cấu trúc sản phẩm (ví dụ: vỏ mỏng). |
+| | Đề xuất SPM | Đề xuất sản xuất model hoàn toàn mới hiện Rạng Đông chưa làm. |
+| **Yêu cầu công cụ BH** | Bảng giá, Catalogue | Yêu cầu gửi catalogue sản phẩm mới, tờ rơi, bảng báo giá. |
+| | Bảng biển | Yêu cầu làm biển quảng cáo ngoài trời cho cửa hàng, đại lý. |
+| | Kệ bóng, thử đèn,… | Yêu cầu cấp kệ trưng bày, bảng thử đèn LED, giá treo demo. |
+| | Khác | Công cụ POSM/bán hàng khác (ví dụ: áo đồng phục, sổ tay). |
+| **Giá, cơ chế RD** | Tốt/ ko tốt | Cạnh tranh về giá bán, biên lợi nhuận, chiết khấu của Rạng Đông. |
+| | Trả thưởng | Thắc mắc hoặc khiếu nại về tiền thưởng, chương trình quay số C2TD. |
+| | Đề xuất | Đề xuất thay đổi chính sách khuyến mãi hoặc điều chỉnh giá chung. |
+| **Dịch vụ** | Bảo hành | Quy trình và tốc độ trả bảo hành, thái độ phục vụ sau bán hàng. |
+| | HTPP | Tranh chấp địa bàn, xung đột kênh phân phối giữa các đại lý. |
+| | Hàng hoá | Logistics, giao hàng trễ, thiếu hụt tồn kho, hỏng hóc do vận chuyển. |
+| **Hàng giả** | Hàng giả | Báo cáo nghi ngờ hàng nhái, hàng giả thương hiệu Rạng Đông. |
+| **Website** | Website | Lỗi ứng dụng/web, lỗi đăng nhập portal đại lý, sự cố phần mềm DMS. |
+| **Đối thủ cạnh tranh** | Hãng | Ghi nhận tên hãng đối thủ xuất hiện trong bình luận. |
+| | Hoạt động | Sự kiện tiếp thị, roadshow, hội nghị khách hàng của đối thủ. |
+| | CTKM, giá, cơ chế | Chương trình khuyến mãi, chiết khấu, chính sách giá của đối thủ. |
+| | TT SP | Ra mắt catalogue, thông số kỹ thuật sản phẩm mới của đối thủ. |
+| **Tin trung lập** | Tin trung lập | Tin nhắn không chứa lời khen, khiếu nại hay yêu cầu cụ thể. |
 
 ---
 
-## 📊 Cấu trúc Cột và Dữ liệu Excel
+## <a name="cau-truc-cot-va-du-lieu-excel"></a>📊 Cấu trúc Cột và Dữ liệu Excel
 
-Hệ thống tự động phát hiện và bổ sung thông tin vào file Excel đầu vào:
-1. **Phát hiện cột đầu vào:** Tự động nhận diện cột chứa văn bản phản hồi thông qua các tên cột phổ biến (như `Nội dung phản hồi`, `Nội dung`,...).
-2. **Cấu trúc cột đầu ra (Enriched columns):**
-   * **Thông tin sản phẩm (Chèn cạnh cột văn bản):**
-     * `Sản phẩm`: Phân nhóm sản phẩm lớn (VD: Đèn LED).
-     * `Dòng SP`: Dòng sản phẩm (VD: Bulb).
-     * `Model`: Model chính xác trong catalog (VD: AT10 9W).
-     * `Lớp` & `Điểm`: Đầu ra phân tích xác suất của mô hình ML baseline.
-   * **Thông tin bổ sung (Phần đuôi):**
-     * `Sentiment`: Nhận diện `Tích cực`, `Tiêu cực`, hoặc để trống cho trung lập.
-     * `LLM_Extracted`: Cụm từ sản phẩm gốc trích xuất từ câu.
-     * `BM25_Score`: Điểm độ tin cậy đối chiếu của BM25.
-   * **Cột nhãn phân loại (Phần đuôi):** 21 cột tương ứng với các **Nhãn con** phía trên. Điền chữ `x` nếu nhãn được kích hoạt (hoặc ghi tên thương hiệu đối thủ tại cột `Hãng`).
+Hệ thống tự động quét và làm giàu thông tin cho các file Excel:
+1. **Tự động nhận diện cột:** Watcher tự tìm cột chứa nội dung bình luận (quét tiêu đề cột khớp với các alias như `Nội dung phản hồi`, `Nội dung`, v.v.).
+2. **Điền thông tin làm giàu:**
+   * **Thông tin sản phẩm (Chèn ngay cạnh cột văn bản gốc):**
+     * `Sản phẩm`: Loại sản phẩm (ví dụ: Đèn LED bulb).
+     * `Dòng SP`: Dòng sản phẩm (ví dụ: Bulb).
+     * `Model`: Mã model tra cứu theo danh mục (ví dụ: AT10 9W).
+     * `Lớp` & `Điểm`: Lớp phân loại và điểm tự tin của mô hình ML baseline.
+   * **Thông tin Telemetry (Thêm vào cuối bảng):**
+     * `Sentiment`: Sắc thái bình luận (`Tích cực`, `Tiêu cực`, hoặc trống).
+     * `LLM_Extracted`: Từ khóa sản phẩm thô do LLM trích xuất.
+     * `BM25_Score`: Điểm độ tin cậy đối sánh RAG.
+   * **Phân loại nhãn (Thêm vào cuối bảng):** 21 cột riêng biệt tương ứng với các nhãn con ở trên, đánh dấu `x` nếu thuộc nhóm đó (riêng cột `Hãng` sẽ điền tên đối thủ).
 
 ---
 
-## 🚀 Khởi động nhanh
+## <a name="khoi-dong-nhanh"></a>🚀 Khởi động nhanh
 
 ### Điều kiện bắt buộc
-* [Docker & Docker Compose](https://www.docker.com/) (khuyến nghị)
-* Python 3.11+ (nếu chạy trực tiếp không qua Docker)
+* [Docker & Docker Compose](https://www.docker.com/) (khuyên dùng)
+* Python 3.11+ (nếu chạy trực tiếp không qua container)
 
 ### Thiết lập môi trường local
-1. Clone dự án:
+1. Clone repository mã nguồn:
    ```bash
    git clone https://github.com/ThanhDT127/dms-feedback-classification.git
    cd dms-feedback-classification/service
    ```
-2. Tạo file cấu hình cục bộ:
+2. Tạo file cấu hình môi trường local:
    ```bash
    cp .env.example .env
    ```
-3. Chỉnh sửa file `.env` điền đầy đủ thông tin SharePoint Drive, Azure AD OAuth2 hoặc API key Gemini.
-4. Nếu chạy qua Vertex AI (khuyến nghị cho Production), đặt file service account key tại:
+3. Chỉnh sửa tệp `.env` và điền thông tin xác thực (SharePoint Drive IDs, GCP Client IDs, hoặc Gemini API keys).
+4. Nếu sử dụng Google Vertex AI (khuyên dùng cho môi trường production), đặt tệp khóa tài khoản dịch vụ tại:
    ```text
    service/testvertex.json
    ```
 
 ### Chạy bằng Docker Compose
-Khởi động watcher và Web UI chạy nền:
+Để khởi động watcher chạy nền và giao diện web dashboard:
 ```bash
 docker compose up -d
 ```
-Xem trạng thái container:
+Kiểm tra trạng thái container:
 ```bash
 docker compose ps
 ```
-Xem log container trực tiếp:
+Theo dõi log hệ thống:
 ```bash
 docker compose logs -f
 ```
-Giao diện Web UI sẽ khả dụng tại địa chỉ: **http://localhost:8501**
+Giao diện Web Dashboard sẽ chạy tại: **http://localhost:8501**
 
 ---
 
-## 🧪 Chạy thử cục bộ với dữ liệu mẫu
+## <a name="chay-thu-cuc-bo-voi-du-lieu-mau"></a>🧪 Chạy thử cục bộ với dữ liệu mẫu
 
-Bạn có thể chạy thử quy trình phân loại offline mà không cần kết nối tới SharePoint:
-1. Đảm bảo đã điền `GEMINI_API_KEY` (hoặc cấu hình `testvertex.json`) trong `.env`.
-2. Truy cập Web Dashboard tại **http://localhost:8501**.
-3. Đi tới tab **File Management**, upload tệp Excel mẫu có sẵn trong dự án:
+Cách xác minh nhanh quy trình phân loại mà không cần kết nối với SharePoint:
+1. Đảm bảo `.env` đã được cấu hình khóa `GEMINI_API_KEY` hợp lệ (hoặc đã cấu hình `testvertex.json`).
+2. Mở trình duyệt truy cập Web Dashboard tại **http://localhost:8501**.
+3. Chuyển sang tab **File Management** và tải lên tệp dữ liệu mẫu:
    * [service/sample_data/sample_feedback.xlsx](sample_data/sample_feedback.xlsx)
-4. Chuyển sang tab **Classify**, kích hoạt chạy thủ công (manual run) và giám sát thanh tiến trình xử lý thời gian thực.
-5. Tải file Excel kết quả đã được phân loại về máy sau khi chạy xong.
+4. Chuyển sang tab **Classify**, bấm nút trigger khởi chạy phân loại thủ công và theo dõi tiến trình trực quan cũng như log xử lý.
+5. Tải file kết quả sau khi hệ thống xử lý hoàn tất.
 
 ---
 
-## 📐 Thiết kế kỹ thuật & Kiến trúc
+## <a name="thiet-ke-ky-thuat-kien-truc"></a>📐 Thiết kế kỹ thuật & Kiến trúc
+
+Sơ đồ dưới đây mô tả luồng xử lý dữ liệu và kiến trúc của dịch vụ DMS:
+
+```mermaid
+graph TD
+    subgraph Input ["Source / Inputs"]
+        SP[SharePoint Folder]
+        Web[Web Dashboard Upload]
+    end
+
+    subgraph Watcher ["SharePoint Watcher"]
+        Poll[Polling Timer 60s]
+        Reconcile[State Reconciliation <br/> seen_files.json]
+    end
+
+    subgraph Service ["DMS Core Service (FastAPI)"]
+        Runner[Pipeline Coordinator / Runner]
+        
+        subgraph Pipeline ["AI Processing Pipeline"]
+            ML[Stage 1: ML Baseline <br/> TF-IDF + Logistic Regression]
+            LLM[Stage 2: LLM Refinement <br/> Gemini 2.5 Flash Lite]
+            RAG[Stage 3: Product RAG <br/> BM25 Okapi + RapidFuzz]
+            Post[Stage 4: Post-Processing <br/> Guardrail Validation]
+        end
+        
+        DB[(Local Cache / Excel DB)]
+    end
+
+    subgraph Outputs ["Outputs & Notifications"]
+        Excel[Enriched Excel Report]
+        Teams[MS Teams Webhook Notification]
+        Email[SMTP Email Notification]
+    end
+
+    SP -->|New File Detected| Poll
+    Poll -->|Trigger Job| Runner
+    Web -->|Manual Job Upload| Runner
+    
+    Runner -->|Load Comments| ML
+    ML -->|Category Candidates| LLM
+    LLM -->|Extract Terms| RAG
+    RAG -->|Matched Catalog Models| Post
+    Post -->|Final Labels & Metadata| Runner
+    
+    Runner -->|Save State| Reconcile
+    Runner -->|Save Local Copy| DB
+    Runner -->|Upload Enriched File| SP
+    Runner -->|Generate| Excel
+    Runner -->|Alert| Teams
+    Runner -->|Alert| Email
+```
 
 ### 1. Phân loại Hybrid ML & LLM
-Hệ thống sử dụng mô hình kết hợp (hybrid):
-* **Giai đoạn 1 (ML Baseline):** Sử dụng các vectorizer TF-IDF (n-gram ký tự và từ) kết hợp bộ phân loại Logistic Regression cục bộ để dự đoán nhanh xác suất các nhãn.
-* **Giai đoạn 2 (LLM Refinement):** Gửi phản hồi kèm theo các gợi ý nhãn baseline sang Gemini 2.5 Flash Lite. LLM sẽ giải quyết các ranh giới ngữ nghĩa mơ hồ (VD: *Báo lỗi* vs *Y/c cải tiến*) để xuất ra định dạng JSON cấu trúc.
-* **Giai đoạn 3 (Post-Processing):** Code Python áp dụng các ràng buộc nghiệp vụ (ví dụ: xóa nhãn đối thủ nếu không có hãng đối thủ, xóa nhãn Trung lập nếu có nhãn khác) để đảm bảo dữ liệu đầu ra Excel chuẩn xác nhất.
+Dịch vụ triển khai mô hình phân loại kép:
+* **Giai đoạn 1 (ML Baseline):** Sử dụng các vector hóa TF-IDF cục bộ kết hợp với mô hình One-Vs-Rest Logistic Regression để dự đoán nhanh các nhãn ứng cử viên tiềm năng.
+* **Giai đoạn 2 (LLM Tinh chỉnh):** Gửi phản hồi kèm danh sách nhãn dự phòng từ ML sang Gemini 2.5 Flash Lite. LLM đánh giá các biên giới ngữ nghĩa (như phân biệt giữa "Báo lỗi" và "Y/c cải tiến") và trả về kết quả JSON có cấu trúc.
+* **Giai đoạn 3 (Hậu xử lý):** Các quy tắc Python (guardrails) làm sạch kết quả JSON (loại bỏ nhãn đối thủ nếu không nhắc tới hãng nào, xóa nhãn "Tin trung lập" nếu bất kỳ nhãn lỗi/yêu cầu nào khác được kích hoạt).
 
 ### 2. Luồng đối chiếu RAG BM25 + LLM
-Để ánh xạ chính xác tên viết tắt, từ lóng của đại lý vào catalog sản phẩm Rạng Đông:
-1. **LLM Extraction:** Gemini trích xuất cụm tên + model sản phẩm thô từ phản hồi.
-2. **Dual-Index BM25 Search:** Tìm kiếm song song trên 2 chỉ mục BM25 (một chỉ mục văn bản gốc, một chỉ mục không dấu qua `unidecode`).
-3. **Keyword Fallback:** Nếu điểm BM25 quá thấp, hệ thống chuyển sang tra cứu biểu thức chính quy (regex) dựa trên hệ luật Level 2 và Level 3.
+Để ánh xạ các từ lóng, viết tắt, hoặc tên model viết sai chính tả trong comment về danh mục sản phẩm chính thức của Rạng Đông:
+1. **Trích xuất thực thể:** Gemini trích xuất các từ khóa sản phẩm thô từ comment.
+2. **Tìm kiếm chỉ mục kép BM25:** Tra cứu danh mục sản phẩm qua hai chỉ mục BM25: một trên văn bản gốc và một trên văn bản không dấu (`unidecode`).
+3. **Regex dự phòng:** Nếu điểm BM25 dưới ngưỡng an toàn, hệ thống dùng tập luật regex cấp 2 và cấp 3 để đối chiếu dòng sản phẩm chung.
 
 ### 3. Đồng bộ trạng thái tự phục hồi (Self-Healing)
-Để tránh xử lý lặp lại file trên SharePoint khi restart container hoặc chuyển VM:
-* Khi khởi động, watcher quét thư mục `Output/` của SharePoint.
-* Đối chiếu file thực tế trên SharePoint với danh sách đã xử lý cục bộ (`seen_files.json`) và tự động cập nhật các file bị thiếu để đồng bộ trạng thái tự động.
+Tránh việc cào lại các file đã xử lý khi khởi động lại container:
+* Khi khởi động, watcher sẽ quét SharePoint tại thư mục `Output/` để tìm các file kết quả.
+* Nó đối chiếu metadata file với file cache cục bộ (`seen_files.json`) để tự khôi phục các bản ghi trạng thái bị thiếu.
 
 ---
 
-## 🧪 Kiểm thử & Bảo đảm chất lượng
+## <a name="kiem-thu-bao-dam-chat-luong"></a>🧪 Kiểm thử & Bảo đảm chất lượng
 
-Các test suite được viết bằng `pytest`. Toàn bộ các kết nối mạng bên ngoài và API Gemini đều được mock độc lập.
+Toàn bộ các test suite được quản lý qua `pytest`. Các yêu cầu HTTP bên ngoài và Gemini API đều được giả lập (mock).
 
-Cách chạy bộ test:
-1. Di chuyển vào thư mục dịch vụ:
+Để chạy bộ kiểm thử:
+1. Di chuyển vào thư mục gốc của dịch vụ:
    ```bash
    cd service
    ```
-2. Chạy pytest:
+2. Chạy lệnh pytest:
    ```bash
    python -m pytest
    ```
-Bộ test gồm **93 test cases** giúp đảm bảo tính đúng đắn của logic watcher, validation cấu hình, phân tích Excel và bảo mật tệp.
+Bộ test bao gồm **93 test cases** tự động bao phủ toàn bộ watcher logic, cấu hình, xử lý Excel và pipeline.
 
 ---
 
-## 🔒 Bảo mật và Làm sạch Dữ liệu
+## <a name="bao-mat-va-lam-sach-du-lieu"></a>🔒 Bảo mật và Làm sạch Dữ liệu
 
 > [!IMPORTANT]
-> Tất cả các ý kiến phản hồi của khách hàng, mã sản phẩm, danh sách nhà phân phối và thông tin xác thực GCP/Azure xuất hiện trong repository này đều là dữ liệu giả lập (mocked) hoặc đã được làm sạch hoàn toàn để tuân thủ chính sách bảo mật dữ liệu doanh nghiệp.
+> Toàn bộ các bình luận khách hàng, mã model, danh sách nhà phân phối, thông tin xác thực GCP/Azure có trong repository này đều là dữ liệu giả lập hoặc đã được làm sạch hoàn toàn để tuân thủ chính sách bảo vệ dữ liệu doanh nghiệp.
 
 ---
 
-## 📖 Tài liệu vận hành chi tiết
+## <a name="tai-lieu-van-hanh-chi-tiet"></a>📖 Tài liệu vận hành chi tiết
 
-* [OPERATIONS.vi.md](OPERATIONS.vi.md) - Hướng dẫn chi tiết cách triển khai production, cấu hình sync asset tự động, chạy script hồi phục dữ liệu cũ và xử lý sự cố.
-* [service/README.md](service/README.md) - Tài liệu kiến trúc sâu hơn dành cho nhà phát triển, giải thích cơ chế Dependency Injection và thiết kế API.
+* [OPERATIONS.vi.md](OPERATIONS.vi.md) - Hướng dẫn chi tiết cách triển khai production, cấu hình đồng bộ asset, script phục hồi lịch sử và khắc phục sự cố.
+* [service/README.md](service/README.md) - Chi tiết thiết lập phát triển, mô tả tiêm phụ thuộc (dependency injection) và thiết kế API.
