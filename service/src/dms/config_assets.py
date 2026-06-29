@@ -144,7 +144,7 @@ class ConfigAssetSyncService:
                     file_name=file_name,
                     remote_folder=self.settings.sp_model_folder,
                     local_dir=self.active_model_dir,
-                    required=False,
+                    required=file_name != "keyword_minors.json",
                 )
             )
         return manifest
