@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -11,7 +10,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from dms.web.app import create_app
-from dms.settings import SERVICE_DIR
 
 
 @pytest.fixture
@@ -30,10 +28,13 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr("dms.settings.SERVICE_DIR", tmp_path)
     monkeypatch.setattr("dms.web.api.files.SERVICE_DIR", tmp_path, raising=False)
     monkeypatch.setattr("dms.web.api.files.WORK_DIR", tmp_path / "work")
-    monkeypatch.setattr("dms.web.api.files.FOLDER_MAP", {
-        "input": [tmp_path / "work" / "input"],
-        "keyword": [tmp_path / "Keyword"],
-    })
+    monkeypatch.setattr(
+        "dms.web.api.files.FOLDER_MAP",
+        {
+            "input": [tmp_path / "work" / "input"],
+            "keyword": [tmp_path / "Keyword"],
+        },
+    )
 
     # Create dirs
     (tmp_path / "work" / "input").mkdir(parents=True, exist_ok=True)
@@ -47,14 +48,17 @@ def client(tmp_path, monkeypatch):
 #  5.1 — Excel with NaN → HTTP 200
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestExcelPreviewNaN:
     def test_excel_with_nan_returns_200(self, client, tmp_path):
         """NaN values in Excel should NOT crash with 500."""
-        df = pd.DataFrame({
-            "STT": [1.0, np.nan, 3.0],
-            "Name": ["Alice", None, "Charlie"],
-            "Score": [95.5, np.nan, np.nan],
-        })
+        df = pd.DataFrame(
+            {
+                "STT": [1.0, np.nan, 3.0],
+                "Name": ["Alice", None, "Charlie"],
+                "Score": [95.5, np.nan, np.nan],
+            }
+        )
         path = tmp_path / "work" / "input" / "test_nan.xlsx"
         df.to_excel(path, index=False)
 
@@ -84,6 +88,7 @@ class TestExcelPreviewNaN:
 #  5.2 — JSON preview
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestJSONPreview:
     def test_json_preview(self, client, tmp_path):
         """Valid JSON file should return type='json' with parsed content."""
@@ -102,6 +107,7 @@ class TestJSONPreview:
 # ═══════════════════════════════════════════════════════════════
 #  5.3 — CSV preview
 # ═══════════════════════════════════════════════════════════════
+
 
 class TestCSVPreview:
     def test_csv_preview(self, client, tmp_path):
@@ -123,6 +129,7 @@ class TestCSVPreview:
 #  5.4 — Text preview
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestTextPreview:
     def test_txt_preview(self, client, tmp_path):
         """Text file should return type='text' with raw content."""
@@ -142,6 +149,7 @@ class TestTextPreview:
 #  5.5 — Unsupported file type
 # ═══════════════════════════════════════════════════════════════
 
+
 class TestUnsupportedPreview:
     def test_pkl_returns_unsupported(self, client, tmp_path):
         """Binary file types should return type='unsupported', not crash."""
@@ -158,6 +166,7 @@ class TestUnsupportedPreview:
 # ═══════════════════════════════════════════════════════════════
 #  5.6 — Large JSON truncation
 # ═══════════════════════════════════════════════════════════════
+
 
 class TestLargeFileProtection:
     def test_large_json_truncated(self, client, tmp_path):
@@ -180,6 +189,7 @@ class TestLargeFileProtection:
 # ═══════════════════════════════════════════════════════════════
 #  5.7 — Corrupt JSON
 # ═══════════════════════════════════════════════════════════════
+
 
 class TestCorruptJSON:
     def test_corrupt_json_returns_raw_with_error(self, client, tmp_path):
@@ -212,4 +222,3 @@ class TestFileDownload:
         """Should return 404 for missing file."""
         response = client.get("/api/files/input/nonexistent.txt/download")
         assert response.status_code == 404
-

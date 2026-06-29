@@ -91,7 +91,11 @@ def detect_header_and_textcol(raw_df: pd.DataFrame, scan_rows: int = 10):
             ),
             None,
         )
-        if text_col_name is None and best_col_idx is not None and best_col_idx < len(df_fixed.columns):
+        if (
+            text_col_name is None
+            and best_col_idx is not None
+            and best_col_idx < len(df_fixed.columns)
+        ):
             text_col_name = df_fixed.columns[best_col_idx]
         return df_fixed.reset_index(drop=True), text_col_name
 
@@ -123,7 +127,9 @@ class PipelineRunner:
         self.rag = rag
         self.metrics = metrics
         self.settings = settings
-        self.issue_classifier = issue_classifier or IssueClassifier(gemini=gemini, settings=settings)
+        self.issue_classifier = issue_classifier or IssueClassifier(
+            gemini=gemini, settings=settings
+        )
 
     def _run_rag_with_retry(self, batch_texts: list[str]) -> list[dict]:
         retries = 0
@@ -282,9 +288,7 @@ class PipelineRunner:
                 ]
             logger.info("  Issue classify time: %.2fs", time.time() - t_issue_s)
 
-            for j, (_, rag, issue) in enumerate(
-                zip(batch, rag_batch, issue_list, strict=False)
-            ):
+            for j, (_, rag, issue) in enumerate(zip(batch, rag_batch, issue_list, strict=False)):
                 base_row = df_all.iloc[i + j].to_dict()
                 labels_minor = {m: False for m in MINOR_ORDER}
                 for minor in issue.get("final_minors", []):
@@ -320,7 +324,9 @@ class PipelineRunner:
                     base_row["Sản phẩm"] = best_cat or base_row.get("Sản phẩm", "")
                     base_row["Dòng SP"] = best_line or base_row.get("Dòng SP", "")
                     base_row["Model"] = best_model or base_row.get("Model", "")
-                    base_row["BM25_Score"] = float(best_score) if best_src == "RAG" and best_score > 0 else ""
+                    base_row["BM25_Score"] = (
+                        float(best_score) if best_src == "RAG" and best_score > 0 else ""
+                    )
                     base_row["Điểm"] = ""
 
                 base_row["LLM_Extracted"] = llm_val
@@ -342,29 +348,31 @@ class PipelineRunner:
                     base_row = df_all.iloc[i + idx_in_batch].to_dict()
                     rag = rag_batch[idx_in_batch]
                     issue = issue_list[idx_in_batch]
-                    
+
                     labels_minor = {m: False for m in MINOR_ORDER}
                     for minor in issue.get("final_minors", []):
                         if minor in labels_minor:
                             labels_minor[minor] = True
-                            
+
                     sentiment = issue.get("sentiment", "") or ""
                     best_cat = (rag.get("Sản phẩm", "") or "").strip()
                     best_line = (rag.get("Dòng SP", "") or "").strip()
                     best_model = (rag.get("Model", "") or "").strip()
                     best_score = rag.get("Score", 0.0) or 0.0
                     brand = (issue.get("brand", "") or "").strip()
-                    
-                    new_results_batch.append({
-                        "text": batch[idx_in_batch],
-                        "product": best_cat,
-                        "product_line": best_line,
-                        "model": best_model,
-                        "bm25_score": round(float(best_score), 1) if best_score else 0,
-                        "sentiment": sentiment,
-                        "labels": [m for m in MINOR_ORDER if labels_minor[m]],
-                        "brand": brand,
-                    })
+
+                    new_results_batch.append(
+                        {
+                            "text": batch[idx_in_batch],
+                            "product": best_cat,
+                            "product_line": best_line,
+                            "model": best_model,
+                            "bm25_score": round(float(best_score), 1) if best_score else 0,
+                            "sentiment": sentiment,
+                            "labels": [m for m in MINOR_ORDER if labels_minor[m]],
+                            "brand": brand,
+                        }
+                    )
                 try:
                     progress_callback(done, n_total, new_results_batch, step=3, step_status="done")
                 except TypeError:

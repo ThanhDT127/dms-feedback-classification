@@ -69,10 +69,12 @@ async def ws_live_logs(websocket: WebSocket):
 
     log_file = _find_latest_log()
     if log_file is None:
-        await websocket.send_json({
-            "type": "info",
-            "data": {"message": "Không tìm thấy file log. Đang chờ..."},
-        })
+        await websocket.send_json(
+            {
+                "type": "info",
+                "data": {"message": "Không tìm thấy file log. Đang chờ..."},
+            }
+        )
 
     try:
         # Start at end of file (tail mode)
@@ -103,10 +105,12 @@ async def ws_live_logs(websocket: WebSocket):
             if latest is not None and latest != current_log_file:
                 current_log_file = latest
                 last_position = 0
-                await websocket.send_json({
-                    "type": "info",
-                    "data": {"message": f"Chuyển sang file log mới: {latest.name}"},
-                })
+                await websocket.send_json(
+                    {
+                        "type": "info",
+                        "data": {"message": f"Chuyển sang file log mới: {latest.name}"},
+                    }
+                )
 
             if current_log_file is not None and current_log_file.is_file():
                 try:

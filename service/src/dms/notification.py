@@ -57,10 +57,7 @@ class NotificationService:
             logger.warning("Email skipped: NOTIFICATION_RECIPIENTS not configured")
             return False
 
-        url = (
-            f"{self.settings.graph_base}/users/"
-            f"{self.settings.notification_sender_email}/sendMail"
-        )
+        url = f"{self.settings.graph_base}/users/{self.settings.notification_sender_email}/sendMail"
         to_recipients = [{"emailAddress": {"address": addr}} for addr in recipients]
         payload = {
             "message": {

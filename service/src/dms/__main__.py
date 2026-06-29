@@ -36,7 +36,9 @@ def _validate_asset_snapshot(
     RAGProductMatcher(settings=snapshot_settings, gemini=gemini)
 
 
-def _build_runtime_settings(settings: Settings, config_asset_sync: ConfigAssetSyncService) -> Settings:
+def _build_runtime_settings(
+    settings: Settings, config_asset_sync: ConfigAssetSyncService
+) -> Settings:
     return config_asset_sync.get_runtime_settings()
 
 

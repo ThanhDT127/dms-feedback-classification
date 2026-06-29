@@ -8,7 +8,6 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-
 # ---------------------------------------------------------------------------
 # _validate_safe_path tests (unit-level)
 # ---------------------------------------------------------------------------
@@ -17,6 +16,7 @@ from fastapi.testclient import TestClient
 class TestValidateSafePath:
     def _get_fn(self):
         from dms.web.api.files import _validate_safe_path
+
         return _validate_safe_path
 
     def test_normal_filename_passes(self, tmp_path: Path) -> None:
@@ -61,9 +61,11 @@ class TestUploadSizeLimit:
     def client(self, tmp_path: Path, monkeypatch):
         """Create a test client with WORK_DIR pointing to tmp_path."""
         import dms.web.api.files as files_module
+
         monkeypatch.setattr(files_module, "WORK_DIR", tmp_path)
 
         from dms.web.app import create_app
+
         app = create_app()
         return TestClient(app, raise_server_exceptions=True)
 

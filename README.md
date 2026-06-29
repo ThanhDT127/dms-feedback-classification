@@ -5,6 +5,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/ThanhDT127/dms-feedback-classification/actions/workflows/ci.yml"><img src="https://github.com/ThanhDT127/dms-feedback-classification/actions/workflows/ci.yml/badge.svg" alt="Python CI" /></a>
   <a href="#readme"><img src="https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?style=flat-square&logo=python&logoColor=white" alt="Python Version" /></a>
   <a href="#readme"><img src="https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" /></a>
   <a href="#readme"><img src="https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose" /></a>
@@ -153,20 +154,42 @@ The pipeline automatically scans and enriches input workbooks:
 * Python 3.11+ (if running bare metal)
 
 ### Local Environment Setup
+
+#### Bare Metal Setup (using Makefile)
+If you want to run or test the pipeline locally on your host machine:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/ThanhDT127/dms-feedback-classification.git
+   cd dms-feedback-classification
+   ```
+2. Set up dependencies (make sure your virtual environment is active or use standard setup):
+   ```bash
+   make setup
+   ```
+3. Create your local config file at the root:
+   ```bash
+   cp .env.example .env
+   ```
+   Edit `.env` with your credentials (SharePoint Drive IDs, GCP Client IDs, or Gemini API keys).
+4. If using Google Vertex AI, place your service account key file at `testvertex.json` at the root.
+5. Manage and run your development tasks:
+   * **Run Tests:** `make test`
+   * **Format Code:** `make format`
+   * **Run Pipeline:** `make run FILE=sample_feedback.xlsx` (Requires placing files in `Input/` folder)
+   * **Clean Caches:** `make clean`
+
+#### Docker Setup (Recommended)
+To run the SharePoint polling watcher service and the operations web dashboard:
 1. Clone the repository:
    ```bash
    git clone https://github.com/ThanhDT127/dms-feedback-classification.git
    cd dms-feedback-classification/service
    ```
-2. Create your local config file:
+2. Copy the sample environment file:
    ```bash
    cp .env.example .env
    ```
-3. Edit `.env` with your credentials (SharePoint Drive IDs, GCP Client IDs, or Gemini API keys).
-4. If using Google Vertex AI (recommended for production), place your service account key file at:
-   ```text
-   service/testvertex.json
-   ```
+3. Edit `service/.env` and place your service account key file (if using Vertex AI) at `service/testvertex.json`.
 
 ### Running with Docker Compose
 To boot up the watcher and the web dashboard:

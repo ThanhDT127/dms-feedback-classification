@@ -36,6 +36,7 @@ def create_app() -> FastAPI:
     # Defaults to "*" for internal deployments. Set explicit origins in production
     # if the service is exposed to the internet.
     import os
+
     cors_origins_raw = os.environ.get("CORS_ALLOWED_ORIGINS", "*")
     cors_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
     app.add_middleware(
@@ -80,7 +81,6 @@ def create_app() -> FastAPI:
         if assets_dir.is_dir():
             app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
-
     # --- Startup ---
     @app.on_event("startup")
     async def on_startup():
@@ -96,8 +96,10 @@ def create_app() -> FastAPI:
 
         # Download seen_files.json and metrics.json from SharePoint if missing or empty
         try:
-            from . import deps
             import json
+
+            from . import deps
+
             settings = deps.get_settings()
             sp_client = deps.get_sharepoint_client()
             if settings and sp_client:
@@ -120,7 +122,11 @@ def create_app() -> FastAPI:
                         pass
 
                 if seen_missing or metrics_missing:
-                    logger.info("Web server detected missing/empty local state (seen_missing: %s, metrics_missing: %s). Restoring from SharePoint Check_Point/...", seen_missing, metrics_missing)
+                    logger.info(
+                        "Web server detected missing/empty local state (seen_missing: %s, metrics_missing: %s). Restoring from SharePoint Check_Point/...",
+                        seen_missing,
+                        metrics_missing,
+                    )
                     ckpt_items = sp_client.list_folder_items(settings.sp_checkpoint_folder)
                     for item in ckpt_items:
                         name = item.get("name")
@@ -139,7 +145,9 @@ def create_app() -> FastAPI:
                     if metrics_collector:
                         metrics_collector._load()
         except Exception as exc:
-            logger.warning("Web server failed to restore state from SharePoint Check_Point/: %s", exc)
+            logger.warning(
+                "Web server failed to restore state from SharePoint Check_Point/: %s", exc
+            )
 
         logger.info("DMS Web UI sẵn sàng tại http://0.0.0.0:8000")
 

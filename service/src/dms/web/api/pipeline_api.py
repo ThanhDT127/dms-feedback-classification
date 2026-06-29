@@ -155,14 +155,14 @@ async def save_keywords(data: dict):
     settings = deps.get_settings()
     if settings is None:
         raise HTTPException(status_code=400, detail="Settings chưa được cấu hình")
-        
+
     kw_map_path = settings.kw_map_path
     try:
         # If the directory doesn't exist, create it
         kw_map_path.parent.mkdir(parents=True, exist_ok=True)
         # Write to file with indent=2, ensure_ascii=False
         kw_map_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        
+
         # Reset dependencies so that loaded keyword_hints are re-initialized
         deps.reset()
         return {"success": True, "message": "Đã lưu từ khóa gợi ý thành công."}
@@ -179,11 +179,11 @@ async def list_products():
     settings = deps.get_settings()
     if settings is None:
         raise HTTPException(status_code=400, detail="Settings chưa được cấu hình")
-        
+
     products_path = settings.df_products_path
     if not products_path.is_file():
         raise HTTPException(status_code=404, detail="Không tìm thấy file sản phẩm Excel.")
-        
+
     try:
         sheets_data = {}
         sheet_names = []
@@ -194,7 +194,7 @@ async def list_products():
                 df = df.fillna("")
                 sheets_data[sheet_name] = {
                     "columns": list(df.columns),
-                    "products": df.to_dict(orient="records")
+                    "products": df.to_dict(orient="records"),
                 }
         return {
             "sheets": sheets_data,
@@ -214,36 +214,42 @@ async def save_products(payload: dict):
     settings = deps.get_settings()
     if settings is None:
         raise HTTPException(status_code=400, detail="Settings chưa được cấu hình")
-        
+
     sheet_name = payload.get("sheet_name")
     products = payload.get("products")
-    
+
     if not sheet_name or products is None:
-        raise HTTPException(status_code=400, detail="Thiếu thông tin sheet_name hoặc danh sách sản phẩm trong payload.")
-        
+        raise HTTPException(
+            status_code=400,
+            detail="Thiếu thông tin sheet_name hoặc danh sách sản phẩm trong payload.",
+        )
+
     products_path = settings.df_products_path
     try:
         # Create parent directories if they don't exist
         products_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Load all existing sheets first to preserve them
         sheets_data = {}
         if products_path.is_file():
             with pd.ExcelFile(products_path) as xl:
                 for name in xl.sheet_names:
                     sheets_data[name] = pd.read_excel(xl, name)
-                    
+
         # Update the target sheet
         sheets_data[sheet_name] = pd.DataFrame(products)
-        
+
         # Save all sheets back to excel using openpyxl engine
-        with pd.ExcelWriter(products_path, engine='openpyxl') as writer:
+        with pd.ExcelWriter(products_path, engine="openpyxl") as writer:
             for name, df_sheet in sheets_data.items():
                 df_sheet.to_excel(writer, sheet_name=name, index=False)
-                
+
         # Reset dependencies so cached RAG index is re-initialized
         deps.reset()
-        return {"success": True, "message": f"Đã lưu danh mục sản phẩm của sheet '{sheet_name}' thành công."}
+        return {
+            "success": True,
+            "message": f"Đã lưu danh mục sản phẩm của sheet '{sheet_name}' thành công.",
+        }
     except PermissionError:
         raise HTTPException(
             status_code=400,
@@ -288,9 +294,7 @@ def _update_config_asset_state(asset_key: str, sp_response: dict) -> None:
 
     try:
         state_path.parent.mkdir(parents=True, exist_ok=True)
-        state_path.write_text(
-            json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception as exc:
         logger.warning("Cannot write config asset state after sync: %s", exc)
 
@@ -361,9 +365,7 @@ async def sync_products_to_sharepoint():
             detail=f"Upload file sản phẩm lên SharePoint thất bại: {exc}",
         ) from exc
 
-    _update_config_asset_state(
-        f"keyword/{products_path.name}", result
-    )
+    _update_config_asset_state(f"keyword/{products_path.name}", result)
     return {
         "success": True,
         "message": f"Đã upload {products_path.name} lên SharePoint/{settings.sp_keyword_folder}/",

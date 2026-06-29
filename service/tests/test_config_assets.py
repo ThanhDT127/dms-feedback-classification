@@ -29,7 +29,9 @@ class FakeSharePointConfigClient:
         return path
 
 
-def _remote_item(item_id: str, name: str, etag: str, modified: str = "2026-05-16T10:00:00Z") -> dict:
+def _remote_item(
+    item_id: str, name: str, etag: str, modified: str = "2026-05-16T10:00:00Z"
+) -> dict:
     return {
         "id": item_id,
         "name": name,
@@ -53,6 +55,7 @@ def _validator(settings, keyword_dir: Path, model_dir: Path) -> None:
     if tfidf_word_path.exists():
         try:
             import joblib
+
             joblib.load(tfidf_word_path)
         except Exception as exc:
             raise ModelArtifactError(f"Failed to load TF-IDF word model: {exc}")
@@ -65,15 +68,15 @@ def prepare_local_assets(settings, tmp_path: Path) -> None:
     settings.model_dir.mkdir(parents=True, exist_ok=True)
     write_baseline_artifacts(settings.model_dir, settings.keyword_dir, include_keyword_minors=True)
     with pd.ExcelWriter(settings.keyword_dir / "Phân Chia Nhóm Sản Phẩm V2.xlsx") as writer:
-        pd.DataFrame(
-            [{"Model": "AT10 8W", "Dòng SP": "Bulb", "Sản phẩm": "Den LED"}]
-        ).to_excel(writer, index=False, sheet_name="Products")
+        pd.DataFrame([{"Model": "AT10 8W", "Dòng SP": "Bulb", "Sản phẩm": "Den LED"}]).to_excel(
+            writer, index=False, sheet_name="Products"
+        )
         pd.DataFrame(
             [{"Keyword": "bóng đèn", "Dòng SP": "Bulb", "Sản phẩm": "Den LED", "Priority": 1}]
         ).to_excel(writer, index=False, sheet_name="Loc lan 2")
-        pd.DataFrame(
-            [{"Keyword": "phích cắm", "Sản phẩm": "Phich", "Priority": 1}]
-        ).to_excel(writer, index=False, sheet_name="Loc lan 3")
+        pd.DataFrame([{"Keyword": "phích cắm", "Sản phẩm": "Phich", "Priority": 1}]).to_excel(
+            writer, index=False, sheet_name="Loc lan 3"
+        )
     (settings.keyword_dir / "Hệ từ khóa Lọc 3 lần.xlsx").write_bytes(b"keyword-v1")
 
 
@@ -121,7 +124,9 @@ def test_config_asset_sync_skips_unchanged_assets(settings, tmp_path: Path):
             },
             {},
         ),
-        snapshot_validator=lambda keyword_dir, model_dir: _validator(settings, keyword_dir, model_dir),
+        snapshot_validator=lambda keyword_dir, model_dir: _validator(
+            settings, keyword_dir, model_dir
+        ),
     )
     seed_state(
         service,
@@ -169,7 +174,9 @@ def test_config_asset_sync_downloads_changed_asset_atomically(settings, tmp_path
     service = ConfigAssetSyncService(
         settings=settings,
         sharepoint_client=client,
-        snapshot_validator=lambda keyword_dir, model_dir: _validator(settings, keyword_dir, model_dir),
+        snapshot_validator=lambda keyword_dir, model_dir: _validator(
+            settings, keyword_dir, model_dir
+        ),
     )
     seed_state(
         service,
@@ -193,7 +200,9 @@ def test_config_asset_sync_downloads_changed_asset_atomically(settings, tmp_path
     assert settings.kw_map_path != runtime_settings.kw_map_path
 
 
-def test_config_asset_sync_rejects_invalid_model_bundle_and_keeps_local_snapshot(settings, tmp_path: Path):
+def test_config_asset_sync_rejects_invalid_model_bundle_and_keeps_local_snapshot(
+    settings, tmp_path: Path
+):
     prepare_local_assets(settings, tmp_path)
     original = settings.tfidf_word_path.read_bytes()
     kw_map_item = _remote_item("kw1", "kw_map.json", "etag-1")
@@ -222,7 +231,9 @@ def test_config_asset_sync_rejects_invalid_model_bundle_and_keeps_local_snapshot
     service = ConfigAssetSyncService(
         settings=settings,
         sharepoint_client=client,
-        snapshot_validator=lambda keyword_dir, model_dir: _validator(settings, keyword_dir, model_dir),
+        snapshot_validator=lambda keyword_dir, model_dir: _validator(
+            settings, keyword_dir, model_dir
+        ),
     )
     seed_state(
         service,
@@ -242,7 +253,9 @@ def test_config_asset_sync_rejects_invalid_model_bundle_and_keeps_local_snapshot
     assert not service.active_model_dir.exists()
 
 
-def test_config_asset_sync_raises_when_required_asset_missing_without_local_snapshot(settings, tmp_path: Path):
+def test_config_asset_sync_raises_when_required_asset_missing_without_local_snapshot(
+    settings, tmp_path: Path
+):
     settings.data_dir = tmp_path / "data"
     settings.ensure_runtime_dirs()
     client = FakeSharePointConfigClient(
@@ -255,13 +268,17 @@ def test_config_asset_sync_raises_when_required_asset_missing_without_local_snap
     service = ConfigAssetSyncService(
         settings=settings,
         sharepoint_client=client,
-        snapshot_validator=lambda keyword_dir, model_dir: _validator(settings, keyword_dir, model_dir),
+        snapshot_validator=lambda keyword_dir, model_dir: _validator(
+            settings, keyword_dir, model_dir
+        ),
     )
     with pytest.raises(ConfigAssetSyncError):
         service.sync()
 
 
-def test_config_asset_sync_uses_source_dirs_as_fallback_before_first_snapshot(settings, tmp_path: Path):
+def test_config_asset_sync_uses_source_dirs_as_fallback_before_first_snapshot(
+    settings, tmp_path: Path
+):
     prepare_local_assets(settings, tmp_path)
     service = ConfigAssetSyncService(
         settings=settings,
@@ -269,7 +286,9 @@ def test_config_asset_sync_uses_source_dirs_as_fallback_before_first_snapshot(se
             {settings.sp_keyword_folder: [], settings.sp_model_folder: []},
             {},
         ),
-        snapshot_validator=lambda keyword_dir, model_dir: _validator(settings, keyword_dir, model_dir),
+        snapshot_validator=lambda keyword_dir, model_dir: _validator(
+            settings, keyword_dir, model_dir
+        ),
     )
     result = service.sync()
     assert not result.reload_required

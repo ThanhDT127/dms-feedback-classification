@@ -10,9 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from dms.settings import Settings, get_settings
-from dms.web.app import create_app
 from dms.web import deps
-
+from dms.web.app import create_app
 
 # ─── Helpers ───
 
@@ -37,8 +36,9 @@ def _make_settings(tmp_path: Path, kw_dir: Path | None = None) -> Settings:
     )
 
 
-def _fake_sp_upload_response(item_id="sp-item-123", etag='"etag-abc"',
-                             modified="2026-05-29T08:00:00Z", size=1024):
+def _fake_sp_upload_response(
+    item_id="sp-item-123", etag='"etag-abc"', modified="2026-05-29T08:00:00Z", size=1024
+):
     """Return a dict mimicking a SharePoint Graph API upload response."""
     return {
         "id": item_id,
@@ -78,7 +78,9 @@ def client(tmp_path, monkeypatch, mock_sp_client):
 
     monkeypatch.setattr("dms.settings.SERVICE_DIR", tmp_path)
     monkeypatch.setattr("dms.web.api.pipeline_api.deps.get_settings", lambda: settings)
-    monkeypatch.setattr("dms.web.api.pipeline_api.deps.get_sharepoint_client", lambda: mock_sp_client)
+    monkeypatch.setattr(
+        "dms.web.api.pipeline_api.deps.get_sharepoint_client", lambda: mock_sp_client
+    )
     monkeypatch.setattr("dms.web.deps.get_settings", lambda: settings)
 
     if hasattr(get_settings, "cache_clear"):
@@ -103,6 +105,7 @@ def kw_map_path(tmp_path) -> Path:
 def products_path(tmp_path) -> Path:
     """Create a minimal product Excel file in the test keyword dir."""
     import pandas as pd
+
     kw_dir = tmp_path / "Keyword"
     kw_dir.mkdir(exist_ok=True)
     path = kw_dir / "Phân Chia Nhóm Sản Phẩm V2.xlsx"
@@ -303,7 +306,9 @@ class TestEdgeCases:
         state = json.loads(state_path.read_text(encoding="utf-8"))
         assert "keyword/kw_map.json" in state["assets"]
 
-    def test_version_format_matches_config_asset_sync(self, client, kw_map_path, mock_sp_client, tmp_path):
+    def test_version_format_matches_config_asset_sync(
+        self, client, kw_map_path, mock_sp_client, tmp_path
+    ):
         """The state entry format MUST exactly match ConfigAssetSyncService._item_version().
         If this breaks, the sync loop prevention will fail silently.
         """
@@ -315,11 +320,15 @@ class TestEdgeCases:
 
         # Must have exactly these 4 keys, all as strings
         expected_keys = {"item_id", "e_tag", "last_modified", "size"}
-        assert set(version.keys()) == expected_keys, f"Keys mismatch: {set(version.keys())} vs {expected_keys}"
+        assert set(version.keys()) == expected_keys, (
+            f"Keys mismatch: {set(version.keys())} vs {expected_keys}"
+        )
         for key in expected_keys:
             assert isinstance(version[key], str), f"Key {key} must be str, got {type(version[key])}"
 
-    def test_sync_loop_prevention_via_is_changed(self, client, kw_map_path, mock_sp_client, tmp_path):
+    def test_sync_loop_prevention_via_is_changed(
+        self, client, kw_map_path, mock_sp_client, tmp_path
+    ):
         """After uploading, ConfigAssetSyncService._is_changed() should return False."""
         from dms.config_assets import ConfigAssetSyncService
 
@@ -336,7 +345,9 @@ class TestEdgeCases:
         # _is_changed() should say "no change" → no re-download
         assert ConfigAssetSyncService._is_changed(remote_item, prior, kw_map_path) is False
 
-    def test_is_changed_detects_real_remote_update(self, client, kw_map_path, mock_sp_client, tmp_path):
+    def test_is_changed_detects_real_remote_update(
+        self, client, kw_map_path, mock_sp_client, tmp_path
+    ):
         """If someone else modifies the file on SharePoint after our upload, _is_changed must return True."""
         from dms.config_assets import ConfigAssetSyncService
 
@@ -348,8 +359,10 @@ class TestEdgeCases:
 
         # Simulate someone ELSE uploading a newer version with different eTag
         remote_item_changed = _fake_sp_upload_response(
-            item_id="sp-item-123", etag='"etag-NEW-VERSION"',
-            modified="2026-05-30T12:00:00Z", size=2048
+            item_id="sp-item-123",
+            etag='"etag-NEW-VERSION"',
+            modified="2026-05-30T12:00:00Z",
+            size=2048,
         )
         assert ConfigAssetSyncService._is_changed(remote_item_changed, prior, kw_map_path) is True
 
@@ -369,7 +382,9 @@ class TestEdgeCases:
         state = json.loads(state_path.read_text(encoding="utf-8"))
         assert state["assets"]["keyword/kw_map.json"]["e_tag"] == '"etag-second-upload"'
 
-    def test_empty_sp_response_fields_stored_as_empty_strings(self, client, kw_map_path, mock_sp_client, tmp_path):
+    def test_empty_sp_response_fields_stored_as_empty_strings(
+        self, client, kw_map_path, mock_sp_client, tmp_path
+    ):
         """If SharePoint response is missing fields, they should be stored as '' not None."""
         mock_sp_client.upload_file.return_value = {}  # Empty response
         response = client.post("/api/pipeline/sync-keywords-to-sp")
@@ -382,7 +397,9 @@ class TestEdgeCases:
             assert isinstance(val, str), f"{key} should be str, got {type(val)}"
             assert val == "", f"{key} should be '' for missing fields, got {val!r}"
 
-    def test_keyword_and_product_sync_independent_state(self, client, kw_map_path, products_path, mock_sp_client, tmp_path):
+    def test_keyword_and_product_sync_independent_state(
+        self, client, kw_map_path, products_path, mock_sp_client, tmp_path
+    ):
         """Syncing keywords and products should write to different state keys."""
         mock_sp_client.upload_file.side_effect = [
             _fake_sp_upload_response(item_id="kw-111"),
@@ -405,6 +422,7 @@ class TestEdgeCases:
         work_dir = tmp_path / "work"
         if work_dir.exists():
             import shutil
+
             shutil.rmtree(work_dir)
 
         response = client.post("/api/pipeline/sync-keywords-to-sp")

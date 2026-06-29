@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 from datetime import datetime
 from pathlib import Path
 
-import io
 import pandas as pd
-from fastapi import APIRouter, HTTPException, UploadFile, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 from ...settings import get_settings
@@ -127,7 +127,7 @@ async def upload_file(file: UploadFile):
                 detail=f"File quá lớn. Giới hạn {MAX_UPLOAD_BYTES // (1024 * 1024)}MB.",
             )
         dest.write_bytes(content)
-        
+
         # Validate Excel structure: must contain a column containing "nội dung" or "noi dung"
         try:
             df = pd.read_excel(dest, nrows=0)
@@ -171,24 +171,24 @@ async def upload_file(file: UploadFile):
 async def get_template():
     """Tải file template Excel mẫu cho việc phân loại phản hồi."""
     try:
-        df = pd.DataFrame({
-            "Nội dung": [
-                "Ví dụ: Ứng dụng chạy rất mượt nhưng đôi khi bị lag nhẹ khi tải dữ liệu lớn.",
-                "Ví dụ: Tôi không thể đăng nhập vào tài khoản của mình từ sáng nay."
-            ]
-        })
+        df = pd.DataFrame(
+            {
+                "Nội dung": [
+                    "Ví dụ: Ứng dụng chạy rất mượt nhưng đôi khi bị lag nhẹ khi tải dữ liệu lớn.",
+                    "Ví dụ: Tôi không thể đăng nhập vào tài khoản của mình từ sáng nay.",
+                ]
+            }
+        )
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False)
         output.seek(0)
-        
-        headers = {
-            'Content-Disposition': 'attachment; filename="template_dms.xlsx"'
-        }
+
+        headers = {"Content-Disposition": 'attachment; filename="template_dms.xlsx"'}
         return StreamingResponse(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers=headers
+            headers=headers,
         )
     except Exception as exc:
         logger.error("Lỗi tạo file template: %s", exc)
@@ -223,24 +223,24 @@ async def sync_sharepoint():
         sp_input_items = sp_client.list_folder_items(settings.sp_input_folder)
         local_input_dir = settings.work_dir / "input"
         local_input_dir.mkdir(parents=True, exist_ok=True)
-        
+
         for item in sp_input_items:
             if "folder" in item:
                 continue
             name = item.get("name", "")
             if not name.lower().endswith(".xlsx"):
                 continue
-            
+
             # Kiểm tra xem file đã từng được xử lý chưa (dựa theo ID hoặc tên)
             item_id = item.get("id")
             if item_id and item_id in seen_data:
                 status = seen_data[item_id].get("status")
                 if status in ("done", "failed"):
                     continue
-            
+
             # Fallback đối chiếu theo tên file
             already_processed = False
-            for fid, s_info in seen_data.items():
+            for _fid, s_info in seen_data.items():
                 if s_info.get("name") == name and s_info.get("status") in ("done", "failed"):
                     already_processed = True
                     break
@@ -265,7 +265,7 @@ async def sync_sharepoint():
         if local_output_dir.is_dir():
             sp_output_items = sp_client.list_folder_items(settings.sp_output_folder)
             sp_output_names = {item["name"] for item in sp_output_items if "folder" not in item}
-            
+
             for path in local_output_dir.iterdir():
                 if path.is_file() and path.suffix.lower() == ".xlsx":
                     if path.name not in sp_output_names:
@@ -294,17 +294,17 @@ async def sync_sharepoint():
 async def list_files(folder: str):
     """Liệt kê các file trong thư mục chỉ định (Duyệt SharePoint Cloud hoặc Local Fallback)."""
     folder_lower = folder.lower()
-    
+
     # Quyết định xem có nên duyệt SharePoint không
     sp_folder_map = {
         "input": get_settings().sp_input_folder,
         "output": get_settings().sp_output_folder,
         "checkpoint": get_settings().sp_checkpoint_folder,
     }
-    
+
     sp_folder = sp_folder_map.get(folder_lower)
     sp_client = get_sharepoint_client() if sp_folder else None
-    
+
     # ─── Đọc seen_files.json để map trạng thái ───
     seen_data = {}
     seen_path = WORK_DIR / "seen_files.json"
@@ -324,34 +324,40 @@ async def list_files(folder: str):
                 # Bỏ qua nếu là thư mục
                 if "folder" in item:
                     continue
-                
+
                 # Trạng thái mặc định là "new" (hoặc None cho output/checkpoint)
                 status = "new" if folder_lower == "input" else None
                 item_id = item.get("id")
-                
+
                 # Đối chiếu chéo từ seen_files.json theo ID hoặc Tên file
                 if item_id and item_id in seen_data:
                     status = seen_data[item_id].get("status", "done")
                 else:
                     # Fallback theo tên file nếu không lưu ID trong seen
-                    for fid, s_info in seen_data.items():
+                    for _fid, s_info in seen_data.items():
                         if s_info.get("name") == name:
                             status = s_info.get("status", "done")
                             break
-                            
-                files.append({
-                    "name": name,
-                    "size": item.get("size", 0),
-                    "modified": item.get("lastModifiedDateTime", "—"),
-                    "extension": Path(name).suffix.lstrip("."),
-                    "source_dir": "SharePoint",
-                    "status": status,
-                    "id": item_id,
-                    "web_url": item.get("webUrl"),
-                })
+
+                files.append(
+                    {
+                        "name": name,
+                        "size": item.get("size", 0),
+                        "modified": item.get("lastModifiedDateTime", "—"),
+                        "extension": Path(name).suffix.lstrip("."),
+                        "source_dir": "SharePoint",
+                        "status": status,
+                        "id": item_id,
+                        "web_url": item.get("webUrl"),
+                    }
+                )
             return files
         except Exception as exc:
-            logger.warning("Không thể duyệt SharePoint cho thư mục %s, chuyển sang fallback local: %s", folder, exc)
+            logger.warning(
+                "Không thể duyệt SharePoint cho thư mục %s, chuyển sang fallback local: %s",
+                folder,
+                exc,
+            )
 
     # ─── Fallback Local (Keyword, Model hoặc khi SharePoint lỗi) ───
     dirs = _get_folder_map().get(folder_lower)
@@ -368,12 +374,12 @@ async def list_files(folder: str):
                 seen_names.add(item.name)
                 info = _file_info(item)
                 info["source_dir"] = str(dir_path)
-                
+
                 # Gán trạng thái cho file local
                 status = None
                 if folder_lower == "input":
                     status = "new"
-                    for fid, s_info in seen_data.items():
+                    for _fid, s_info in seen_data.items():
                         if s_info.get("name") == item.name:
                             status = s_info.get("status", "done")
                             break
@@ -410,20 +416,20 @@ def _safe_dataframe_records(df: pd.DataFrame) -> list[dict]:
 async def preview_file(folder: str, filename: str, max_rows: int = 20):
     """Đọc preview file — hỗ trợ Excel, CSV, JSON, text (SharePoint Cloud hoặc Local Fallback)."""
     folder_lower = folder.lower()
-    
+
     # ─── Lấy file trên SharePoint nếu được hỗ trợ ───
     sp_folder_map = {
         "input": get_settings().sp_input_folder,
         "output": get_settings().sp_output_folder,
         "checkpoint": get_settings().sp_checkpoint_folder,
     }
-    
+
     sp_folder = sp_folder_map.get(folder_lower)
     sp_client = get_sharepoint_client() if sp_folder else None
-    
+
     file_path: Path | None = None
     temp_downloaded_path: Path | None = None
-    
+
     if sp_client is not None and sp_folder:
         try:
             items = sp_client.list_folder_items(sp_folder)
@@ -432,16 +438,16 @@ async def preview_file(folder: str, filename: str, max_rows: int = 20):
                 if item.get("name") == filename:
                     target_item = item
                     break
-            
+
             if target_item:
                 # Tải file về thư mục staging tạm thời
                 staging_dir = WORK_DIR / "staging"
                 staging_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 # Sanitize filename to avoid path traversal in staging
                 safe_name = Path(filename).name
                 temp_path = staging_dir / safe_name
-                
+
                 sp_client.download_file(target_item["id"], temp_path)
                 file_path = temp_path
                 temp_downloaded_path = temp_path
@@ -595,20 +601,20 @@ def cleanup_file(path: Path) -> None:
 async def download_file(folder: str, filename: str, background_tasks: BackgroundTasks):
     """Tải file — hỗ trợ Excel, CSV, JSON, text (SharePoint Cloud hoặc Local Fallback)."""
     folder_lower = folder.lower()
-    
+
     # Quyết định xem có nên tải từ SharePoint không
     sp_folder_map = {
         "input": get_settings().sp_input_folder,
         "output": get_settings().sp_output_folder,
         "checkpoint": get_settings().sp_checkpoint_folder,
     }
-    
+
     sp_folder = sp_folder_map.get(folder_lower)
     sp_client = get_sharepoint_client() if sp_folder else None
-    
+
     file_path: Path | None = None
     temp_downloaded_path: Path | None = None
-    
+
     if sp_client is not None and sp_folder:
         try:
             items = sp_client.list_folder_items(sp_folder)
@@ -617,14 +623,14 @@ async def download_file(folder: str, filename: str, background_tasks: Background
                 if item.get("name") == filename:
                     target_item = item
                     break
-            
+
             if target_item:
                 staging_dir = WORK_DIR / "staging"
                 staging_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 safe_name = Path(filename).name
                 temp_path = staging_dir / safe_name
-                
+
                 sp_client.download_file(target_item["id"], temp_path)
                 file_path = temp_path
                 temp_downloaded_path = temp_path
@@ -673,5 +679,3 @@ async def download_file(folder: str, filename: str, background_tasks: Background
         filename=file_path.name,
         media_type=media_type,
     )
-
-

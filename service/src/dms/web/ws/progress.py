@@ -26,10 +26,12 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
     jobs: dict = websocket.app.state.jobs
     job = jobs.get(job_id)
     if job is None:
-        await websocket.send_json({
-            "type": "error",
-            "data": {"error": f"Không tìm thấy job: {job_id}"},
-        })
+        await websocket.send_json(
+            {
+                "type": "error",
+                "data": {"error": f"Không tìm thấy job: {job_id}"},
+            }
+        )
         await websocket.close(code=4004)
         return
 
@@ -41,10 +43,12 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
         while True:
             job = jobs.get(job_id)
             if job is None:
-                await websocket.send_json({
-                    "type": "error",
-                    "data": {"error": "Job đã bị xóa"},
-                })
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "data": {"error": "Job đã bị xóa"},
+                    }
+                )
                 break
 
             status = job.get("status", "unknown")
@@ -54,23 +58,21 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
             if len(all_results) > last_sent_results_count:
                 new_results = all_results[last_sent_results_count:]
                 last_sent_results_count = len(all_results)
-                await websocket.send_json({
-                    "type": "batch_result",
-                    "data": {
-                        "results": new_results
-                    }
-                })
+                await websocket.send_json(
+                    {"type": "batch_result", "data": {"results": new_results}}
+                )
 
             # 2. Send progress update when rows_done OR step changes
             current_rows = job.get("rows_done", 0)
             current_step = job.get("step")
             current_step_status = job.get("step_status")
-            
+
             rows_changed = current_rows != last_sent_rows
-            step_changed = (current_step != last_sent_step or 
-                          current_step_status != last_sent_step_status)
+            step_changed = (
+                current_step != last_sent_step or current_step_status != last_sent_step_status
+            )
             terminal = status in ("completed", "error", "cancelled")
-            
+
             if rows_changed or step_changed or terminal:
                 last_sent_rows = current_rows
                 last_sent_step = current_step
@@ -80,59 +82,66 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
                     # Send final batch results if any are left
                     if len(all_results) > last_sent_results_count:
                         new_results = all_results[last_sent_results_count:]
-                        await websocket.send_json({
-                            "type": "batch_result",
-                            "data": {"results": new_results}
-                        })
-                    
-                    await websocket.send_json({
-                        "type": "complete",
-                        "data": {
-                            "job_id": job_id,
-                            "status": "completed",
-                            "total_rows": job.get("total_rows", 0),
-                            "rows_done": job.get("rows_done", 0),
-                            "percent": 100,
-                            "output_path": job.get("output_path", ""),
-                            "duration_seconds": job.get("duration_seconds", 0),
-                        },
-                    })
+                        await websocket.send_json(
+                            {"type": "batch_result", "data": {"results": new_results}}
+                        )
+
+                    await websocket.send_json(
+                        {
+                            "type": "complete",
+                            "data": {
+                                "job_id": job_id,
+                                "status": "completed",
+                                "total_rows": job.get("total_rows", 0),
+                                "rows_done": job.get("rows_done", 0),
+                                "percent": 100,
+                                "output_path": job.get("output_path", ""),
+                                "duration_seconds": job.get("duration_seconds", 0),
+                            },
+                        }
+                    )
                     break
 
                 if status == "error":
-                    await websocket.send_json({
-                        "type": "error",
-                        "data": {
-                            "job_id": job_id,
-                            "status": "error",
-                            "error": job.get("error", "Lỗi không xác định"),
-                        },
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "data": {
+                                "job_id": job_id,
+                                "status": "error",
+                                "error": job.get("error", "Lỗi không xác định"),
+                            },
+                        }
+                    )
                     break
 
                 if status == "cancelled":
-                    await websocket.send_json({
-                        "type": "cancelled",
-                        "data": {
-                            "job_id": job_id,
-                            "status": "cancelled",
-                        },
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "cancelled",
+                            "data": {
+                                "job_id": job_id,
+                                "status": "cancelled",
+                            },
+                        }
+                    )
                     break
 
                 # Progress update
-                await websocket.send_json({
-                    "type": "progress",
-                    "data": {
-                        "job_id": job_id,
-                        "status": status,
-                        "total_rows": job.get("total_rows", 0),
-                        "rows_done": current_rows,
-                        "percent": job.get("percent", 0),
-                        "step": current_step,
-                        "step_status": current_step_status,
-                    },
-                })
+                await websocket.send_json(
+                    {
+                        "type": "progress",
+                        "data": {
+                            "job_id": job_id,
+                            "status": status,
+                            "total_rows": job.get("total_rows", 0),
+                            "rows_done": current_rows,
+                            "percent": job.get("percent", 0),
+                            "step": current_step,
+                            "step_status": current_step_status,
+                        },
+                    }
+                )
 
             await asyncio.sleep(0.5)
 

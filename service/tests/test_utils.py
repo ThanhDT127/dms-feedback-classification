@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-
-import pytest
 
 from dms.utils import atomic_write_json, atomic_write_text
 
@@ -78,6 +75,7 @@ class TestAtomicWriteJson:
 
     def test_non_serializable_uses_default_str(self, tmp_path: Path) -> None:
         from datetime import datetime
+
         target = tmp_path / "dt.json"
         now = datetime.now()
         atomic_write_json(target, {"ts": now})

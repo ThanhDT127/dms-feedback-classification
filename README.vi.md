@@ -5,6 +5,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/ThanhDT127/dms-feedback-classification/actions/workflows/ci.yml"><img src="https://github.com/ThanhDT127/dms-feedback-classification/actions/workflows/ci.yml/badge.svg" alt="Python CI" /></a>
   <a href="#readme"><img src="https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue?style=flat-square&logo=python&logoColor=white" alt="Python Version" /></a>
   <a href="#readme"><img src="https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" /></a>
   <a href="#readme"><img src="https://img.shields.io/badge/Docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Compose" /></a>
@@ -151,20 +152,42 @@ Hệ thống tự động quét và làm giàu thông tin cho các file Excel:
 * Python 3.11+ (nếu chạy trực tiếp không qua container)
 
 ### Thiết lập môi trường local
+
+#### Chạy trực tiếp cục bộ (Bare Metal - dùng Makefile)
+Nếu bạn muốn phát triển, chạy hoặc kiểm thử pipeline trực tiếp trên máy chủ:
+1. Clone repository mã nguồn:
+   ```bash
+   git clone https://github.com/ThanhDT127/dms-feedback-classification.git
+   cd dms-feedback-classification
+   ```
+2. Cài đặt các thư viện phụ thuộc (đảm bảo virtual environment đã kích hoạt hoặc dùng lệnh make):
+   ```bash
+   make setup
+   ```
+3. Tạo file cấu hình môi trường local tại thư mục gốc:
+   ```bash
+   cp .env.example .env
+   ```
+   Chỉnh sửa tệp `.env` và điền thông tin xác thực (SharePoint Drive IDs, GCP Client IDs, hoặc Gemini API keys).
+4. Nếu sử dụng Google Vertex AI, đặt tệp khóa tài khoản dịch vụ tại `testvertex.json` ở thư mục gốc.
+5. Quản lý dự án thông qua các lệnh `make` tiện ích:
+   * **Chạy kiểm thử (pytest):** `make test`
+   * **Định dạng code (ruff):** `make format`
+   * **Chạy pipeline offline:** `make run FILE=sample_feedback.xlsx` (Cần đặt file Excel vào thư mục `Input/` trước)
+   * **Dọn dẹp cache:** `make clean`
+
+#### Chạy bằng Docker (Khuyên dùng)
+Để chạy watcher tự động đồng bộ SharePoint và giao diện quản lý web dashboard:
 1. Clone repository mã nguồn:
    ```bash
    git clone https://github.com/ThanhDT127/dms-feedback-classification.git
    cd dms-feedback-classification/service
    ```
-2. Tạo file cấu hình môi trường local:
+2. Sao chép tệp cấu hình mẫu:
    ```bash
    cp .env.example .env
    ```
-3. Chỉnh sửa tệp `.env` và điền thông tin xác thực (SharePoint Drive IDs, GCP Client IDs, hoặc Gemini API keys).
-4. Nếu sử dụng Google Vertex AI (khuyên dùng cho môi trường production), đặt tệp khóa tài khoản dịch vụ tại:
-   ```text
-   service/testvertex.json
-   ```
+3. Chỉnh sửa tệp `service/.env` và đặt tệp khóa Vertex AI (nếu dùng) vào `service/testvertex.json`.
 
 ### Chạy bằng Docker Compose
 Để khởi động watcher chạy nền và giao diện web dashboard:

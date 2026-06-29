@@ -167,8 +167,15 @@ def _run_classification_job(
                     remote_filename = f"{orig_stem}_output.xlsx"
                 else:
                     remote_filename = output_path.name
-                logger.info("Uploading completed job %s output to SharePoint: %s as %s", job_id, output_path.name, remote_filename)
-                res = sp_client.upload_file(output_path, settings.sp_output_folder, remote_filename=remote_filename)
+                logger.info(
+                    "Uploading completed job %s output to SharePoint: %s as %s",
+                    job_id,
+                    output_path.name,
+                    remote_filename,
+                )
+                res = sp_client.upload_file(
+                    output_path, settings.sp_output_folder, remote_filename=remote_filename
+                )
                 job["sp_uploaded"] = True
                 job["sp_folder"] = settings.sp_output_folder
                 job["sp_web_url"] = res.get("webUrl")
@@ -324,7 +331,7 @@ async def download_job_result(request: Request, job_id: str):
         remote_filename = output_path.name
 
     headers = {
-        "Content-Disposition": f'attachment; filename="{remote_filename}"; filename*=utf-8\'\'{quote(remote_filename)}\''
+        "Content-Disposition": f"attachment; filename=\"{remote_filename}\"; filename*=utf-8''{quote(remote_filename)}'"
     }
 
     return FileResponse(
@@ -375,12 +382,26 @@ async def upload_job_to_sharepoint(request: Request, job_id: str):
             remote_output_name = output_path.name
 
         # Upload input file to Input folder
-        logger.info("Manually uploading job %s input to SharePoint: %s as %s", job_id, input_path.name, remote_input_name)
-        sp_client.upload_file(input_path, settings.sp_input_folder, remote_filename=remote_input_name)
+        logger.info(
+            "Manually uploading job %s input to SharePoint: %s as %s",
+            job_id,
+            input_path.name,
+            remote_input_name,
+        )
+        sp_client.upload_file(
+            input_path, settings.sp_input_folder, remote_filename=remote_input_name
+        )
 
         # Upload output file to Output folder
-        logger.info("Manually uploading job %s output to SharePoint: %s as %s", job_id, output_path.name, remote_output_name)
-        res_out = sp_client.upload_file(output_path, settings.sp_output_folder, remote_filename=remote_output_name)
+        logger.info(
+            "Manually uploading job %s output to SharePoint: %s as %s",
+            job_id,
+            output_path.name,
+            remote_output_name,
+        )
+        res_out = sp_client.upload_file(
+            output_path, settings.sp_output_folder, remote_filename=remote_output_name
+        )
 
         job["sp_uploaded"] = True
         job["sp_folder"] = settings.sp_output_folder
@@ -396,4 +417,3 @@ async def upload_job_to_sharepoint(request: Request, job_id: str):
             status_code=500,
             detail=f"Không thể upload lên SharePoint: {exc}",
         ) from exc
-

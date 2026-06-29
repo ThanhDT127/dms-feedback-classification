@@ -112,9 +112,7 @@ class ConfigAssetSyncService:
             updates["keyword_dir_override"] = self.active_keyword_dir
         if self.active_model_dir.exists():
             updates["model_dir_override"] = self.active_model_dir
-        return self.settings.model_copy(
-            update=updates
-        )
+        return self.settings.model_copy(update=updates)
 
     def _source_path_for(self, asset: TrackedConfigAsset) -> Path:
         base_dir = self.source_keyword_dir if asset.category == "keyword" else self.source_model_dir
@@ -162,6 +160,7 @@ class ConfigAssetSyncService:
 
     def save_state(self, state: dict) -> None:
         from .utils import atomic_write_json
+
         atomic_write_json(self.settings.config_assets_state_path, state)
 
     @staticmethod

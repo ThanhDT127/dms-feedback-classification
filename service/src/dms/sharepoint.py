@@ -29,8 +29,10 @@ class SharePointClient:
         self._folder_ids: dict[str, str] = {}
 
     def _drive_url(self, path: str = "") -> str:
-        return f"{self.settings.graph_base}/drives/{self.settings.sharepoint_drive_id}/{path}".rstrip(
-            "/"
+        return (
+            f"{self.settings.graph_base}/drives/{self.settings.sharepoint_drive_id}/{path}".rstrip(
+                "/"
+            )
         )
 
     def _raise_for_error(self, response: requests.Response, message: str) -> None:
@@ -38,9 +40,7 @@ class SharePointClient:
             response.raise_for_status()
         except requests.HTTPError as exc:
             detail = response.text[:300]
-            raise SharePointError(
-                f"{message} ({response.status_code}): {detail}"
-            ) from exc
+            raise SharePointError(f"{message} ({response.status_code}): {detail}") from exc
 
     def _get_subfolder_id(self, parent_id: str, folder_name: str) -> str:
         url = self._drive_url(f"items/{parent_id}/children")
@@ -48,15 +48,11 @@ class SharePointClient:
         self._raise_for_error(response, "Cannot access folder children")
         data = response.json()
         if "error" in data:
-            raise SharePointError(
-                f"Cannot access folder children: {data['error']['message']}"
-            )
+            raise SharePointError(f"Cannot access folder children: {data['error']['message']}")
         for item in data.get("value", []):
             if item.get("name") == folder_name and "folder" in item:
                 return item["id"]
-        raise SharePointError(
-            f"Subfolder not found: {folder_name!r} in parent {parent_id}"
-        )
+        raise SharePointError(f"Subfolder not found: {folder_name!r} in parent {parent_id}")
 
     def get_folder_id(self, folder_name: str) -> str:
         if folder_name not in self._folder_ids:
@@ -77,9 +73,7 @@ class SharePointClient:
         self._raise_for_error(response, f"Cannot list folder {folder_name}")
         data = response.json()
         if "error" in data:
-            raise SharePointError(
-                f"Cannot list folder {folder_name}: {data['error']['message']}"
-            )
+            raise SharePointError(f"Cannot list folder {folder_name}: {data['error']['message']}")
         return list(data.get("value", []))
 
     def list_files(self) -> list[dict]:
@@ -131,6 +125,7 @@ class SharePointClient:
         remote_filename: str | None = None,
     ) -> dict:
         from urllib.parse import quote
+
         local_path = Path(local_path)
         filename = remote_filename or local_path.name
         folder_id = self.get_folder_id(remote_folder)
