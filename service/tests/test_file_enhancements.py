@@ -15,9 +15,11 @@ class TestFileEnhancements:
     def client(self, tmp_path: Path, monkeypatch) -> TestClient:
         """Create a test client with WORK_DIR pointing to tmp_path."""
         import dms.web.api.files as files_module
+
         monkeypatch.setattr(files_module, "WORK_DIR", tmp_path)
 
         from dms.web.app import create_app
+
         app = create_app()
         return TestClient(app, raise_server_exceptions=True)
 
@@ -25,7 +27,10 @@ class TestFileEnhancements:
         """Endpoint should dynamically generate and return template Excel file."""
         resp = client.get("/api/files/template")
         assert resp.status_code == 200
-        assert resp.headers["content-type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        assert (
+            resp.headers["content-type"]
+            == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         assert "attachment" in resp.headers["content-disposition"]
         assert "template_dms.xlsx" in resp.headers["content-disposition"]
 
@@ -43,7 +48,13 @@ class TestFileEnhancements:
 
         resp = client.post(
             "/api/files/upload",
-            files={"file": ("valid.xlsx", valid_content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            files={
+                "file": (
+                    "valid.xlsx",
+                    valid_content,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
         )
         assert resp.status_code == 200
         assert resp.json()["filename"] == "valid.xlsx"
@@ -62,7 +73,13 @@ class TestFileEnhancements:
 
         resp = client.post(
             "/api/files/upload",
-            files={"file": ("invalid.xlsx", invalid_content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            files={
+                "file": (
+                    "invalid.xlsx",
+                    invalid_content,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
         )
         assert resp.status_code == 400
         assert "Cột dữ liệu không hợp lệ" in resp.json()["detail"]

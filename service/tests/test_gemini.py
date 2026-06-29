@@ -58,6 +58,10 @@ def test_gemini_apikey_initialization(settings, monkeypatch):
 
 def test_gemini_wraps_errors(settings, monkeypatch):
     client = GeminiClient(settings)
-    monkeypatch.setattr(client, "_generate_vertex", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
+    monkeypatch.setattr(
+        client,
+        "_generate_vertex",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("bad")),
+    )
     with pytest.raises(GeminiError):
         client.generate("hello")

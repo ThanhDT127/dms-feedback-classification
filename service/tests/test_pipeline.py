@@ -74,7 +74,17 @@ def test_rag_bm25_and_keyword_fallback(settings, tmp_path: Path):
     assert result[0]["Model"] == "AT10 8W"
 
     fallback = rag.enrich_with_keyword_fallbacks(
-        [{"LLM_Extracted": "", "Model": "", "Dòng SP": "", "Sản phẩm": "", "Score": 0.0, "Evidence": "", "Src": "NONE"}],
+        [
+            {
+                "LLM_Extracted": "",
+                "Model": "",
+                "Dòng SP": "",
+                "Sản phẩm": "",
+                "Score": 0.0,
+                "Evidence": "",
+                "Src": "NONE",
+            }
+        ],
         ["Tôi muốn bóng đèn mới"],
     )
     assert fallback[0]["Sản phẩm"] == "Den LED"
@@ -99,12 +109,16 @@ def test_pipeline_runner_processes_file_with_prelim_handoff(settings, tmp_path: 
     )
 
     input_path = tmp_path / "input.xlsx"
-    pd.DataFrame({"Nội dung phản hồi": ["AT10 8W website bị lỗi"]}).to_excel(input_path, index=False)
+    pd.DataFrame({"Nội dung phản hồi": ["AT10 8W website bị lỗi"]}).to_excel(
+        input_path, index=False
+    )
 
     result = runner.run_pipeline(input_path, tmp_path / "out.xlsx", tmp_path / "ckpt.json")
     assert result["total_rows"] == 1
     assert (tmp_path / "out.xlsx").exists()
-    assert any("matched_product" in prompt for kind, prompt in gemini.calls if kind == "generate_json")
+    assert any(
+        "matched_product" in prompt for kind, prompt in gemini.calls if kind == "generate_json"
+    )
 
 
 def test_issue_classifier_prompt_inverted_cot():
@@ -115,24 +129,12 @@ def test_issue_classifier_prompt_inverted_cot():
         "is_competitor": True,
         "sentiment": "Tiêu cực",
         "decision_log": [
-            {
-                "minor": "Báo lỗi",
-                "action": "ADD",
-                "why": "vợt ASIA hay lỗi"
-            },
-            {
-                "minor": "Hãng",
-                "action": "ADD",
-                "why": "Nhắc tới Asia"
-            }
+            {"minor": "Báo lỗi", "action": "ADD", "why": "vợt ASIA hay lỗi"},
+            {"minor": "Hãng", "action": "ADD", "why": "Nhắc tới Asia"},
         ],
-        "labels": {
-            "Báo lỗi": True,
-            "Hãng": True,
-            "Website": False
-        }
+        "labels": {"Báo lỗi": True, "Hãng": True, "Website": False},
     }
-    
+
     normalized = normalize_issue_output(raw_parsed)
     assert normalized["brand"] == "Asia"
     assert normalized["sentiment"] == "Tiêu cực"
@@ -152,18 +154,14 @@ def test_issue_classifier_typo_guard_and_brand_fallback():
             {
                 "minor": "Tin trung lập",
                 "action": "ADD",
-                "why": "tin thưởng là viết sai chính tả của tin tưởng"
+                "why": "tin thưởng là viết sai chính tả của tin tưởng",
             }
         ],
-        "labels": {
-            "Tin trung lập": True,
-            "Trả thưởng": False
-        }
+        "labels": {"Tin trung lập": True, "Trả thưởng": False},
     }
-    
+
     normalized = normalize_issue_output(raw_parsed)
     assert normalized["brand"] == ""
     assert normalized["sentiment"] == "Tiêu cực"
     assert "Tin trung lập" in normalized["final_minors"]
     assert "Trả thưởng" not in normalized["final_minors"]
-

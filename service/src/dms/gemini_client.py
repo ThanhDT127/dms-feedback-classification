@@ -29,9 +29,7 @@ class GeminiClient:
         os.environ["GOOGLE_CLOUD_PROJECT"] = self.settings.gcp_project_id
         os.environ["GOOGLE_CLOUD_LOCATION"] = self.settings.gcp_location
         if self.settings.gcp_service_account_json:
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
-                self.settings.gcp_service_account_json
-            )
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = self.settings.gcp_service_account_json
 
         from google import genai
 
@@ -55,6 +53,7 @@ class GeminiClient:
 
     def generate(self, prompt: str, temperature: float | None = None) -> str:
         import time
+
         last_err = None
         for attempt in range(1, self.settings.max_retry + 1):
             try:
@@ -76,6 +75,7 @@ class GeminiClient:
 
     def generate_json(self, prompt: str, temperature: float = 0.0) -> str:
         import time
+
         last_err = None
         for attempt in range(1, self.settings.max_retry + 1):
             try:
@@ -111,9 +111,7 @@ class GeminiClient:
             try:
                 return future.result(timeout=timeout)
             except concurrent.futures.TimeoutError:
-                raise TimeoutError(
-                    f"Gemini API call timed out after {timeout}s"
-                )
+                raise TimeoutError(f"Gemini API call timed out after {timeout}s")
 
     def _generate_vertex(
         self,
@@ -139,9 +137,7 @@ class GeminiClient:
 
         if self._vertex_client is None:
             raise GeminiError("Vertex AI client is not initialized")
-        response = self._call_with_timeout(
-            self._vertex_client.models.generate_content, **kwargs
-        )
+        response = self._call_with_timeout(self._vertex_client.models.generate_content, **kwargs)
         return (getattr(response, "text", None) or "").strip()
 
     def _generate_apikey(self, prompt: str, temperature: float | None = None) -> str:
@@ -179,4 +175,3 @@ class GeminiClient:
                 generation_config={"temperature": temperature},
             )
             return (getattr(response, "text", None) or "").strip()
-

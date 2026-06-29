@@ -1,0 +1,40 @@
+name: Python CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: "pip"
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r service/requirements.txt
+        pip install pytest ruff mypy
+
+    - name: Run Ruff Format & Lint Check
+      run: |
+        ruff format --check service/src service/tests
+        ruff check service/src service/tests
+
+    - name: Run Mypy Type Check
+      run: |
+        mypy --config-file service/pyproject.toml service/src
+
+    - name: Run Test Suite (pytest)
+      run: |
+        pytest service/tests

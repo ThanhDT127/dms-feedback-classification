@@ -19,7 +19,6 @@ else:
     SERVICE_DIR = Path(__file__).resolve().parents[2]
 
 
-
 class Settings(BaseSettings):
     """Validated runtime settings loaded from environment variables and .env."""
 
@@ -68,7 +67,6 @@ class Settings(BaseSettings):
     cleanup_log_ttl_days: int = Field(7, alias="CLEANUP_LOG_TTL_DAYS")
     cleanup_staging_ttl_hours: int = Field(24, alias="CLEANUP_STAGING_TTL_HOURS")
 
-
     data_dir: Path = Field(default_factory=lambda: SERVICE_DIR, alias="DATA_DIR")
     keyword_dir_override: Path | None = Field(default=None, alias="KEYWORD_DIR")
     model_dir_override: Path | None = Field(default=None, alias="MODEL_DIR")
@@ -96,9 +94,7 @@ class Settings(BaseSettings):
             if not getattr(self, field_name):
                 missing.append(field_name)
         if missing:
-            raise ValueError(
-                "Missing required settings: " + ", ".join(sorted(missing))
-            )
+            raise ValueError("Missing required settings: " + ", ".join(sorted(missing)))
 
         backend = self.gemini_backend.lower().strip()
         if backend not in {"vertex", "apikey"}:
@@ -226,6 +222,7 @@ def get_settings() -> Settings:
 def update_env_file(updates: dict[str, str]) -> None:
     """Update or append key-value pairs in the .env file while preserving comments and order."""
     from .utils import atomic_write_text
+
     env_path = SERVICE_DIR / ".env"
     if not env_path.exists():
         atomic_write_text(env_path, "")
@@ -257,4 +254,3 @@ def update_env_file(updates: dict[str, str]) -> None:
             new_lines.append(f"{key}={val}")
 
     atomic_write_text(env_path, "\n".join(new_lines) + "\n")
-

@@ -25,10 +25,14 @@ def write_keyword_map(keyword_dir: Path) -> None:
         "CTKM/giá/cơ chế": ["khuyến mãi", "giảm giá"],
         "TT SP": ["mẫu mã", "tính năng"],
     }
-    (keyword_dir / "kw_map.json").write_text(json.dumps(kw_map, ensure_ascii=False, indent=2), encoding="utf-8")
+    (keyword_dir / "kw_map.json").write_text(
+        json.dumps(kw_map, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
-def write_baseline_artifacts(model_dir: Path, keyword_dir: Path, include_keyword_minors: bool = True) -> None:
+def write_baseline_artifacts(
+    model_dir: Path, keyword_dir: Path, include_keyword_minors: bool = True
+) -> None:
     model_dir.mkdir(parents=True, exist_ok=True)
     write_keyword_map(keyword_dir)
 
@@ -83,7 +87,9 @@ def write_baseline_artifacts(model_dir: Path, keyword_dir: Path, include_keyword
         json.dumps({label: 0.4 for label in label_cols}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    (model_dir / "label_cols.json").write_text(json.dumps(label_cols, ensure_ascii=False, indent=2), encoding="utf-8")
+    (model_dir / "label_cols.json").write_text(
+        json.dumps(label_cols, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     if include_keyword_minors:
         (model_dir / "keyword_minors.json").write_text(
             json.dumps({"minors": keyword_minors}, ensure_ascii=False, indent=2),

@@ -92,7 +92,7 @@ class MetricsCollector:
         last_done_entry = None
         last_failed_entry = None
 
-        for file_id, entry in seen_data.items():
+        for _file_id, entry in seen_data.items():
             status = entry.get("status")
             if status == "done":
                 reconstructed_processed += 1
@@ -108,7 +108,9 @@ class MetricsCollector:
             elif status == "failed":
                 reconstructed_failed += 1
                 last_attempt = entry.get("last_attempt", "")
-                if not last_failed_entry or last_attempt > last_failed_entry.get("last_attempt", ""):
+                if not last_failed_entry or last_attempt > last_failed_entry.get(
+                    "last_attempt", ""
+                ):
                     last_failed_entry = entry
 
         # Reconstruct if seen_files has more progress, or more processed rows, or more distinct labels
@@ -120,15 +122,21 @@ class MetricsCollector:
         ):
             logger.info(
                 "Reconstructing metrics from seen_files.json: processed %d -> %d, failed %d -> %d, rows %d -> %d, labels %d -> %d",
-                self.files_processed, reconstructed_processed,
-                self.files_failed, reconstructed_failed,
-                self.total_rows, reconstructed_rows,
-                len(self.label_distribution), len(reconstructed_labels)
+                self.files_processed,
+                reconstructed_processed,
+                self.files_failed,
+                reconstructed_failed,
+                self.total_rows,
+                reconstructed_rows,
+                len(self.label_distribution),
+                len(reconstructed_labels),
             )
             self.files_processed = max(self.files_processed, reconstructed_processed)
             self.files_failed = max(self.files_failed, reconstructed_failed)
             self.total_rows = max(self.total_rows, reconstructed_rows)
-            self.total_processing_seconds = max(self.total_processing_seconds, reconstructed_seconds)
+            self.total_processing_seconds = max(
+                self.total_processing_seconds, reconstructed_seconds
+            )
 
             for lbl, cnt in reconstructed_labels.items():
                 self.label_distribution[lbl] = max(self.label_distribution[lbl], cnt)
@@ -149,8 +157,9 @@ class MetricsCollector:
                 }
             self.flush()
 
-
-    def record_success(self, file_name: str, rows: int, duration: float, label_dist: dict[str, int] | None = None) -> None:
+    def record_success(
+        self, file_name: str, rows: int, duration: float, label_dist: dict[str, int] | None = None
+    ) -> None:
         self.files_processed += 1
         self.total_rows += rows
         self.total_processing_seconds += duration
@@ -246,6 +255,7 @@ class MetricsCollector:
         }
         try:
             from .utils import atomic_write_json
+
             atomic_write_json(self._path, data)
         except Exception as exc:
             logger.warning("Failed to write metrics: %s", exc)
@@ -322,11 +332,11 @@ class MetricsCollector:
             import pandas as pd
 
             from .pipeline.issue_classifier import MINOR_ORDER
-            
+
             output_dir = self._path.parent / "output"
             if not output_dir.is_dir():
                 return
-                
+
             logger.info("Starting one-time migration to build label_distribution from work/output")
             for path in output_dir.glob("*.xlsx"):
                 try:
@@ -338,7 +348,9 @@ class MetricsCollector:
                             self.label_distribution[col] += count
                 except Exception as exc:
                     logger.warning("One-time scan failed for %s: %s", path, exc)
-            
-            logger.info("One-time scan populated label distribution: %s", dict(self.label_distribution))
+
+            logger.info(
+                "One-time scan populated label distribution: %s", dict(self.label_distribution)
+            )
         except Exception as exc:
             logger.warning("Failed during one-time scan of output files: %s", exc)

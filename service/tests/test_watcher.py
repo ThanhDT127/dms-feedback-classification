@@ -127,7 +127,9 @@ def test_watcher_reloads_runner_after_asset_sync(settings):
         runs.append(label)
         return FakePipeline(label=label)
 
-    sync = FakeConfigSync(results=[FakeSyncResult(reload_required=True, downloaded_assets=["keyword/kw_map.json"])])
+    sync = FakeConfigSync(
+        results=[FakeSyncResult(reload_required=True, downloaded_assets=["keyword/kw_map.json"])]
+    )
     watcher = Watcher(
         sharepoint_client=FakeSharePoint([{"id": "1", "name": "a.xlsx"}]),
         pipeline_runner=FakePipeline(label="initial"),
@@ -167,27 +169,27 @@ def test_watcher_keeps_current_runner_when_sync_fails(settings):
 def test_watcher_settings_hot_reloads(settings, monkeypatch, tmp_path):
     # Mock settings
     monkeypatch.setattr(settings, "keyword_dir_override", tmp_path)
-    
+
     watcher = make_watcher(settings, [])
-    
+
     # Check current values
     assert watcher.settings.gemini_backend == "vertex"
-    
+
     # Mock get_settings to return new Settings
     mock_new_settings = settings.model_copy(
         update={
             "gemini_backend": "apikey",
             "gemini_api_key": "some-key",
             "gemini_model": "gemini-2.5-pro",
-            "notify_on_success": False
+            "notify_on_success": False,
         }
     )
-    
+
     # Mock get_settings in dms.settings module
     monkeypatch.setattr("dms.settings.get_settings", lambda: mock_new_settings)
-    
+
     watcher.reload_settings()
-    
+
     # Verify in-place attributes are updated
     assert watcher.settings.gemini_backend == "apikey"
     assert watcher.settings.gemini_model == "gemini-2.5-pro"

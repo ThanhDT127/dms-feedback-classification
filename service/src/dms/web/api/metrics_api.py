@@ -32,7 +32,12 @@ def _log_dir() -> Path:
 async def get_health():
     """Trả về trạng thái hoạt động của dịch vụ."""
     health_path = _work_dir() / "health.json"
-    logger.info("Health check: work_dir=%s, health_path=%s, exists=%s", _work_dir(), health_path, health_path.is_file())
+    logger.info(
+        "Health check: work_dir=%s, health_path=%s, exists=%s",
+        _work_dir(),
+        health_path,
+        health_path.is_file(),
+    )
     if health_path.is_file():
         try:
             data = json.loads(health_path.read_text(encoding="utf-8"))
@@ -92,16 +97,18 @@ async def get_metrics():
         try:
             seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
             for fid, info in seen_data.items():
-                recent_files.append({
-                    "id": fid,
-                    "filename": info.get("name", "Unknown"),
-                    "status": info.get("status", "done"),
-                    "timestamp": info.get("processed_at") or info.get("last_attempt") or "",
-                    "total_rows": info.get("total_rows", 0),
-                    "duration_seconds": info.get("duration_seconds", 0.0),
-                    "failures": info.get("failures", 0),
-                    "last_error": info.get("last_error", ""),
-                })
+                recent_files.append(
+                    {
+                        "id": fid,
+                        "filename": info.get("name", "Unknown"),
+                        "status": info.get("status", "done"),
+                        "timestamp": info.get("processed_at") or info.get("last_attempt") or "",
+                        "total_rows": info.get("total_rows", 0),
+                        "duration_seconds": info.get("duration_seconds", 0.0),
+                        "failures": info.get("failures", 0),
+                        "last_error": info.get("last_error", ""),
+                    }
+                )
             # Sắp xếp giảm dần theo thời gian xử lý
             recent_files.sort(key=lambda x: x["timestamp"], reverse=True)
         except Exception as exc:
@@ -138,7 +145,7 @@ async def get_daily_metrics():
                             date_str = date_src.split(" ")[0]
                         else:
                             date_str = date_src
-                        
+
                         if re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
                             daily_counts[date_str] = daily_counts.get(date_str, 0) + 1
         except Exception as exc:
@@ -149,7 +156,6 @@ async def get_daily_metrics():
     counts = [daily_counts[d] for d in sorted_dates]
 
     return {"dates": sorted_dates, "counts": counts}
-
 
 
 # ---------- Logs ----------

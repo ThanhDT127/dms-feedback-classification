@@ -52,7 +52,9 @@ def write_formatted_header(ws, df_like: pd.DataFrame) -> None:
         major = MINOR_TO_MAJOR.get(col_name) if col_name in MINOR_ORDER else None
         if major != prev_major:
             if prev_major and start_block:
-                ws.merge_cells(start_row=1, start_column=start_block, end_row=1, end_column=col_idx - 1)
+                ws.merge_cells(
+                    start_row=1, start_column=start_block, end_row=1, end_column=col_idx - 1
+                )
             prev_major = major
             start_block = col_idx if major else None
 
@@ -64,7 +66,11 @@ def write_formatted_header(ws, df_like: pd.DataFrame) -> None:
             ws.merge_cells(start_row=1, start_column=start_block, end_row=1, end_column=end_col)
 
     for col_idx, col_name in enumerate(df_like.columns, start=1):
-        color = MAJOR_COLORS.get(MINOR_TO_MAJOR[col_name], "FFFFFF") if col_name in MINOR_ORDER else BLUE_OTHER
+        color = (
+            MAJOR_COLORS.get(MINOR_TO_MAJOR[col_name], "FFFFFF")
+            if col_name in MINOR_ORDER
+            else BLUE_OTHER
+        )
         fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
         ws.cell(row=1, column=col_idx).fill = fill
         ws.cell(row=2, column=col_idx).fill = fill

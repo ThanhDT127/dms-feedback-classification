@@ -48,7 +48,6 @@ async def get_settings():
     return masked
 
 
-
 # ---------- Prompt templates ----------
 
 
@@ -80,9 +79,9 @@ async def get_issue_prompt():
             end_idx = source.find(end_marker)
 
             if start_idx >= 0 and end_idx >= 0:
-                raw_template = source[start_idx:end_idx + len(end_marker)]
+                raw_template = source[start_idx : end_idx + len(end_marker)]
             elif start_idx >= 0:
-                raw_template = source[start_idx:start_idx + 5000]
+                raw_template = source[start_idx : start_idx + 5000]
             else:
                 raw_template = "Không thể trích xuất prompt template từ source code."
 
@@ -119,10 +118,10 @@ async def get_rag_prompt():
         from ...pipeline.rag_product import RAGProductMatcher
 
         source = inspect.getsource(RAGProductMatcher.llm_extract_batch)
-        prompt_start = source.find('prompt = dedent(')
-        prompt_end = source.find(').strip()', prompt_start)
+        prompt_start = source.find("prompt = dedent(")
+        prompt_end = source.find(").strip()", prompt_start)
         if prompt_start >= 0 and prompt_end >= 0:
-            prompt_template = source[prompt_start:prompt_end + len(').strip()')]
+            prompt_template = source[prompt_start : prompt_end + len(").strip()")]
         else:
             prompt_template = "Không thể trích xuất prompt template từ source code."
 
@@ -248,27 +247,28 @@ MAP = {
 async def update_settings(payload: dict):
     """Cập nhật cài đặt hệ thống vào file .env một cách an toàn."""
     env_file = SERVICE_DIR / ".env"
-    
+
     # 1. Back up current .env content and os.environ values
     old_env_content = ""
     if env_file.exists():
         old_env_content = env_file.read_text(encoding="utf-8")
-        
+
     import os
+
     old_os_env = {env_key: os.environ.get(env_key) for env_key in MAP.values()}
-        
+
     try:
         # Prepare updates mapping
         updates = {}
         for key, value in payload.items():
             if key in MAP:
                 env_key = MAP[key]
-                
+
                 # Check for masked secret values and skip them
                 if isinstance(value, str) and (value.startswith("****") or "••" in value):
                     # Keep existing value if it was already set
                     continue
-                
+
                 # Normalize Gemini backend values
                 if env_key == "GEMINI_BACKEND" and isinstance(value, str):
                     val_lower = value.lower().strip()
@@ -276,23 +276,23 @@ async def update_settings(payload: dict):
                         value = "vertex"
                     elif val_lower == "api_key" or val_lower == "apikey":
                         value = "apikey"
-                
+
                 updates[env_key] = str(value)
-                
+
         if not updates:
             return {"success": True, "message": "Không có thay đổi nào được áp dụng."}
-            
+
         # 2. Write updates to .env file and update current process's environment variables
         update_env_file(updates)
         for env_key, env_val in updates.items():
             os.environ[env_key] = env_val
-        
+
         # 3. Validate by trying to load Settings
         deps.reset()
         Settings()
-        
+
         return {"success": True, "message": "Đã lưu cấu hình thành công."}
-        
+
     except Exception as exc:
         # 4. Rollback to original .env content and os.environ
         if old_env_content:
@@ -303,13 +303,12 @@ async def update_settings(payload: dict):
             else:
                 os.environ[env_key] = old_val
         deps.reset()
-        
+
         logger.error("Lỗi lưu cấu hình: %s", exc)
         raise HTTPException(
             status_code=400,
             detail=f"Cấu hình không hợp lệ. Đã khôi phục cài đặt cũ. Chi tiết lỗi: {exc}",
         )
-
 
 
 @router.put("/prompt")
@@ -318,18 +317,18 @@ async def save_custom_prompt(payload: dict):
     settings = deps.get_settings()
     if settings is None:
         raise HTTPException(status_code=400, detail="Settings chưa được cấu hình")
-        
+
     prompt_text = payload.get("prompt", "").strip()
     if not prompt_text:
         raise HTTPException(status_code=400, detail="Nội dung prompt không được để trống")
-        
+
     # Validation: ensure all required placeholders are intact
     required_placeholders = [
         "{minor_order_json}",
         "{label_defs}",
         "{hints_json}",
         "{brand_json}",
-        "{input_json}"
+        "{input_json}",
     ]
     missing = [ph for ph in required_placeholders if ph not in prompt_text]
     if missing:
@@ -337,12 +336,12 @@ async def save_custom_prompt(payload: dict):
             status_code=400,
             detail=f"Lỗi: Thiếu các placeholder bắt buộc để nội suy dữ liệu: {', '.join(missing)}. Vui lòng giữ lại các placeholder này trong prompt.",
         )
-        
+
     try:
         prompt_override = settings.keyword_dir / "system_prompt.txt"
         prompt_override.parent.mkdir(parents=True, exist_ok=True)
         prompt_override.write_text(prompt_text, encoding="utf-8")
-        
+
         # Reset cached pipeline classes so they reload the new prompt override
         deps.reset()
         return {"success": True, "message": "Đã lưu System Prompt tùy chỉnh thành công."}

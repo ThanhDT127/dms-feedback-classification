@@ -45,7 +45,9 @@ class FakeSession:
 def test_list_files_download_and_upload(settings, mock_auth_provider, tmp_path: Path):
     session = FakeSession(
         [
-            FakeResponse(payload={"value": [{"name": "Input", "folder": {}, "id": "input-folder"}]}),
+            FakeResponse(
+                payload={"value": [{"name": "Input", "folder": {}, "id": "input-folder"}]}
+            ),
             FakeResponse(
                 payload={
                     "value": [
@@ -54,16 +56,22 @@ def test_list_files_download_and_upload(settings, mock_auth_provider, tmp_path: 
                     ]
                 }
             ),
-            FakeResponse(payload={"name": "a.xlsx", "@microsoft.graph.downloadUrl": "https://download"}),
+            FakeResponse(
+                payload={"name": "a.xlsx", "@microsoft.graph.downloadUrl": "https://download"}
+            ),
             FakeResponse(payload={}, text="ok"),
-            FakeResponse(payload={"value": [{"name": "Output", "folder": {}, "id": "output-folder"}]}),
+            FakeResponse(
+                payload={"value": [{"name": "Output", "folder": {}, "id": "output-folder"}]}
+            ),
             FakeResponse(status_code=201, payload={"id": "uploaded"}),
         ]
     )
     client = SharePointClient(mock_auth_provider, settings, session)
 
     files = client.list_files()
-    assert files == [{"id": "1", "name": "a.xlsx", "size": 5, "lastModifiedDateTime": "", "eTag": ""}]
+    assert files == [
+        {"id": "1", "name": "a.xlsx", "size": 5, "lastModifiedDateTime": "", "eTag": ""}
+    ]
     local = client.download_file("1", tmp_path / "a.xlsx")
     assert local.exists()
 
@@ -78,7 +86,9 @@ def test_list_files_download_and_upload(settings, mock_auth_provider, tmp_path: 
 def test_sharepoint_error_raised_on_upload_failure(settings, mock_auth_provider, tmp_path: Path):
     session = FakeSession(
         [
-            FakeResponse(payload={"value": [{"name": "Output", "folder": {}, "id": "output-folder"}]}),
+            FakeResponse(
+                payload={"value": [{"name": "Output", "folder": {}, "id": "output-folder"}]}
+            ),
             FakeResponse(status_code=500, text="boom"),
         ]
     )

@@ -90,7 +90,14 @@ def test_get_settings_wraps_validation_error(monkeypatch):
         def __init__(self):
             raise ValidationError.from_exception_data(
                 "Settings",
-                [{"type": "missing", "loc": ("AZURE_TENANT_ID",), "msg": "missing input", "input": None}],
+                [
+                    {
+                        "type": "missing",
+                        "loc": ("AZURE_TENANT_ID",),
+                        "msg": "missing input",
+                        "input": None,
+                    }
+                ],
             )
 
     monkeypatch.setattr("dms.settings.Settings", BrokenSettings)

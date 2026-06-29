@@ -66,7 +66,9 @@ class Watcher:
             seen_missing = True
             if self.settings.seen_files_path.exists():
                 try:
-                    seen_data = json.loads(self.settings.seen_files_path.read_text(encoding="utf-8"))
+                    seen_data = json.loads(
+                        self.settings.seen_files_path.read_text(encoding="utf-8")
+                    )
                     if seen_data and len(seen_data) > 0:
                         seen_missing = False
                 except Exception:
@@ -75,7 +77,9 @@ class Watcher:
             metrics_missing = True
             if self.settings.metrics_path.exists():
                 try:
-                    metrics_data = json.loads(self.settings.metrics_path.read_text(encoding="utf-8"))
+                    metrics_data = json.loads(
+                        self.settings.metrics_path.read_text(encoding="utf-8")
+                    )
                     if metrics_data and metrics_data.get("files_processed", 0) > 0:
                         metrics_missing = False
                 except Exception:
@@ -84,8 +88,14 @@ class Watcher:
             if not seen_missing and not metrics_missing:
                 return
 
-            logger.info("Local state files missing or empty (seen_missing: %s, metrics_missing: %s). Attempting to restore from SharePoint Check_Point/...", seen_missing, metrics_missing)
-            ckpt_items = self.sharepoint_client.list_folder_items(self.settings.sp_checkpoint_folder)
+            logger.info(
+                "Local state files missing or empty (seen_missing: %s, metrics_missing: %s). Attempting to restore from SharePoint Check_Point/...",
+                seen_missing,
+                metrics_missing,
+            )
+            ckpt_items = self.sharepoint_client.list_folder_items(
+                self.settings.sp_checkpoint_folder
+            )
 
             for item in ckpt_items:
                 name = item.get("name")
@@ -134,7 +144,10 @@ class Watcher:
 
                 inp_stem = Path(file_name).stem.lower()
                 if inp_stem in output_stems:
-                    logger.info("Self-healing: Matching output found for input %s. Registering as done.", file_name)
+                    logger.info(
+                        "Self-healing: Matching output found for input %s. Registering as done.",
+                        file_name,
+                    )
                     seen[file_id] = {
                         "name": file_name,
                         "status": "done",
@@ -147,7 +160,9 @@ class Watcher:
                     reconciled_count += 1
 
             if reconciled_count > 0:
-                logger.info("Reconciliation complete. Marked %d missing files as done.", reconciled_count)
+                logger.info(
+                    "Reconciliation complete. Marked %d missing files as done.", reconciled_count
+                )
                 self._save_seen(seen)
                 # Force rebuild metrics after reconciliation
                 self.metrics._load()
@@ -192,7 +207,9 @@ class Watcher:
                 logger.warning("%s", message)
         if result.reload_required:
             if self.runner_factory is None:
-                raise RuntimeError("Config asset reload requested but no runner factory is configured")
+                raise RuntimeError(
+                    "Config asset reload requested but no runner factory is configured"
+                )
             self.pipeline_runner = self.runner_factory()
             logger.info("Reloaded pipeline dependencies from refreshed config assets")
 
@@ -314,50 +331,53 @@ class Watcher:
     def reload_settings(self) -> None:
         """Reload settings from disk and update dependent services in-place."""
         from .settings import get_settings
+
         if hasattr(get_settings, "cache_clear"):
             get_settings.cache_clear()
         try:
             new_settings = get_settings()
-            
+
             # Save original configuration values to compare
             old_backend = self.settings.gemini_backend
             old_model = self.settings.gemini_model
             old_key = self.settings.gemini_api_key
-            
+
             # 1. Update self.settings fields in-place
             for field in new_settings.__class__.model_fields:
                 val = getattr(new_settings, field)
                 setattr(self.settings, field, val)
-                
+
             # 2. Re-initialize pipeline assets reload if Gemini configuration changed
-            backend_changed = (old_backend != self.settings.gemini_backend)
-            model_changed = (old_model != self.settings.gemini_model)
-            key_changed = (old_key != self.settings.gemini_api_key)
-            
+            backend_changed = old_backend != self.settings.gemini_backend
+            model_changed = old_model != self.settings.gemini_model
+            key_changed = old_key != self.settings.gemini_api_key
+
             if backend_changed or model_changed or key_changed:
                 logger.info(
                     "Watcher detected Gemini settings changed: backend=%s->%s, model=%s->%s",
-                    old_backend, self.settings.gemini_backend,
-                    old_model, self.settings.gemini_model
+                    old_backend,
+                    self.settings.gemini_backend,
+                    old_model,
+                    self.settings.gemini_model,
                 )
-                
+
                 # Clear cached lazy clients inside GeminiClient
                 if hasattr(self.pipeline_runner, "gemini"):
                     self.pipeline_runner.gemini._vertex_client = None
                     self.pipeline_runner.gemini._apikey_model = None
-                
+
                 # Re-create RAGProductMatcher with new settings
                 if hasattr(self.pipeline_runner, "rag"):
                     from .pipeline.rag_product import RAGProductMatcher
+
                     self.pipeline_runner.rag = RAGProductMatcher(
-                        settings=self.settings,
-                        gemini=self.pipeline_runner.gemini
+                        settings=self.settings, gemini=self.pipeline_runner.gemini
                     )
-            
+
             # 3. Synchronize other modules that references settings
             self.cleanup.settings = self.settings
             logger.info("Watcher settings hot-reloaded successfully")
-            
+
         except Exception as exc:
             logger.error("Failed to hot-reload settings in watcher: %s", exc)
 

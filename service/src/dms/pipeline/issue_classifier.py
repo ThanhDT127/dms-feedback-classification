@@ -342,20 +342,22 @@ class IssueClassifier:
             return []
 
         kw_map = self._load_kw_map()
-        
+
         # Build prompt rows
         prompt_rows = []
         for idx, text in enumerate(texts):
             prod = matched_products[idx] if matched_products and idx < len(matched_products) else {}
-            prompt_rows.append({
-                "row_index": idx,
-                "text": text,
-                "matched_product": {
-                    "model": prod.get("Model") or prod.get("model") or "",
-                    "dong_sp": prod.get("Dòng SP") or prod.get("dong_sp") or "",
-                    "san_pham": prod.get("Sản phẩm") or prod.get("san_pham") or ""
+            prompt_rows.append(
+                {
+                    "row_index": idx,
+                    "text": text,
+                    "matched_product": {
+                        "model": prod.get("Model") or prod.get("model") or "",
+                        "dong_sp": prod.get("Dòng SP") or prod.get("dong_sp") or "",
+                        "san_pham": prod.get("Sản phẩm") or prod.get("san_pham") or "",
+                    },
                 }
-            })
+            )
 
         minor_order_json = json.dumps(MINOR_ORDER, ensure_ascii=False)
         label_defs = json.dumps(LABEL_DEFINITIONS, ensure_ascii=False, indent=2)
@@ -687,7 +689,15 @@ class IssueClassifier:
 
         arr = _extract_json_anywhere(raw, expected_n=len(texts))
         if not isinstance(arr, list) or len(arr) == 0:
-            arr = [{"labels": {}, "sentiment": "", "brand": "", "decision_log": [{"reason": "FALLBACK_PARSING"}]} for _ in texts]
+            arr = [
+                {
+                    "labels": {},
+                    "sentiment": "",
+                    "brand": "",
+                    "decision_log": [{"reason": "FALLBACK_PARSING"}],
+                }
+                for _ in texts
+            ]
 
         out = []
         for idx in range(len(texts)):
@@ -696,7 +706,14 @@ class IssueClassifier:
             parsed_idx = parsed.get("row_index")
             if parsed_idx is not None and parsed_idx != idx:
                 # Find matching row index if scrambled
-                matched_item = next((item for item in arr if isinstance(item, dict) and item.get("row_index") == idx), None)
+                matched_item = next(
+                    (
+                        item
+                        for item in arr
+                        if isinstance(item, dict) and item.get("row_index") == idx
+                    ),
+                    None,
+                )
                 if matched_item:
                     parsed = matched_item
 

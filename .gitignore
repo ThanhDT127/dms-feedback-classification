@@ -92,3 +92,8 @@ test_output/
 test_checkpoint/
 compare_report*.md
 prompt_v2_comparison.md
+
+# ===========================
+# SCRATCH STATE & TEMP
+# ===========================
+scratch/*.json
