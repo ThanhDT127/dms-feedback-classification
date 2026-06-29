@@ -99,10 +99,9 @@ prompt_v2_comparison.md
 scratch/*.json
 
 # ===========================
-# DOCUMENTATION (EXCLUDED)
+# GENERATED DOCUMENTATION
 # ===========================
-TECHNICAL_SPEC.md
-TECHNICAL_SPEC.docx
-USER_GUIDE.md
-USER_GUIDE.docx
-convert_docx.py
+docs/TECHNICAL_DOCUMENT.md
+docs/TECHNICAL_DOCUMENT.docx
+docs/USER_GUIDE.md
+docs/USER_GUIDE.docx
