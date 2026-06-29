@@ -282,6 +282,18 @@ class RAGProductMatcher:
                 )
                 continue
             cands = self.bm25_search_dual(extracted, topk=3)
+            if cands:
+                from rapidfuzz.distance import Levenshtein
+                for cand in cands:
+                    cand["lev_sim"] = float(
+                        Levenshtein.normalized_similarity(
+                            str(extracted).lower().strip(),
+                            str(cand["Model"] or "").lower().strip()
+                        )
+                    )
+                # Re-rank: prioritize candidates with high Levenshtein similarity, then BM25 score
+                cands.sort(key=lambda x: (x["lev_sim"], x["Score"]), reverse=True)
+
             if not cands or cands[0]["Score"] < self.settings.bm25_min_score:
                 out.append(
                     {

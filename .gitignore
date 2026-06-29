@@ -99,9 +99,6 @@ prompt_v2_comparison.md
 scratch/*.json
 
 # ===========================
-# GENERATED DOCUMENTATION
+# IGNORED DOCUMENTATION
 # ===========================
-docs/TECHNICAL_DOCUMENT.md
-docs/TECHNICAL_DOCUMENT.docx
-docs/USER_GUIDE.md
-docs/USER_GUIDE.docx
+ignored_docs/
