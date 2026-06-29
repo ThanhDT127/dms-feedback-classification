@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     ckpt_every: int = Field(50, alias="CKPT_EVERY")
     base_wait: float = 4.0
     max_retry: int = 3
-    rate_gap_sec: float = 4.0
+    rate_gap_sec: float = Field(4.0, alias="RATE_LIMIT_GAP")
     bm25_min_score: float = 5.0
     http_timeout_seconds: float = 30.0
     gemini_timeout_seconds: float = Field(120.0, alias="GEMINI_TIMEOUT_SECONDS")
