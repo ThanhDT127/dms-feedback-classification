@@ -94,7 +94,7 @@ def main() -> None:
     )
 
     runtime_settings = _build_runtime_settings(settings, config_asset_sync)
-    logger.info("Baseline model ready from %s", runtime_settings.model_dir)
+    logger.info("Model assets ready from %s", runtime_settings.model_dir)
     logger.info("Composition root ready")
 
     # Register graceful shutdown handlers (SIGTERM from docker stop, SIGINT from Ctrl+C)

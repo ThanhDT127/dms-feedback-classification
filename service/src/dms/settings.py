@@ -54,11 +54,11 @@ class Settings(BaseSettings):
 
     llm_batch_size: int = Field(20, alias="LLM_BATCH_SIZE")
     ckpt_every: int = Field(50, alias="CKPT_EVERY")
-    base_wait: float = 4.0
-    max_retry: int = 3
-    rate_gap_sec: float = 4.0
-    bm25_min_score: float = 5.0
-    http_timeout_seconds: float = 30.0
+    base_wait: float = Field(4.0, alias="BASE_WAIT")
+    max_retry: int = Field(3, alias="MAX_RETRY")
+    rate_gap_sec: float = Field(4.0, alias="RATE_LIMIT_GAP")
+    bm25_min_score: float = Field(5.0, alias="BM25_MIN_SCORE")
+    http_timeout_seconds: float = Field(30.0, alias="HTTP_TIMEOUT_SECONDS")
     gemini_timeout_seconds: float = Field(120.0, alias="GEMINI_TIMEOUT_SECONDS")
     cors_allowed_origins: str = Field("*", alias="CORS_ALLOWED_ORIGINS")
     enable_sharepoint_config_sync: bool = Field(True, alias="ENABLE_SHAREPOINT_CONFIG_SYNC")

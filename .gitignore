@@ -97,3 +97,12 @@ prompt_v2_comparison.md
 # SCRATCH STATE & TEMP
 # ===========================
 scratch/*.json
+
+# ===========================
+# DOCUMENTATION (EXCLUDED)
+# ===========================
+TECHNICAL_SPEC.md
+TECHNICAL_SPEC.docx
+USER_GUIDE.md
+USER_GUIDE.docx
+convert_docx.py
