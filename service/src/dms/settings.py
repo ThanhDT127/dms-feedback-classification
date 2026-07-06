@@ -67,7 +67,11 @@ class Settings(BaseSettings):
     cleanup_log_ttl_days: int = Field(7, alias="CLEANUP_LOG_TTL_DAYS")
     cleanup_staging_ttl_hours: int = Field(24, alias="CLEANUP_STAGING_TTL_HOURS")
 
-    data_dir: Path = Field(default_factory=lambda: SERVICE_DIR, alias="DATA_DIR")
+    # Auth
+    jwt_secret_key: str = Field(default="dev-secret-key-change-me", alias="JWT_SECRET_KEY")
+    default_admin_password: str = Field(default="admin123", alias="DEFAULT_ADMIN_PASSWORD")
+
+    data_dir: Path = Field(default_factory=lambda: SERVICE_DIR / "data", alias="DATA_DIR")
     keyword_dir_override: Path | None = Field(default=None, alias="KEYWORD_DIR")
     model_dir_override: Path | None = Field(default=None, alias="MODEL_DIR")
     work_dir: Path = Field(default_factory=lambda: SERVICE_DIR / "work", alias="WORK_DIR")
@@ -111,15 +115,39 @@ class Settings(BaseSettings):
         if backend == "apikey" and not self.gemini_api_key:
             raise ValueError("GEMINI_API_KEY is required when GEMINI_BACKEND=apikey")
 
+        if os.environ.get("ENVIRONMENT", "").lower() == "production":
+            if self.jwt_secret_key == "dev-secret-key-change-me" or len(self.jwt_secret_key) < 32:
+                raise ValueError("JWT_SECRET_KEY must be set to a strong value in production")
+            if self.default_admin_password == "admin123":
+                raise ValueError("DEFAULT_ADMIN_PASSWORD must be changed in production")
+
         return self
 
     @property
     def keyword_dir(self) -> Path:
-        return self.keyword_dir_override or (self.data_dir / "Keyword")
+        return self.keyword_dir_override or self._default_asset_dir("Keyword")
 
     @property
     def model_dir(self) -> Path:
-        return self.model_dir_override or (self.data_dir / "Model")
+        return self.model_dir_override or self._default_asset_dir("Model")
+
+    def _default_asset_dir(self, name: str) -> Path:
+        candidate = self.data_dir / name
+        legacy = SERVICE_DIR / name
+        if self._uses_service_data() and self._is_empty_dir(candidate) and legacy.exists():
+            return legacy
+        return candidate
+
+    def _uses_service_data(self) -> bool:
+        return self.data_dir.resolve() == (SERVICE_DIR / "data").resolve()
+
+    @staticmethod
+    def _is_empty_dir(path: Path) -> bool:
+        if not path.exists():
+            return True
+        if not path.is_dir():
+            return False
+        return not any(path.iterdir())
 
     @property
     def kw_map_path(self) -> Path:
@@ -127,7 +155,17 @@ class Settings(BaseSettings):
 
     @property
     def df_products_path(self) -> Path:
-        return self.keyword_dir / "Phân Chia Nhóm Sản Phẩm V2.xlsx"
+        filename = "Phân Chia Nhóm Sản Phẩm V2.xlsx"
+        candidate = self.keyword_dir / filename
+        legacy = SERVICE_DIR / "Keyword" / filename
+        if (
+            self.keyword_dir_override is None
+            and self._uses_service_data()
+            and not candidate.exists()
+            and legacy.exists()
+        ):
+            return legacy
+        return candidate
 
     @property
     def seen_files_path(self) -> Path:
@@ -148,6 +186,14 @@ class Settings(BaseSettings):
     @property
     def config_assets_cache_dir(self) -> Path:
         return self.work_dir / "config_assets"
+
+    @property
+    def label_history_db_path(self) -> Path:
+        return self.work_dir / "label_history.db"
+
+    @property
+    def label_config_path(self) -> Path:
+        return self.work_dir / "labels.json"
 
     @property
     def active_keyword_dir(self) -> Path:

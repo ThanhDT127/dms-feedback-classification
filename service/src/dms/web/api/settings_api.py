@@ -7,10 +7,11 @@ import logging
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from ...settings import SERVICE_DIR, Settings, update_env_file
 from .. import deps
+from ..deps import get_admin_user
 
 logger = logging.getLogger("dms-web")
 
@@ -30,7 +31,7 @@ def _mask_secret(value: str, visible_chars: int = 4) -> str:
 
 
 @router.get("")
-async def get_settings():
+async def get_settings(admin: dict = Depends(get_admin_user)):
     """Trả về cấu hình hiện tại (ẩn bí mật)."""
     raw = deps.get_settings_partial()
 
@@ -48,11 +49,29 @@ async def get_settings():
     return masked
 
 
+@router.get("/secret/{key}")
+async def get_secret_setting(key: str, admin: dict = Depends(get_admin_user)):
+    """Return an unmasked secret value for an authenticated admin."""
+    allowed = {
+        "gemini_api_key": ("gemini_api_key", "GEMINI_API_KEY"),
+        "api_key": ("gemini_api_key", "GEMINI_API_KEY"),
+    }
+    if key not in allowed:
+        raise HTTPException(status_code=404, detail="Secret not found")
+
+    raw = deps.get_settings_partial()
+    for candidate in allowed[key]:
+        value = raw.get(candidate)
+        if isinstance(value, str) and value:
+            return {"key": key, "value": value}
+    return {"key": key, "value": ""}
+
+
 # ---------- Prompt templates ----------
 
 
 @router.get("/prompt")
-async def get_issue_prompt():
+async def get_issue_prompt(admin: dict = Depends(get_admin_user)):
     """Trả về template prompt của Issue Classifier."""
     try:
         from ...pipeline.issue_classifier import IssueClassifier
@@ -112,7 +131,7 @@ async def get_issue_prompt():
 
 
 @router.get("/prompt/rag")
-async def get_rag_prompt():
+async def get_rag_prompt(admin: dict = Depends(get_admin_user)):
     """Trả về template prompt RAG extraction."""
     try:
         from ...pipeline.rag_product import RAGProductMatcher
@@ -145,7 +164,7 @@ async def get_rag_prompt():
 
 
 @router.get("/models")
-async def get_available_models():
+async def get_available_models(admin: dict = Depends(get_admin_user)):
     """Trả về danh sách các model Gemini khả dụng."""
     return [
         {
@@ -175,7 +194,7 @@ async def get_available_models():
 
 
 @router.post("/test-connection")
-async def test_connection():
+async def test_connection(admin: dict = Depends(get_admin_user)):
     """Kiểm tra kết nối tới Gemini API."""
     gemini = deps.get_gemini()
     if gemini is None:
@@ -244,7 +263,7 @@ MAP = {
 
 
 @router.put("")
-async def update_settings(payload: dict):
+async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
     """Cập nhật cài đặt hệ thống vào file .env một cách an toàn."""
     env_file = SERVICE_DIR / ".env"
 
@@ -312,7 +331,7 @@ async def update_settings(payload: dict):
 
 
 @router.put("/prompt")
-async def save_custom_prompt(payload: dict):
+async def save_custom_prompt(payload: dict, admin: dict = Depends(get_admin_user)):
     """Lưu trữ system prompt tự chọn vào file system_prompt.txt."""
     settings = deps.get_settings()
     if settings is None:

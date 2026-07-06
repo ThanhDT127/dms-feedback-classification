@@ -5,21 +5,33 @@
 window.Charts = (() => {
   const _instances = {};
 
-  // Global Chart.js defaults for dark theme
+  function getThemeColor(varName, fallback) {
+    const val = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    return val || fallback;
+  }
+
+  // Global Chart.js defaults — reads CSS variables for theme awareness
   function applyDefaults() {
     if (!window.Chart) return;
-    Chart.defaults.color = '#cbd5e1';
-    Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.08)';
+    const textSecondary = getThemeColor('--text-secondary', '#cbd5e1');
+    const textPrimary = getThemeColor('--text-primary', '#ffffff');
+    const borderColor = getThemeColor('--border', 'rgba(255,255,255,0.08)');
+    const bgSecondary = getThemeColor('--bg-secondary', '#071330');
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const gridColor = isLight ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.06)';
+
+    Chart.defaults.color = textSecondary;
+    Chart.defaults.borderColor = borderColor;
     Chart.defaults.font.family = "'Inter', sans-serif";
     Chart.defaults.font.size = 12;
     Chart.defaults.plugins.legend.labels.usePointStyle = true;
     Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
     Chart.defaults.plugins.legend.labels.padding = 16;
-    Chart.defaults.plugins.legend.labels.color = '#cbd5e1';
-    Chart.defaults.plugins.tooltip.backgroundColor = '#071330';
-    Chart.defaults.plugins.tooltip.titleColor = '#ffffff';
-    Chart.defaults.plugins.tooltip.bodyColor = '#cbd5e1';
-    Chart.defaults.plugins.tooltip.borderColor = 'rgba(255, 255, 255, 0.12)';
+    Chart.defaults.plugins.legend.labels.color = textSecondary;
+    Chart.defaults.plugins.tooltip.backgroundColor = bgSecondary;
+    Chart.defaults.plugins.tooltip.titleColor = textPrimary;
+    Chart.defaults.plugins.tooltip.bodyColor = textSecondary;
+    Chart.defaults.plugins.tooltip.borderColor = borderColor;
     Chart.defaults.plugins.tooltip.borderWidth = 1;
     Chart.defaults.plugins.tooltip.cornerRadius = 8;
     Chart.defaults.plugins.tooltip.padding = 10;
@@ -84,7 +96,7 @@ window.Charts = (() => {
           y: {
             beginAtZero: true,
             grid: {
-              color: 'rgba(255, 255, 255, 0.06)',
+              color: document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
               drawBorder: false
             },
             ticks: {
@@ -122,7 +134,7 @@ window.Charts = (() => {
         datasets: [{
           data,
           backgroundColor: bgColors,
-          borderColor: '#071330',
+          borderColor: getThemeColor('--bg-secondary', '#071330'),
           borderWidth: 2,
           hoverOffset: 8,
         }]
@@ -155,7 +167,7 @@ window.Charts = (() => {
                       hidden: false,
                       index: i,
                       pointStyle: 'circle',
-                      fontColor: '#cbd5e1'
+                      fontColor: getThemeColor('--text-secondary', '#cbd5e1')
                     };
                   });
                 }
@@ -192,7 +204,7 @@ window.Charts = (() => {
           x: { grid: { display: false } },
           y: {
             beginAtZero: true,
-            grid: { color: 'rgba(255, 255, 255, 0.06)', drawBorder: false },
+            grid: { color: document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)', drawBorder: false },
             ticks: { precision: 0 }
           }
         },
@@ -215,5 +227,32 @@ window.Charts = (() => {
     applyDefaults();
   }
 
-  return { createBarChart, createDoughnutChart, createLineChart, destroy };
+  function applyThemeColors() {
+    applyDefaults();
+    Object.keys(_instances).forEach(id => {
+      const chart = _instances[id];
+      if (!chart) return;
+      // Update doughnut border colors
+      if (chart.config.type === 'doughnut') {
+        chart.data.datasets.forEach(ds => {
+          ds.borderColor = getThemeColor('--bg-secondary', '#071330');
+        });
+      }
+      // Update grid colors for bar/line charts
+      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+      const gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
+      if (chart.options.scales) {
+        Object.values(chart.options.scales).forEach(scale => {
+          if (scale.grid) scale.grid.color = gridColor;
+        });
+      }
+      // Update legend label colors
+      if (chart.config.type === 'doughnut' && chart.options.plugins?.legend?.labels?.generateLabels) {
+        // generateLabels will re-read getThemeColor on next render
+      }
+      chart.update('none');
+    });
+  }
+
+  return { createBarChart, createDoughnutChart, createLineChart, destroy, applyThemeColors };
 })();

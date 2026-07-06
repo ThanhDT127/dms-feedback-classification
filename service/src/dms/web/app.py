@@ -10,6 +10,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..settings import SERVICE_DIR
+from .api.auth_api import router as auth_router
+from .api.auth_api import user_router
 from .api.classify import router as classify_router
 from .api.files import router as files_router
 from .api.metrics_api import router as metrics_router
@@ -51,6 +53,8 @@ def create_app() -> FastAPI:
     app.state.jobs = {}  # job_id -> job info dict
 
     # --- API routers ---
+    app.include_router(auth_router)
+    app.include_router(user_router)
     app.include_router(metrics_router)
     app.include_router(files_router)
     app.include_router(classify_router)

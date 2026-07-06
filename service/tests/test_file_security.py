@@ -8,6 +8,8 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+from conftest import apply_auth_overrides
+
 # ---------------------------------------------------------------------------
 # _validate_safe_path tests (unit-level)
 # ---------------------------------------------------------------------------
@@ -67,6 +69,7 @@ class TestUploadSizeLimit:
         from dms.web.app import create_app
 
         app = create_app()
+        apply_auth_overrides(app)
         return TestClient(app, raise_server_exceptions=True)
 
     def test_upload_within_limit(self, client, tmp_path) -> None:

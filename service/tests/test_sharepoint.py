@@ -41,6 +41,9 @@ class FakeSession:
     def put(self, url, **kwargs):
         return self._next("put", url, **kwargs)
 
+    def delete(self, url, **kwargs):
+        return self._next("delete", url, **kwargs)
+
 
 def test_list_files_download_and_upload(settings, mock_auth_provider, tmp_path: Path):
     session = FakeSession(
@@ -97,3 +100,23 @@ def test_sharepoint_error_raised_on_upload_failure(settings, mock_auth_provider,
     path.write_text("payload", encoding="utf-8")
     with pytest.raises(SharePointError):
         client.upload_file(path, settings.sp_output_folder)
+
+
+def test_delete_item_calls_graph_delete(settings, mock_auth_provider):
+    session = FakeSession([FakeResponse(status_code=204)])
+    client = SharePointClient(mock_auth_provider, settings, session)
+
+    client.delete_item("item-123")
+
+    method, url, kwargs = session.calls[0]
+    assert method == "delete"
+    assert url.endswith("/items/item-123")
+    assert "headers" in kwargs
+
+
+def test_delete_item_raises_on_graph_failure(settings, mock_auth_provider):
+    session = FakeSession([FakeResponse(status_code=500, text="boom")])
+    client = SharePointClient(mock_auth_provider, settings, session)
+
+    with pytest.raises(SharePointError):
+        client.delete_item("item-123")

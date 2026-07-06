@@ -66,8 +66,11 @@ DMS/
 ├── LICENSE                    # File giấy phép MIT
 ├── README.md                  # Tài liệu tiếng Anh
 ├── README.vi.md               # Tài liệu tiếng Việt
-├── OPERATIONS.md              # Hướng dẫn deploy & vận hành chi tiết
-├── OPERATIONS.vi.md           # Hướng dẫn vận hành (Tiếng Việt)
+├── docs/                      # Thư mục Tài liệu
+│   ├── OPERATIONS.md          # Hướng dẫn deploy & vận hành chi tiết
+│   ├── OPERATIONS.vi.md       # Hướng dẫn vận hành (Tiếng Việt)
+│   ├── TECHNICAL_DOCUMENT.md  # Tài liệu kiến trúc hệ thống & Thiết kế kỹ thuật
+│   └── USER_GUIDE.md          # Tài liệu hướng dẫn sử dụng vận hành
 ├── openspec/                  # Thư mục chứa đặc tả kiến trúc (31 spec BDD)
 │   └── specs/
 │       ├── issue-llm-classification/spec.md
@@ -314,7 +317,9 @@ Bộ test bao gồm **93 test cases** tự động bao phủ toàn bộ watcher 
 
 ---
 
-## <a name="tai-lieu-van-hanh-chi-tiet"></a>📖 Tài liệu vận hành chi tiết
+## <a name="tai-lieu-van-hanh-chi-tiet"></a>📖 Tài liệu vận hành & Hướng dẫn chi tiết
 
-* [OPERATIONS.vi.md](OPERATIONS.vi.md) - Hướng dẫn chi tiết cách triển khai production, cấu hình đồng bộ asset, script phục hồi lịch sử và khắc phục sự cố.
-* [service/README.md](service/README.md) - Chi tiết thiết lập phát triển, mô tả tiêm phụ thuộc (dependency injection) và thiết kế API.
+* [docs/OPERATIONS.vi.md](docs/OPERATIONS.vi.md) - Hướng dẫn chi tiết cách triển khai production, cấu hình đồng bộ asset, script phục hồi lịch sử và khắc phục sự cố (Tiếng Việt).
+* [docs/TECHNICAL_DOCUMENT.md](docs/TECHNICAL_DOCUMENT.md) - Tài liệu thiết kế kỹ thuật, kiến trúc hệ thống chi tiết và luồng xử lý backend (Tiếng Anh).
+* [docs/USER_GUIDE.md](docs/USER_GUIDE.md) - Tài liệu hướng dẫn sử dụng chi tiết cho người vận hành dashboard và quản lý file Excel (Tiếng Anh).
+* [service/README.md](service/README.md) - Chi tiết thiết lập phát triển, mô tả cơ chế Dependency Injection và thiết kế API cho lập trình viên.

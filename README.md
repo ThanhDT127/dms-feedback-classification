@@ -66,8 +66,11 @@ DMS/
 ├── LICENSE                    # MIT License
 ├── README.md                  # English Documentation
 ├── README.vi.md               # Vietnamese Documentation
-├── OPERATIONS.md              # Detailed Operations & Troubleshooting Guide
-├── OPERATIONS.vi.md           # Detailed Operations (Vietnamese)
+├── docs/                      # Documentation Folder
+│   ├── OPERATIONS.md          # Detailed Operations & Troubleshooting Guide
+│   ├── OPERATIONS.vi.md       # Detailed Operations (Vietnamese)
+│   ├── TECHNICAL_DOCUMENT.md  # System Architecture & Technical Specifications
+│   └── USER_GUIDE.md          # User Guide & Operational Manual
 ├── openspec/                  # Architectural Specs (31 detailed BDD specs)
 │   └── specs/
 │       ├── issue-llm-classification/spec.md
@@ -316,7 +319,9 @@ The test suite consists of **93 test cases** verifying watcher logic, settings v
 
 ---
 
-## <a name="detailed-operations"></a>📖 Detailed Operations
+## <a name="detailed-operations"></a>📖 Detailed Operations & Documentation
 
-* [OPERATIONS.md](OPERATIONS.md) - Complete instructions for production deployment, config asset synchronization, history reconstruction scripts, and troubleshooting.
+* [docs/OPERATIONS.md](docs/OPERATIONS.md) - Complete instructions for production deployment, config asset synchronization, history reconstruction scripts, and troubleshooting.
+* [docs/TECHNICAL_DOCUMENT.md](docs/TECHNICAL_DOCUMENT.md) - Detailed Technical Document covering system architecture, database layout, and backend workflows.
+* [docs/USER_GUIDE.md](docs/USER_GUIDE.md) - Full end-user manual for running classification, operating the dashboard, and uploading files.
 * [service/README.md](service/README.md) - Deep dive into developer setup, dependency injection details, and API design.

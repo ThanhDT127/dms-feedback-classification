@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from dms.settings import Settings, get_settings
 from dms.web import deps
 from dms.web.app import create_app
+from conftest import apply_auth_overrides
 
 # ─── Helpers ───
 
@@ -88,6 +89,7 @@ def client(tmp_path, monkeypatch, mock_sp_client):
     deps.reset()
 
     app = create_app()
+    apply_auth_overrides(app)
     return TestClient(app)
 
 

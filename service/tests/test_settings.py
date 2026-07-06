@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+import dms.settings as settings_mod
 from dms.exceptions import ConfigurationError
 from dms.settings import Settings, get_settings
 
@@ -40,6 +41,47 @@ def test_settings_model_dir_override(tmp_path):
         model_dir_override=tmp_path / "custom-model",
     )
     assert settings.model_dir == tmp_path / "custom-model"
+
+
+def test_settings_default_data_dir_uses_service_data(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings_mod, "SERVICE_DIR", tmp_path)
+
+    settings = Settings(
+        azure_tenant_id="tenant",
+        azure_client_id="client",
+        azure_client_secret="secret",
+        sharepoint_drive_id="drive",
+        sharepoint_root_folder_id="root",
+        gemini_backend="vertex",
+        gcp_project_id="project",
+    )
+
+    assert settings.data_dir == tmp_path / "data"
+
+
+def test_settings_service_data_falls_back_to_legacy_asset_dirs(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings_mod, "SERVICE_DIR", tmp_path)
+    (tmp_path / "data" / "Keyword").mkdir(parents=True)
+    (tmp_path / "data" / "Model").mkdir(parents=True)
+    (tmp_path / "Keyword").mkdir()
+    (tmp_path / "Model").mkdir()
+    products_path = tmp_path / "Keyword" / "Phân Chia Nhóm Sản Phẩm V2.xlsx"
+    products_path.write_bytes(b"excel")
+
+    settings = Settings(
+        azure_tenant_id="tenant",
+        azure_client_id="client",
+        azure_client_secret="secret",
+        sharepoint_drive_id="drive",
+        sharepoint_root_folder_id="root",
+        gemini_backend="vertex",
+        gcp_project_id="project",
+        data_dir=tmp_path / "data",
+    )
+
+    assert settings.keyword_dir == tmp_path / "Keyword"
+    assert settings.model_dir == tmp_path / "Model"
+    assert settings.df_products_path == products_path
 
 
 def test_settings_missing_required_fields_raise_validation_error():

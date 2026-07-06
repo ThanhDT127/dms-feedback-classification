@@ -21,7 +21,10 @@ window.WS = (() => {
     connect() {
       if (this._closed) return;
       try {
-        this.ws = new WebSocket(this.url);
+        const token = API.getAccessToken ? API.getAccessToken() : '';
+        const sep = this.path.includes('?') ? '&' : '?';
+        const url = `${wsBase}${this.path}${token ? sep + 'token=' + token : ''}`;
+        this.ws = new WebSocket(url);
       } catch (e) {
         console.warn('WS connect error:', e);
         this._scheduleReconnect();
@@ -47,8 +50,16 @@ window.WS = (() => {
         if (this.handlers.onError) this.handlers.onError(err);
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = async (event) => {
         if (this.handlers.onClose) this.handlers.onClose();
+        if (event && event.code === 4001) {
+          const refreshed = API.refreshToken ? await API.refreshToken() : false;
+          if (!refreshed) {
+            this.shouldReconnect = false;
+            this._closed = true;
+            return;
+          }
+        }
         if (this.shouldReconnect && !this._closed) {
           this._scheduleReconnect();
         }

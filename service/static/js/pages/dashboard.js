@@ -294,7 +294,7 @@ window.DashboardPage = (() => {
 
   function startRefresh() {
     stopRefresh();
-    _refreshInterval = setInterval(loadData, 10000);
+    _refreshInterval = setInterval(loadData, 30000);
   }
 
   function stopRefresh() {

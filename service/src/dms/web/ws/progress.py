@@ -21,6 +21,22 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
     - {"type": "complete", "data": {output_path, duration_seconds, ...}}
     - {"type": "error", "data": {error}}
     """
+    # Validate authentication token
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4001, reason="Missing authentication token")
+        return
+    from .. import deps
+    settings = deps.get_settings()
+    if settings:
+        from ...jwt_utils import decode_token
+        import jwt as pyjwt
+        try:
+            decode_token(token, settings.jwt_secret_key, expected_type="access")
+        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError, ValueError):
+            await websocket.close(code=4001, reason="Invalid or expired token")
+            return
+
     await websocket.accept()
 
     jobs: dict = websocket.app.state.jobs

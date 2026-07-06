@@ -4,7 +4,7 @@
    ============================================================ */
 
 window.ClassifyPage = (() => {
-  let _mode = 'text'; // 'text' | 'file' | 'batch'
+  let _mode = 'text'; // 'text' | 'file' | 'batch' | 'config'
   let _wsClient = null;
   let _currentJob = null;
   let _isPaused = false;
@@ -12,6 +12,31 @@ window.ClassifyPage = (() => {
   let _lastTextInput = '';
 
   let _labelGroups = [];
+
+  // Config tab cache (task 3.3)
+  let _configPrompt = null;
+  let _configKeywords = null;
+  let _configProducts = null;
+  let _configSheetTab = 0;
+  let _productEditorColumns = [];
+  let _productEditorSheetName = '';
+
+  function isAdmin() {
+    return window.App?.state?.user?.role === 'admin';
+  }
+
+  function configPromptText() {
+    return _configPrompt?.raw_template || _configPrompt?.prompt_template || _configPrompt?.prompt || _configPrompt?.system_prompt || '';
+  }
+
+  function downloadTemplate() {
+    return API.download('/files/template', 'template_dms.xlsx');
+  }
+
+  function downloadJob(jobId) {
+    if (!jobId) return;
+    return API.download(`/classify/jobs/${encodeURIComponent(jobId)}/download`, `ket_qua_${jobId}.xlsx`);
+  }
 
   async function loadLabels() {
     try {
@@ -61,6 +86,7 @@ window.ClassifyPage = (() => {
           <button class="pill-tab active" data-mode="text" onclick="ClassifyPage.setMode('text')">📝 Đoạn văn bản</button>
           <button class="pill-tab" data-mode="file" onclick="ClassifyPage.setMode('file')">📄 Một file</button>
           <button class="pill-tab" data-mode="batch" onclick="ClassifyPage.setMode('batch')">📁 Nhiều file</button>
+          ${isAdmin() ? '<button class="pill-tab" data-mode="config" onclick="ClassifyPage.setMode(\'config\')">⚙️ Cấu hình</button>' : ''}
         </div>
       </div>
 
@@ -73,6 +99,10 @@ window.ClassifyPage = (() => {
   }
 
   function setMode(mode) {
+    if (mode === 'config' && !isAdmin()) {
+      Toast.error('Bạn không có quyền truy cập cấu hình');
+      mode = 'text';
+    }
     _mode = mode;
     document.querySelectorAll('#classify-mode .pill-tab').forEach(t => {
       t.classList.toggle('active', t.dataset.mode === mode);
@@ -107,6 +137,11 @@ window.ClassifyPage = (() => {
           if ((_currentJob.status === 'running' || _currentJob.status === 'queued') && (!_wsClient || !_wsClient.isOpen())) {
             connectJobWS(_currentJob.job_id || _currentJob.id);
           }
+          // Restore pause button state (task 1.3)
+          const pauseBtn = document.getElementById('btn-pause');
+          if (pauseBtn && _isPaused) {
+            pauseBtn.innerHTML = '▶️ Tiếp tục';
+          }
         }
         break;
       case 'batch': 
@@ -115,6 +150,10 @@ window.ClassifyPage = (() => {
           document.getElementById('batch-queue')?.classList.remove('hidden');
           renderBatchTable();
         }
+        break;
+      case 'config':
+        el.innerHTML = renderConfigMode();
+        loadConfigData();
         break;
     }
   }
@@ -202,9 +241,9 @@ window.ClassifyPage = (() => {
             </div>
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
-            <a href="/api/classify/jobs/${jobId}/download" class="btn btn-success btn-sm" target="_blank" style="text-decoration:none;">
+            <button class="btn btn-success btn-sm" onclick="ClassifyPage.downloadJob('${jobId}')">
               📥 Tải file kết quả (.xlsx)
-            </a>
+            </button>
             ${spLinkHtml}
           </div>
         `;
@@ -540,6 +579,7 @@ window.ClassifyPage = (() => {
     const isJobActive = _currentJob && (_currentJob.status === 'running' || _currentJob.status === 'queued' || _currentJob.status === 'completed' || _currentJob.status === 'error');
 
     return `
+      ${renderExcelGuide()}
       <div class="card animate-in">
         <!-- Dropzone -->
         <div class="dropzone ${isJobActive ? 'hidden' : ''}" id="classify-dropzone"
@@ -758,8 +798,11 @@ window.ClassifyPage = (() => {
       },
       onProgress: (data) => {
         console.log('[WS] Progress:', data);
-        updateFileProgress(data);
-        if (data.step) {
+        // Null-safe: DOM elements may not exist if user is on another page (task 1.2)
+        if (document.getElementById('file-progress-bar')) {
+          updateFileProgress(data);
+        }
+        if (data.step && document.getElementById('file-steps')) {
           updateFileSteps(data.step, data.step_status);
         }
         if (_currentJob) {
@@ -1005,9 +1048,7 @@ window.ClassifyPage = (() => {
           </div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;">
-          <a href="/api/classify/jobs/${jobId}/download" class="btn btn-success btn-sm" target="_blank" style="text-decoration:none;">
-            📥 Tải file kết quả (.xlsx)
-          </a>
+          <button class="btn btn-success btn-sm" onclick="ClassifyPage.downloadJob('${jobId}')">📥 Tải file kết quả (.xlsx)</button>
           ${spLinkHtml}
         </div>
       `;
@@ -1059,7 +1100,7 @@ window.ClassifyPage = (() => {
   function downloadResult() {
     if (_currentJob) {
       const jobId = _currentJob.job_id || _currentJob.id;
-      window.open(`/api/classify/jobs/${jobId}/download`, '_blank');
+      downloadJob(jobId);
     }
   }
 
@@ -1069,6 +1110,7 @@ window.ClassifyPage = (() => {
 
   function renderBatchMode() {
     return `
+      ${renderExcelGuide()}
       <div class="card animate-in">
         <!-- Multiple file upload -->
         <div class="dropzone" id="batch-dropzone"
@@ -1171,7 +1213,7 @@ window.ClassifyPage = (() => {
           : `<button class="btn btn-ghost btn-sm" id="btn-push-sp-batch-${i}" onclick="ClassifyPage.pushToSharePoint('${state.jobId}', ${i})" title="Đẩy lên SharePoint" style="padding: 2px 6px; margin-left: 4px; font-size: 11px;">☁️ Đẩy SP</button>`;
         statusHtml = `
           <span class="badge badge-green" id="batch-status-${i}">✅ Hoàn thành</span>
-          <button class="btn btn-ghost btn-sm" onclick="window.open('/api/classify/jobs/${state.jobId}/download', '_blank')" title="Tải kết quả" style="padding: 2px 6px; margin-left: 4px; font-size: 11px;">📥 Tải</button>
+          <button class="btn btn-ghost btn-sm" onclick="ClassifyPage.downloadJob('${state.jobId}')" title="Tải kết quả" style="padding: 2px 6px; margin-left: 4px; font-size: 11px;">📥 Tải</button>
           ${spLink}
         `;
       } else if (state.status === 'failed') {
@@ -1244,7 +1286,7 @@ window.ClassifyPage = (() => {
           : `<button class="btn btn-ghost btn-sm" id="btn-push-sp-batch-${i}" onclick="ClassifyPage.pushToSharePoint('${state.jobId}', ${i})" title="Đẩy lên SharePoint" style="padding: 2px 6px; margin-left: 4px; font-size: 11px;">☁️ Đẩy SP</button>`;
         statusEl.innerHTML = `
           <span class="badge badge-green">✅ Hoàn thành</span>
-          <button class="btn btn-ghost btn-sm" onclick="window.open('/api/classify/jobs/${state.jobId}/download', '_blank')" title="Tải kết quả" style="padding: 2px 6px; margin-left: 4px; font-size: 11px;">📥 Tải</button>
+          <button class="btn btn-ghost btn-sm" onclick="ClassifyPage.downloadJob('${state.jobId}')" title="Tải kết quả" style="padding: 2px 6px; margin-left: 4px; font-size: 11px;">📥 Tải</button>
           ${spLink}
         `;
       } else if (state.status === 'cancelled') {
@@ -1440,11 +1482,492 @@ window.ClassifyPage = (() => {
   }
 
   function destroy() {
-    if (_wsClient) {
-      _wsClient.close();
-      _wsClient = null;
+    // Task 1.1: Do NOT close WS in destroy() — let it persist across page navigations
+    // WS messages continue updating _currentJob state in background
+    // _wsClient.close() is only called by stopClassify() and resetJob() (intentional user actions)
+    // Preserve _currentJob, _selectedFile, _batchFiles, _isPaused so state persists
+  }
+
+  // === Excel Guide (tasks 2.1-2.5) ===
+
+  function renderExcelGuide() {
+    return `
+      <div class="excel-guide-banner animate-in" style="margin-bottom:16px; font-size:13px; display:flex; flex-direction:column; gap:8px; background:rgba(245,158,11,0.05); border:1px solid rgba(245,158,11,0.2); border-radius:var(--radius-md); padding:12px; width:100%;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+          <span style="color:var(--accent-amber); font-weight:500; display:flex; align-items:center; gap:6px;">
+            ⚠️ Định dạng Excel yêu cầu: Cột văn bản bắt buộc phải chứa chữ "Nội dung" hoặc "noi dung".
+          </span>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px;" onclick="ClassifyPage.previewTemplate()">👁️ Xem cấu trúc mẫu</button>
+            <button class="btn btn-ghost btn-sm" style="font-size:12px; padding:4px 10px; color:var(--text-secondary);" onclick="ClassifyPage.downloadTemplate()"><span style="text-decoration:underline;">Tải file mẫu (.xlsx)</span></button>
+          </div>
+        </div>
+        <p style="font-size:12px; color:var(--text-muted); margin:0; line-height:1.5;">
+          Hệ thống sẽ quét cột này để phân loại. Các cột thông tin đi kèm (như Tên, Ngày, Mã phản hồi...) sẽ được tự động giữ nguyên và đi kèm trong kết quả phân loại xuất ra.
+        </p>
+      </div>
+    `;
+  }
+
+  function previewTemplate() {
+    const columns = ['Nội dung phản hồi', 'Người gửi', 'Ghi chú (Tùy chọn)'];
+    const rows = [
+      { 'Nội dung phản hồi': 'Ứng dụng chạy mượt nhưng đôi khi lag nhẹ khi tải dữ liệu lớn.', 'Người gửi': 'Nguyễn Văn A', 'Ghi chú (Tùy chọn)': 'Góp ý giao diện' },
+      { 'Nội dung phản hồi': 'Không thể đăng nhập vào tài khoản từ sáng nay, báo lỗi kết nối.', 'Người gửi': 'Trần Thị B', 'Ghi chú (Tùy chọn)': 'Lỗi kỹ thuật' }
+    ];
+    let tableHtml = '<table class="table" style="font-size:12px;"><thead><tr>' + columns.map(c => `<th>${esc(c)}</th>`).join('') + '</tr></thead><tbody>';
+    rows.forEach(r => {
+      tableHtml += '<tr>' + columns.map(c => `<td>${esc(r[c])}</td>`).join('') + '</tr>';
+    });
+    tableHtml += '</tbody></table>';
+
+    openClassifyModal('📄 Cấu trúc file Excel mẫu', `
+      <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;">
+        <p style="margin:0 0 8px;">📌 <strong>Cột bắt buộc:</strong> Tiêu đề chứa từ "Nội dung" hoặc "noi dung".</p>
+        <p style="margin:0;">Các cột bổ sung sẽ được giữ nguyên trong kết quả phân loại.</p>
+      </div>
+      <div style="overflow-x:auto;">${tableHtml}</div>
+      <div style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="ClassifyPage.downloadTemplate()">📥 Tải file mẫu (.xlsx)</button></div>
+    `);
+  }
+
+  // === Classify Modal (task 7.1) ===
+
+  function openClassifyModal(title, contentHtml, onSave) {
+    // Remove existing modal if any
+    document.getElementById('classify-modal-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'classify-modal-overlay';
+    overlay.className = 'classify-modal-overlay';
+    overlay.innerHTML = `
+      <div class="classify-modal">
+        <div class="classify-modal-header">
+          <h3>${title}</h3>
+          <button class="btn btn-ghost btn-sm" onclick="ClassifyPage.closeClassifyModal()" style="font-size:16px;">✕</button>
+        </div>
+        <div class="classify-modal-body">${contentHtml}</div>
+        ${onSave ? `
+          <div class="classify-modal-footer">
+            <button class="btn btn-secondary btn-sm" onclick="ClassifyPage.closeClassifyModal()">Hủy</button>
+            <button class="btn btn-primary btn-sm" id="classify-modal-save">💾 Lưu</button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeClassifyModal();
+    });
+
+    document.body.appendChild(overlay);
+
+    if (onSave) {
+      document.getElementById('classify-modal-save')?.addEventListener('click', onSave);
     }
-    // Preserve _currentJob, _selectedFile, and _batchFiles so that state is maintained when switching tabs
+  }
+
+  function closeClassifyModal() {
+    const overlay = document.getElementById('classify-modal-overlay');
+    if (overlay) overlay.remove();
+  }
+
+  // === Config Mode (tasks 3-6) ===
+
+  function renderConfigMode() {
+    return `
+      <div class="config-panel animate-in">
+        <!-- System Prompt -->
+        <details class="config-section" open>
+          <summary class="config-section-header">
+            <h4>📝 System Prompt</h4>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); ClassifyPage.openPromptEditor()" style="font-size:11px;">✏️ Chỉnh sửa</button>
+          </summary>
+          <div class="config-section-body" id="config-prompt-body">
+            <div class="text-muted" style="font-size:12px;"><span class="spinner" style="width:14px;height:14px;"></span> Đang tải...</div>
+          </div>
+        </details>
+
+        <!-- Keywords -->
+        <details class="config-section">
+          <summary class="config-section-header">
+            <h4>🔑 Từ khóa phân loại</h4>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); ClassifyPage.openKeywordEditor()" style="font-size:11px;">✏️ Chỉnh sửa</button>
+          </summary>
+          <div class="config-section-body" id="config-keywords-body">
+            <div class="text-muted" style="font-size:12px;"><span class="spinner" style="width:14px;height:14px;"></span> Đang tải...</div>
+          </div>
+        </details>
+
+        <!-- Products -->
+        <details class="config-section">
+          <summary class="config-section-header">
+            <h4>📦 Bảng sản phẩm</h4>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); ClassifyPage.openProductEditor()" style="font-size:11px;">✏️ Chỉnh sửa</button>
+          </summary>
+          <div class="config-section-body" id="config-products-body">
+            <div class="text-muted" style="font-size:12px;"><span class="spinner" style="width:14px;height:14px;"></span> Đang tải...</div>
+          </div>
+        </details>
+      </div>
+    `;
+  }
+
+  async function loadConfigData() {
+    const results = await Promise.allSettled([
+      _configPrompt ? Promise.resolve(_configPrompt) : API.get('/settings/prompt').catch(() => ({ prompt: '(Không thể tải prompt)' })),
+      _configKeywords ? Promise.resolve(_configKeywords) : API.get('/pipeline/keywords/raw').catch(() => ({})),
+      _configProducts ? Promise.resolve(_configProducts) : API.get('/pipeline/products/list').catch(() => ({ sheets: {}, sheet_names: [] }))
+    ]);
+
+    // Prompt
+    if (results[0].status === 'fulfilled') {
+      _configPrompt = results[0].value;
+      const body = document.getElementById('config-prompt-body');
+      if (body) {
+        const text = configPromptText() || JSON.stringify(_configPrompt);
+        const truncated = text.length > 500 ? text.substring(0, 500) + '...' : text;
+        body.innerHTML = `
+          <pre style="white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.6;color:var(--text-secondary);font-family:var(--font-mono);background:var(--bg-tertiary);padding:12px;border-radius:var(--radius-sm);max-height:200px;overflow-y:auto;">${esc(truncated)}</pre>
+          <div style="margin-top:8px;font-size:11px;color:var(--text-muted);">${text.length} ký tự</div>
+        `;
+      }
+    }
+
+    // Keywords
+    if (results[1].status === 'fulfilled') {
+      _configKeywords = results[1].value;
+      const body = document.getElementById('config-keywords-body');
+      if (body) {
+        const categories = _configKeywords.categories || _configKeywords;
+        if (typeof categories === 'object' && !Array.isArray(categories)) {
+          const entries = Object.entries(categories);
+          let html = `<div style="margin-bottom:10px;"><input type="text" class="form-input" placeholder="🔍 Tìm từ khóa..." style="font-size:12px;padding:6px 10px;" oninput="ClassifyPage.filterKeywords(this.value)"></div>`;
+          html += '<div id="config-keywords-grid">';
+          entries.forEach(([cat, keywords]) => {
+            const kws = Array.isArray(keywords) ? keywords : [];
+            html += `
+              <div class="config-kw-category" data-category="${esc(cat)}" style="margin-bottom:12px;">
+                <div style="font-weight:600;font-size:12px;color:var(--text-primary);margin-bottom:4px;">${esc(cat)} <span class="text-muted" style="font-weight:400;">(${kws.length})</span></div>
+                <div class="config-kw-chips">${kws.map(k => `<span class="keyword-chip">${esc(String(k))}</span>`).join('')}</div>
+              </div>
+            `;
+          });
+          html += '</div>';
+          // Quick add UI
+          html += `
+            <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="text" class="form-input" id="config-kw-new" placeholder="Từ khóa mới" style="font-size:12px;padding:6px 10px;flex:1;min-width:120px;">
+              <select class="form-input" id="config-kw-cat" style="font-size:12px;padding:6px 10px;max-width:200px;">
+                ${entries.map(([cat]) => `<option value="${esc(cat)}">${esc(cat)}</option>`).join('')}
+              </select>
+              <button class="btn btn-primary btn-sm" style="font-size:11px;" onclick="ClassifyPage.quickAddKeyword()">➕ Thêm</button>
+            </div>
+          `;
+          body.innerHTML = html;
+        } else {
+          body.innerHTML = '<div class="text-muted">Không có dữ liệu từ khóa</div>';
+        }
+      }
+    }
+
+    // Products
+    if (results[2].status === 'fulfilled') {
+      _configProducts = results[2].value;
+      const body = document.getElementById('config-products-body');
+      if (body) {
+        renderProductsPanel(body);
+      }
+    }
+  }
+
+  function normalizeProductSheets() {
+    const source = _configProducts?.sheets || _configProducts?.data || [];
+    if (Array.isArray(source)) return source;
+    if (source && typeof source === 'object') {
+      const names = _configProducts?.sheet_names || Object.keys(source);
+      return names.map(name => ({
+        name,
+        columns: source[name]?.columns || [],
+        products: source[name]?.products || source[name]?.rows || source[name]?.data || []
+      }));
+    }
+    return [];
+  }
+
+  function renderProductsPanel(body) {
+    const sheets = normalizeProductSheets();
+    if (!Array.isArray(sheets) || sheets.length === 0) {
+      // Try treating as single table
+      if (_configProducts?.rows || _configProducts?.products) {
+        const rows = _configProducts.rows || _configProducts.products || [];
+        body.innerHTML = renderProductTable(rows);
+        return;
+      }
+      body.innerHTML = '<div class="text-muted">Không có dữ liệu sản phẩm</div>';
+      return;
+    }
+
+    let html = '<div class="config-sheet-tabs">';
+    sheets.forEach((sheet, i) => {
+      const name = sheet.name || sheet.sheet_name || `Sheet ${i + 1}`;
+      html += `<button class="config-sheet-tab ${i === _configSheetTab ? 'active' : ''}" onclick="ClassifyPage.switchConfigSheet(${i})">${esc(name)}</button>`;
+    });
+    html += '</div>';
+    html += `
+      <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="text" class="form-input" placeholder="🔍 Tìm sản phẩm..." style="font-size:12px;padding:6px 10px;flex:1;min-width:220px;" oninput="ClassifyPage.filterProducts(this.value)">
+      </div>
+    `;
+    html += '<div id="config-products-table">';
+
+    const activeSheet = sheets[_configSheetTab] || sheets[0];
+    const rows = activeSheet?.rows || activeSheet?.data || activeSheet?.products || [];
+    html += renderProductTable(rows);
+    html += '</div>';
+    body.innerHTML = html;
+  }
+
+  function renderProductTable(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return '<div class="text-muted">Không có dữ liệu</div>';
+    const headers = Object.keys(rows[0]);
+    let html = '<div style="overflow-x:auto;max-height:300px;overflow-y:auto;"><table class="config-product-table"><thead><tr>';
+    headers.forEach(h => { html += `<th>${esc(String(h))}</th>`; });
+    html += '</tr></thead><tbody id="config-product-tbody">';
+    rows.slice(0, 50).forEach(row => {
+      html += '<tr>';
+      headers.forEach(h => { html += `<td>${esc(String(row[h] ?? ''))}</td>`; });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    if (rows.length > 50) {
+      html += `<div class="text-muted" style="font-size:11px;margin-top:6px;">Hiển thị 50/${rows.length} dòng</div>`;
+    }
+    return html;
+  }
+
+  function switchConfigSheet(index) {
+    _configSheetTab = index;
+    const body = document.getElementById('config-products-body');
+    if (body) renderProductsPanel(body);
+  }
+
+  function activeProductSheet() {
+    const sheets = normalizeProductSheets();
+    const sheet = sheets[_configSheetTab] || sheets[0] || null;
+    if (sheet) return sheet;
+    const rows = _configProducts?.rows || _configProducts?.products || [];
+    return {
+      name: _configProducts?.sheet_name || 'Sản phẩm',
+      columns: rows[0] ? Object.keys(rows[0]) : ['Sản phẩm', 'Dòng SP', 'Model'],
+      products: rows
+    };
+  }
+
+  function renderProductEditorRow(row = {}) {
+    const cells = _productEditorColumns.map(col => `
+      <td contenteditable="true" data-product-field="${escAttr(col)}" style="min-width:140px;">${esc(row[col] ?? '')}</td>
+    `).join('');
+    return `
+      <tr>
+        ${cells}
+        <td style="width:70px;">
+          <button class="btn btn-ghost btn-sm" onclick="ClassifyPage.deleteProductEditorRow(this)" title="Xóa dòng">🗑️</button>
+        </td>
+      </tr>
+    `;
+  }
+
+  function openProductEditor() {
+    if (!isAdmin()) {
+      Toast.error('Bạn không có quyền chỉnh sửa bảng sản phẩm');
+      return;
+    }
+    if (window.SettingsPage?.openProductAssetEditor) {
+      SettingsPage.openProductAssetEditor();
+      return;
+    }
+    const sheet = activeProductSheet();
+    const rows = sheet?.products || sheet?.rows || sheet?.data || [];
+    _productEditorSheetName = sheet?.name || sheet?.sheet_name || 'Sản phẩm';
+    _productEditorColumns = Array.isArray(sheet?.columns) && sheet.columns.length
+      ? sheet.columns.map(String)
+      : (rows[0] ? Object.keys(rows[0]) : ['Sản phẩm', 'Dòng SP', 'Model']);
+
+    const table = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;">
+        <div class="text-muted" style="font-size:12px;">Sheet: <strong>${esc(_productEditorSheetName)}</strong></div>
+        <button class="btn btn-secondary btn-sm" onclick="ClassifyPage.addProductEditorRow()">➕ Thêm dòng</button>
+      </div>
+      <div style="overflow:auto;max-height:52vh;border:1px solid var(--border);border-radius:var(--radius-sm);">
+        <table class="config-product-table">
+          <thead>
+            <tr>
+              ${_productEditorColumns.map(col => `<th>${esc(col)}</th>`).join('')}
+              <th>Hành động</th>
+            </tr>
+          </thead>
+          <tbody id="config-product-editor-tbody">
+            ${(Array.isArray(rows) && rows.length ? rows : [{}]).map(row => renderProductEditorRow(row)).join('')}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-muted" style="font-size:11px;margin-top:10px;">Nhấp trực tiếp vào ô để sửa. Dữ liệu sẽ lưu vào sheet hiện tại và giữ nguyên các sheet khác.</p>
+    `;
+
+    openClassifyModal(`✏️ Sửa danh mục sản phẩm`, table, saveProductEditor);
+  }
+
+  function addProductEditorRow() {
+    const tbody = document.getElementById('config-product-editor-tbody');
+    if (!tbody) return;
+    const temp = document.createElement('tbody');
+    temp.innerHTML = renderProductEditorRow({});
+    tbody.appendChild(temp.firstElementChild);
+  }
+
+  function deleteProductEditorRow(button) {
+    const row = button?.closest?.('tr');
+    const tbody = document.getElementById('config-product-editor-tbody');
+    if (!row || !tbody) return;
+    if (tbody.querySelectorAll('tr').length <= 1) {
+      row.querySelectorAll('[data-product-field]').forEach(cell => { cell.textContent = ''; });
+      return;
+    }
+    row.remove();
+  }
+
+  async function saveProductEditor() {
+    if (!_productEditorSheetName || _productEditorColumns.length === 0) return;
+    const rows = Array.from(document.querySelectorAll('#config-product-editor-tbody tr')).map(tr => {
+      const row = {};
+      tr.querySelectorAll('[data-product-field]').forEach(cell => {
+        row[cell.getAttribute('data-product-field')] = cell.textContent.trim();
+      });
+      return row;
+    }).filter(row => Object.values(row).some(value => String(value).trim() !== ''));
+
+    try {
+      await API.put('/pipeline/products', {
+        sheet_name: _productEditorSheetName,
+        products: rows
+      });
+      Toast.success(`Đã lưu bảng sản phẩm "${_productEditorSheetName}"`);
+      _configProducts = null;
+      closeClassifyModal();
+      if (_mode === 'config') renderMode();
+    } catch (e) {
+      Toast.error('Lỗi lưu bảng sản phẩm: ' + e.message);
+    }
+  }
+
+  // === Prompt Editor (task 4.4) ===
+
+  async function openPromptEditor() {
+    if (window.SettingsPage?.openPromptAssetEditor) {
+      SettingsPage.openPromptAssetEditor();
+      return;
+    }
+    if (!_configPrompt) {
+      try {
+        _configPrompt = await API.get('/settings/prompt');
+      } catch (e) {
+        Toast.error('Không thể tải System Prompt: ' + e.message);
+        return;
+      }
+    }
+    const text = configPromptText();
+    openClassifyModal('✏️ Chỉnh sửa System Prompt', `
+      <textarea id="config-prompt-textarea" class="form-input" style="width:100%;min-height:350px;font-family:var(--font-mono);font-size:12px;line-height:1.6;resize:vertical;">${esc(text)}</textarea>
+    `, async () => {
+      const newText = document.getElementById('config-prompt-textarea')?.value;
+      if (!newText) return;
+      try {
+        await API.put('/settings/prompt', { prompt: newText });
+        _configPrompt = null; // clear cache
+        Toast.success('System prompt đã được lưu');
+        closeClassifyModal();
+        if (_mode === 'config') { renderMode(); }
+      } catch (e) {
+        Toast.error('Lỗi lưu prompt: ' + e.message);
+      }
+    });
+  }
+
+  function openKeywordEditor() {
+    if (!isAdmin()) {
+      Toast.error('Bạn không có quyền chỉnh sửa từ khóa');
+      return;
+    }
+    if (window.SettingsPage?.openKeywordAssetEditor) {
+      SettingsPage.openKeywordAssetEditor();
+      return;
+    }
+    Toast.error('Không thể mở editor từ khóa');
+  }
+
+  // === Keyword filter + quick add (tasks 5.1-5.3) ===
+
+  function filterKeywords(query) {
+    const q = query.trim().toLowerCase();
+    document.querySelectorAll('.config-kw-category').forEach(cat => {
+      const chips = cat.querySelectorAll('.keyword-chip');
+      let hasMatch = false;
+      chips.forEach(chip => {
+        const text = chip.textContent.toLowerCase();
+        if (!q || text.includes(q)) {
+          chip.style.display = '';
+          chip.classList.toggle('highlight', !!q && text.includes(q));
+          hasMatch = true;
+        } else {
+          chip.style.display = 'none';
+          chip.classList.remove('highlight');
+        }
+      });
+      cat.style.display = hasMatch || !q ? '' : 'none';
+    });
+  }
+
+  async function quickAddKeyword() {
+    const input = document.getElementById('config-kw-new');
+    const select = document.getElementById('config-kw-cat');
+    if (!input || !select) return;
+    const keyword = input.value.trim();
+    const category = select.value;
+    if (!keyword) { Toast.error('Nhập từ khóa'); return; }
+
+    // Add to cached data
+    const categories = _configKeywords?.categories || _configKeywords || {};
+    if (!categories[category]) categories[category] = [];
+    if (categories[category].some(k => String(k).trim().toLowerCase() === keyword.toLowerCase())) {
+      Toast.error('Từ khóa đã tồn tại trong nhóm này');
+      return;
+    }
+    categories[category].push(keyword);
+
+    try {
+      await API.put('/pipeline/keywords', categories);
+      _configKeywords = null; // clear cache
+      input.value = '';
+      Toast.success(`Đã thêm "${keyword}" vào ${category}`);
+      if (_mode === 'config') { renderMode(); }
+    } catch (e) {
+      Toast.error('Lỗi lưu từ khóa: ' + e.message);
+    }
+  }
+
+  // === Product filter (tasks 6.1-6.2) ===
+
+  function filterProducts(query) {
+    const q = query.trim().toLowerCase();
+    const tbody = document.getElementById('config-product-tbody');
+    if (!tbody) return;
+    tbody.querySelectorAll('tr').forEach(tr => {
+      const text = tr.textContent.toLowerCase();
+      const match = !q || text.includes(q);
+      tr.style.display = match ? '' : 'none';
+      tr.classList.toggle('highlight', !!q && match);
+    });
   }
 
   return {
@@ -1453,6 +1976,10 @@ window.ClassifyPage = (() => {
     fileDragOver, fileDragLeave, fileDrop, handleFile, clearFile,
     startFileClassify, togglePause, stopClassify, downloadResult, resetJob,
     batchDrop, handleBatchFiles, startBatch, clearBatch, removeBatchFile,
-    pushToSharePoint
+    pushToSharePoint,
+    previewTemplate, downloadTemplate, downloadJob, openPromptEditor, openKeywordEditor, quickAddKeyword,
+    filterKeywords, filterProducts, switchConfigSheet,
+    openProductEditor, addProductEditorRow, deleteProductEditorRow, saveProductEditor,
+    openClassifyModal, closeClassifyModal
   };
 })();

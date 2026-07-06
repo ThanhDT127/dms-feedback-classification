@@ -8,6 +8,30 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from dms.settings import Settings
+from dms.web.deps import get_admin_user, get_current_user
+
+
+TEST_ADMIN = {
+    "username": "adminuser",
+    "display_name": "Admin User",
+    "role": "admin",
+    "is_active": True,
+}
+TEST_USER = {
+    "username": "testuser",
+    "display_name": "Test User",
+    "role": "user",
+    "is_active": True,
+}
+
+
+def apply_auth_overrides(app, *, user: dict | None = None, admin: dict | None = None):
+    """Allow tests to exercise protected endpoints with explicit roles."""
+    current_user = user or TEST_ADMIN
+    admin_user = admin or TEST_ADMIN
+    app.dependency_overrides[get_current_user] = lambda: current_user
+    app.dependency_overrides[get_admin_user] = lambda: admin_user
+    return app
 
 
 class DummySession:

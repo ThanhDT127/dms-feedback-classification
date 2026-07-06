@@ -62,6 +62,22 @@ async def ws_live_logs(websocket: WebSocket):
     - {"type": "log", "data": {timestamp, level, message, module}}
     - {"type": "info", "data": {message}}
     """
+    # Validate authentication token
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4001, reason="Missing authentication token")
+        return
+    from .. import deps
+    settings = deps.get_settings()
+    if settings:
+        from ...jwt_utils import decode_token
+        import jwt as pyjwt
+        try:
+            decode_token(token, settings.jwt_secret_key, expected_type="access")
+        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError, ValueError):
+            await websocket.close(code=4001, reason="Invalid or expired token")
+            return
+
     await websocket.accept()
 
     # Parse level filter from query params

@@ -6,6 +6,8 @@ import logging
 import threading
 from typing import Any
 
+from fastapi import Depends, Header, HTTPException
+
 from ..settings import SERVICE_DIR, Settings
 
 logger = logging.getLogger("dms-web")
@@ -43,6 +45,89 @@ def get_settings() -> Settings | None:
             return None
 
     return _get_or_create("settings", _factory)
+
+
+def get_label_history_store():
+    """Return a singleton LabelHistoryStore."""
+    from ..label_history import LabelHistoryStore
+
+    def _factory():
+        settings = get_settings()
+        if settings is None:
+            return None
+        return LabelHistoryStore(settings.label_history_db_path)
+
+    return _get_or_create("label_history_store", _factory)
+
+
+def get_user_store():
+    """Return a singleton UserStore."""
+    from ..user_store import UserStore
+
+    def _factory():
+        settings = get_settings()
+        if settings is None:
+            return None
+        db_path = settings.data_dir / "users.json"
+        return UserStore(db_path=db_path, default_admin_password=settings.default_admin_password)
+
+    return _get_or_create("user_store", _factory)
+
+
+async def get_current_user(authorization: str = Header(None)) -> dict:
+    """FastAPI dependency: extract and validate JWT from Authorization header."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+
+    token = authorization[7:].strip()  # Strip 'Bearer '
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+    settings = get_settings()
+    if settings is None:
+        raise HTTPException(status_code=500, detail="Server configuration error")
+
+    from ..jwt_utils import decode_token
+    import jwt as pyjwt
+
+    try:
+        payload = decode_token(token, settings.jwt_secret_key, expected_type="access")
+    except pyjwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except (pyjwt.InvalidTokenError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    username = payload.get("sub")
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    user_store = get_user_store()
+    if user_store is None:
+        raise HTTPException(status_code=500, detail="User store not available")
+
+    user = user_store.get_user(username)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    if user.get("is_active", True) is False:
+        raise HTTPException(status_code=403, detail="User is inactive")
+
+    return user
+
+
+async def get_admin_user(user: dict = Depends(get_current_user)):
+    """FastAPI dependency: require admin role."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+async def get_optional_user(authorization: str = Header(None)):
+    """FastAPI dependency: return user or None."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    try:
+        return await get_current_user(authorization)
+    except HTTPException:
+        return None
 
 
 def get_settings_partial() -> dict:

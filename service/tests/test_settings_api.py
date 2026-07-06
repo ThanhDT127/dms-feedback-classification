@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from dms.settings import Settings, get_settings
 from dms.web import deps
 from dms.web.app import create_app
+from conftest import apply_auth_overrides
 
 
 @pytest.fixture
@@ -85,6 +86,7 @@ def client(tmp_path, monkeypatch):
     deps.reset()
 
     app = create_app()
+    apply_auth_overrides(app)
     return TestClient(app)
 
 
@@ -106,6 +108,10 @@ def test_put_settings_success(client, tmp_path):
     env_content = (tmp_path / ".env").read_text(encoding="utf-8")
     assert "GEMINI_BACKEND=apikey" in env_content
     assert "GEMINI_API_KEY=new-secret-key-12345" in env_content
+
+    secret = client.get("/api/settings/secret/gemini_api_key")
+    assert secret.status_code == 200
+    assert secret.json()["value"] == "new-secret-key-12345"
 
 
 def test_put_settings_validation_and_rollback(client, tmp_path):
@@ -152,6 +158,24 @@ def test_put_pipeline_keywords(client, tmp_path):
     assert kw_file.is_file()
     data = json.loads(kw_file.read_text(encoding="utf-8"))
     assert data["Báo lỗi"] == ["hỏng", "cháy", "vỡ"]
+
+
+def test_keyword_search_exact_and_partial(client):
+    payload = {"Báo lỗi": ["hỏng", "cháy", "vỡ"], "HTPP": ["phân phối", "tràn vùng"]}
+    response = client.put("/api/pipeline/keywords", json=payload)
+    assert response.status_code == 200
+
+    exact = client.get("/api/pipeline/keywords/search", params={"q": "hỏng"})
+    assert exact.status_code == 200
+    assert exact.json()["results"][0] == {"keyword": "hỏng", "group": "Báo lỗi"}
+
+    partial = client.get("/api/pipeline/keywords/search", params={"q": "phân"})
+    assert partial.status_code == 200
+    assert {"keyword": "phân phối", "group": "HTPP"} in partial.json()["results"]
+
+    empty = client.get("/api/pipeline/keywords/search", params={"q": ""})
+    assert empty.status_code == 200
+    assert empty.json()["results"] == []
 
 
 def test_products_list_and_save(client, tmp_path):
