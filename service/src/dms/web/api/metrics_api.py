@@ -8,9 +8,10 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from ...settings import get_settings
+from ..deps import get_current_user
 
 logger = logging.getLogger("dms-web")
 
@@ -29,7 +30,7 @@ def _log_dir() -> Path:
 
 
 @router.get("/health")
-async def get_health():
+async def get_health(user: dict = Depends(get_current_user)):
     """Trả về trạng thái hoạt động của dịch vụ."""
     health_path = _work_dir() / "health.json"
     logger.info(
@@ -72,7 +73,7 @@ async def get_health():
 
 
 @router.get("/metrics")
-async def get_metrics():
+async def get_metrics(user: dict = Depends(get_current_user)):
     """Trả về số liệu thống kê vận hành."""
     metrics_path = _work_dir() / "metrics.json"
     seen_path = _work_dir() / "seen_files.json"
@@ -126,7 +127,7 @@ async def get_metrics():
 
 
 @router.get("/metrics/daily")
-async def get_daily_metrics():
+async def get_daily_metrics(user: dict = Depends(get_current_user)):
     """Trả về tổng hợp theo ngày cho biểu đồ frontend."""
     daily_counts = {}
 
@@ -212,6 +213,7 @@ def _parse_log_line(line: str) -> dict | None:
 async def get_logs(
     level: str | None = Query(None, description="Lọc theo level: DEBUG, INFO, WARNING, ERROR"),
     limit: int = Query(200, ge=1, le=5000, description="Số dòng tối đa"),
+    user: dict = Depends(get_current_user),
 ):
     """Đọc log gần đây từ file log mới nhất."""
     log_file = _find_latest_log()

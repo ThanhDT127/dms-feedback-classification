@@ -146,3 +146,16 @@ class SharePointClient:
 
     def upload_checkpoint(self, local_path: str | Path) -> dict:
         return self.upload_file(local_path, self.settings.sp_checkpoint_folder)
+
+    def delete_item(self, item_id: str) -> None:
+        """Delete a SharePoint drive item by Microsoft Graph item id."""
+        if not item_id:
+            raise SharePointError("Delete failed: missing SharePoint item id")
+        url = self._drive_url(f"items/{item_id}")
+        response = self.session.delete(url, headers=self.auth.get_headers())
+        if response.status_code not in (200, 202, 204):
+            raise SharePointError(
+                f"Delete failed ({response.status_code}) for item {item_id}: "
+                f"{response.text[:300]}"
+            )
+        logger.info("Deleted SharePoint item %s", item_id)

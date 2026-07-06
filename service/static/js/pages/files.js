@@ -17,8 +17,95 @@ window.FilesPage = (() => {
   let _refreshInterval = null;
   let _lastFilesHash = '';
 
+  // Interaction-aware refresh state (tasks 2.1-2.6)
+  let _isUserInteracting = false;
+  let _pendingData = null;
+  let _scrollIdleTimer = null;
+  let _tableWrapEl = null;
+
+  // Enhanced file management state
+  let _expandedRows = new Set();
+  let _selectedFiles = new Set();
+  let _metadataCache = new Map();
+  let _dragCounter = 0;
+
+  // Event handler references for cleanup
+  let _onMouseEnter = null;
+  let _onMouseLeave = null;
+  let _onScroll = null;
+
+  function isAdminRole() {
+    return window.App?.state?.user?.role === 'admin';
+  }
+
+  async function loadConfigAssetSyncHealth() {
+    const el = document.getElementById('config-asset-sync-health');
+    if (!el) return;
+    try {
+      const data = await API.getHealth({ silent: true });
+      const asset = data.config_assets;
+      if (!asset) {
+        el.textContent = 'Web UI đang chạy không có trạng thái watcher/config asset; bấm Làm mới hoặc kiểm tra service watcher nếu cần tự phát hiện thay đổi Keyword/Model trên SharePoint.';
+        return;
+      }
+      const status = asset.status || asset.state || 'không rõ';
+      const last = asset.last_sync || asset.last_checked || asset.updated_at || '';
+      el.textContent = last
+        ? `Config asset sync: ${status} · lần kiểm tra cuối ${last}`
+        : `Config asset sync: ${status}`;
+    } catch (e) {
+      el.textContent = 'Không đọc được trạng thái watcher/config asset. Đồng bộ thủ công vẫn dùng nút Đồng bộ SharePoint.';
+    }
+  }
+
+  function downloadTemplate() {
+    return API.download('/files/template', 'template_dms.xlsx');
+  }
+
+  function downloadFile(filename) {
+    if (!filename) return;
+    return API.download(
+      `/files/${_activeFolder}/${encodeURIComponent(filename)}/download`,
+      filename
+    );
+  }
+
+  function isEditableConfigAsset(filename) {
+    const lower = String(filename || '').toLowerCase();
+    return lower === 'kw_map.json'
+      || lower.includes('hệ từ khóa lọc 3 lần')
+      || lower.includes('he tu khoa loc 3 lan')
+      || lower.includes('phân chia nhóm sản phẩm v2')
+      || lower.includes('phan chia nhom san pham v2');
+  }
+
+  function editKeywordAsset(filename) {
+    if (!isAdminRole()) {
+      Toast.error('Bạn không có quyền chỉnh sửa cấu hình');
+      return;
+    }
+    const lower = String(filename || '').toLowerCase();
+    if (lower === 'kw_map.json' || lower.includes('hệ từ khóa') || lower.includes('he tu khoa')) {
+      SettingsPage.openKeywordAssetEditor();
+      return;
+    }
+    if (lower.includes('phân chia nhóm sản phẩm v2') || lower.includes('phan chia nhom san pham v2')) {
+      SettingsPage.openProductAssetEditor();
+      return;
+    }
+    Toast.info('Không hỗ trợ chỉnh sửa trực tiếp file này. Vui lòng tải xuống để kiểm tra hoặc dùng file kw_map.json / Phân Chia Nhóm Sản Phẩm V2.xlsx.');
+  }
+
+  function selectedFileItems() {
+    return [..._selectedFiles].map(name => {
+      const file = _files.find(f => (f.name || f.filename) === name) || {};
+      return { name, id: file.id || null, source: file.source || (file.web_url ? 'sharepoint' : 'local_cache') };
+    });
+  }
+
   function render() {
     const app = document.getElementById('app');
+    const isAdmin = isAdminRole();
     app.innerHTML = `
       <div class="page-header">
         <h2>📂 Quản lý file</h2>
@@ -36,15 +123,21 @@ window.FilesPage = (() => {
         `).join('')}
       </div>
 
+      <div class="sync-help-card" id="file-sync-help" style="margin:0 0 16px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-secondary);font-size:12px;color:var(--text-secondary);">
+        <strong style="color:var(--accent-blue);">☁ Đồng bộ SharePoint:</strong>
+        Tải Input từ SharePoint về local/cache và đẩy Output lên SharePoint. Hệ thống không tự đồng bộ thao tác xóa; xóa local/cache và Xóa trên SharePoint là hai hành động riêng.
+        <span id="config-asset-sync-health" style="display:block;margin-top:6px;color:var(--text-muted);">Đang kiểm tra trạng thái đồng bộ cấu hình...</span>
+      </div>
+
       <!-- Toolbar -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
         <div style="display:flex;align-items:center;gap:8px;">
           <span id="file-count" class="text-secondary" style="font-size:13px;"></span>
         </div>
         <div class="btn-group" style="display:flex;gap:8px;align-items:center;">
-          <input type="file" id="local-file-upload-input" style="display:none;" accept=".xlsx" onchange="FilesPage.handleUpload(this)">
-          <button id="btn-upload-file" class="btn btn-primary btn-sm" onclick="document.getElementById('local-file-upload-input').click()">📤 Tải file lên</button>
-          <button id="btn-sync-sharepoint" class="btn btn-secondary btn-sm" onclick="FilesPage.syncSharePoint()">☁️ Đồng bộ SharePoint</button>
+          <input type="file" id="local-file-upload-input" style="display:none;" accept=".xlsx" multiple onchange="FilesPage.handleUpload(this)">
+          ${isAdmin ? '<button id="btn-upload-file" class="btn btn-primary btn-sm" onclick="document.getElementById(\'local-file-upload-input\').click()">📤 Tải file lên</button>' : ''}
+          ${isAdmin ? '<button id="btn-sync-sharepoint" class="btn btn-secondary btn-sm" onclick="FilesPage.syncSharePoint()">☁️ Đồng bộ SharePoint</button>' : ''}
           <button class="btn btn-secondary btn-sm" onclick="FilesPage.refresh()">🔄 Làm mới</button>
         </div>
       </div>
@@ -57,7 +150,7 @@ window.FilesPage = (() => {
           </span>
           <div style="display:flex; gap:8px;">
             <button class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px;" onclick="FilesPage.previewTemplate()">👁️ Xem cấu trúc mẫu</button>
-            <a href="/api/files/template" download class="btn btn-ghost btn-sm" style="font-size:12px; padding:4px 10px; color:var(--text-secondary);"><span style="text-decoration:underline;">Tải file mẫu (.xlsx)</span></a>
+            <button class="btn btn-ghost btn-sm" style="font-size:12px; padding:4px 10px; color:var(--text-secondary);" onclick="FilesPage.downloadTemplate()"><span style="text-decoration:underline;">Tải file mẫu (.xlsx)</span></button>
           </div>
         </div>
         <p style="font-size:12px; color:var(--text-muted); margin:0; line-height:1.5;">
@@ -65,9 +158,28 @@ window.FilesPage = (() => {
         </p>
       </div>
 
+      <!-- New Data Banner (task 3.1-3.5) -->
+      <div id="new-data-banner" class="hidden" style="margin-bottom:12px; padding:10px 16px; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.3); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:space-between; cursor:pointer; transition:opacity 0.3s;" onclick="FilesPage.applyPendingData()">
+        <span style="color:var(--accent-blue); font-size:13px; font-weight:500; display:flex; align-items:center; gap:6px;">
+          🔔 Có dữ liệu mới — Nhấn để cập nhật
+        </span>
+        <span style="color:var(--text-muted); font-size:11px;">Bảng chưa được cập nhật vì bạn đang tương tác</span>
+      </div>
+
       <!-- File Table -->
       <div class="card" style="padding:0;overflow:hidden;">
-        <div class="table-wrap" style="max-height:450px;overflow-y:auto;overflow-x:auto;">
+        ${isAdmin ? `<div class="bulk-toolbar" id="bulk-toolbar" data-layout="bulk-toolbar-inline">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="font-size:13px;font-weight:500;">Đã chọn <span id="bulk-count">0</span> file</span>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary btn-sm" onclick="FilesPage.selectAllFiles()">☑️ Chọn tất cả</button>
+            <button class="btn btn-danger btn-sm" onclick="FilesPage.bulkDelete()">🗑️ Xóa local/cache</button>
+            <button class="btn btn-secondary btn-sm" onclick="FilesPage.bulkDeleteSharePoint()">☁️ Xóa trên SharePoint</button>
+            <button class="btn btn-ghost btn-sm" onclick="FilesPage.clearSelection()">✕ Bỏ chọn</button>
+          </div>
+        </div>` : ''}
+        <div class="table-wrap" id="file-table-wrap" style="max-height:450px;overflow-y:auto;overflow-x:auto;">
           <table class="table" id="file-table">
             <thead>
               <tr>
@@ -80,10 +192,16 @@ window.FilesPage = (() => {
               </tr>
             </thead>
             <tbody id="file-tbody">
-              <tr><td colspan="6"><div class="text-center text-muted" style="padding:30px;">Đang tải...</div></td></tr>
+              <tr><td colspan="8"><div class="text-center text-muted" style="padding:30px;">Đang tải...</div></td></tr>
             </tbody>
           </table>
         </div>
+      </div>
+
+      <!-- Drop Zone Overlay -->
+      <div class="file-drop-zone" id="file-drop-zone">
+        <div class="drop-icon">📥</div>
+        <div>Thả file .xlsx vào đây</div>
       </div>
 
       <!-- Preview Panel -->
@@ -97,21 +215,6 @@ window.FilesPage = (() => {
         </div>
       </div>
 
-      <!-- Folder Tree -->
-      <div class="card mt-6 animate-in animate-in-delay-3">
-        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <span class="card-title"><span class="icon">🌳</span> Cấu trúc thư mục</span>
-          <div style="display:flex; gap:6px;">
-            <button class="btn btn-ghost btn-sm" onclick="FilesPage.expandAllTree(true)" style="font-size:11px; padding: 2px 6px;">➕ Mở rộng hết</button>
-            <button class="btn btn-ghost btn-sm" onclick="FilesPage.expandAllTree(false)" style="font-size:11px; padding: 2px 6px;">➖ Thu gọn hết</button>
-            <button class="btn btn-ghost btn-sm" onclick="FilesPage.loadTree()" title="Làm mới">🔄</button>
-          </div>
-        </div>
-        <div id="folder-tree" style="font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);max-height:300px;overflow-y:auto;">
-          Đang tải...
-        </div>
-      </div>
-
       <!-- Cloud-centric workflow instructions and status legend -->
       <div class="card mt-6 animate-in animate-in-delay-4" style="background:rgba(255,255,255,0.02);border:1px solid var(--border);padding:20px;">
         <div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--accent-blue);display:flex;align-items:center;gap:6px;">
@@ -120,7 +223,7 @@ window.FilesPage = (() => {
         <div style="font-size:12px;line-height:1.6;color:var(--text-secondary);display:flex;flex-direction:column;gap:12px;">
           <div>
             <strong style="color:var(--text-primary);">☁️ Chế độ Tự động hóa đồng bộ Cloud (SharePoint-centric):</strong>
-            <p style="margin:4px 0 0 0;color:var(--text-muted);">Hệ thống hoạt động theo mô hình Cloud-first. Để phân loại phản hồi, anh chỉ cần kéo thả/tải file Excel lên trực tiếp thư mục <span style="color:var(--accent-blue);font-weight:500;">Input</span> trên SharePoint của anh. Watcher của hệ thống sẽ quét tự động, tải tạm về máy ảo để xử lý và đẩy kết quả lên thư mục <span style="color:var(--accent-green);font-weight:500;">Output</span> trên SharePoint Cloud. Không hỗ trợ tải file lên local tại đây để tránh xung đột luồng.</p>
+            <p style="margin:4px 0 0 0;color:var(--text-muted);">Hệ thống hoạt động theo mô hình Cloud-first. Admin có thể tải file Excel vào Input để xử lý thủ công; watcher vẫn đồng bộ và đẩy kết quả lên thư mục <span style="color:var(--accent-green);font-weight:500;">Output</span> trên SharePoint Cloud.</p>
           </div>
           <div style="border-top:1px solid var(--border);padding-top:12px;">
             <strong style="color:var(--text-primary);display:block;margin-bottom:8px;">📌 Chú thích trạng thái file:</strong>
@@ -148,13 +251,256 @@ window.FilesPage = (() => {
     `;
 
     loadFiles();
-    loadTree();
+    loadConfigAssetSyncHealth();
     startRefresh();
+    _bindInteractionTracking();
+    _initDragDrop();
+  }
+
+  // === Interaction tracking (tasks 2.1-2.6) ===
+
+  function _bindInteractionTracking() {
+    _tableWrapEl = document.getElementById('file-table-wrap');
+    if (!_tableWrapEl) return;
+
+    _onMouseEnter = () => { _isUserInteracting = true; };
+    _onMouseLeave = () => {
+      _isUserInteracting = false;
+      // Apply pending data when user leaves table area
+      if (_pendingData) {
+        applyPendingData();
+      }
+    };
+    _onScroll = () => {
+      _isUserInteracting = true;
+      // Debounce: clear interaction flag after 500ms of no scrolling
+      if (_scrollIdleTimer) clearTimeout(_scrollIdleTimer);
+      _scrollIdleTimer = setTimeout(() => {
+        _isUserInteracting = false;
+        if (_pendingData) {
+          applyPendingData();
+        }
+      }, 500);
+    };
+
+    _tableWrapEl.addEventListener('mouseenter', _onMouseEnter);
+    _tableWrapEl.addEventListener('mouseleave', _onMouseLeave);
+    _tableWrapEl.addEventListener('scroll', _onScroll, { passive: true });
+  }
+
+  function _unbindInteractionTracking() {
+    if (_tableWrapEl) {
+      if (_onMouseEnter) _tableWrapEl.removeEventListener('mouseenter', _onMouseEnter);
+      if (_onMouseLeave) _tableWrapEl.removeEventListener('mouseleave', _onMouseLeave);
+      if (_onScroll) _tableWrapEl.removeEventListener('scroll', _onScroll);
+    }
+    if (_scrollIdleTimer) {
+      clearTimeout(_scrollIdleTimer);
+      _scrollIdleTimer = null;
+    }
+    _tableWrapEl = null;
+    _onMouseEnter = null;
+    _onMouseLeave = null;
+    _onScroll = null;
+  }
+
+  // === New data banner (tasks 3.1-3.5) ===
+
+  function _showBanner() {
+    const banner = document.getElementById('new-data-banner');
+    if (banner) banner.classList.remove('hidden');
+  }
+
+  function _hideBanner() {
+    const banner = document.getElementById('new-data-banner');
+    if (banner) banner.classList.add('hidden');
+  }
+
+  function applyPendingData() {
+    if (!_pendingData) return;
+    const { newFiles, isInput, metrics } = _pendingData;
+    _pendingData = null;
+    _hideBanner();
+
+    const tbody = document.getElementById('file-tbody');
+    if (!tbody) return;
+
+    _files = newFiles;
+    _updateFileCount(metrics);
+
+    if (_files.length === 0) {
+      const isAdmin = isAdminRole();
+      const colSpan = isInput ? (isAdmin ? 8 : 7) : (isAdmin ? 7 : 6);
+      tbody.innerHTML = `
+        <tr><td colspan="${colSpan}">
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <p class="empty-state-text">Thư mục trống</p>
+            <p class="empty-state-hint">Chưa có file nào trong thư mục ${_activeFolder}</p>
+          </div>
+        </td></tr>
+      `;
+      return;
+    }
+
+    diffFileRows(tbody, newFiles, isInput, true);
+  }
+
+  // === Row rendering helper (task 1.3) ===
+
+  function buildRowHTML(file, index, isInput, silent) {
+    const name = file.name || file.filename || 'unknown';
+    const size = formatSize(file.size || 0);
+    const date = file.modified || file.date || '—';
+    const status = getStatusBadge(file.status);
+    const webUrl = file.web_url || '';
+    const source = file.source || (webUrl ? 'sharepoint' : 'local_cache');
+    const itemId = file.id || '';
+    const canEditAsset = isAdminRole() && _activeFolder === 'keyword' && isEditableConfigAsset(name);
+
+    const cloudBtn = webUrl
+      ? `<a href="${escAttr(webUrl)}" target="_blank" class="btn btn-ghost btn-sm" title="Xem trên SharePoint" style="text-decoration:none;">☁️</a>`
+      : '';
+    const downloadBtn = `<button class="btn btn-ghost btn-sm" title="Tải về" onclick="FilesPage.downloadFile('${escAttr(name)}')">📥</button>`;
+    const editBtn = canEditAsset
+      ? `<button class="btn btn-ghost btn-sm" title="Chỉnh sửa cấu hình" onclick="FilesPage.editKeywordAsset('${escAttr(name)}')">✏️</button>`
+      : '';
+
+    const isSelected = _selectedFiles.has(name);
+    const isExpanded = _expandedRows.has(name);
+    const rowClass = [silent ? '' : 'animate-in', isSelected ? 'selected' : ''].filter(Boolean).join(' ');
+    const animStyle = silent ? '' : `style="animation-delay:${index * 30}ms"`;
+
+    return `
+      <tr class="${rowClass}" ${animStyle} data-filename="${escAttr(name)}" data-file-id="${escAttr(itemId)}" data-source="${escAttr(source)}">
+        ${isAdminRole() ? `<td><input type="checkbox" class="file-checkbox" ${isSelected ? 'checked' : ''} onchange="FilesPage.toggleFileSelection('${escAttr(name)}')"></td>` : ''}
+        <td><span class="expand-icon ${isExpanded ? 'expanded' : ''}" onclick="FilesPage.toggleRowDetail('${escAttr(name)}')">▶</span></td>
+        <td class="text-muted">${index + 1}</td>
+        <td>
+          <span style="cursor:pointer;color:var(--accent-blue);" onclick="FilesPage.preview('${escAttr(name)}')">
+            ${escHtml(name)}
+          </span>
+        </td>
+        <td class="text-muted text-mono" style="font-size:12px;">${size}</td>
+        <td class="text-muted" style="font-size:12px;">${escHtml(date)}</td>
+        ${isInput ? `<td>${status}</td>` : ''}
+        <td>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <button class="btn btn-ghost btn-sm" title="Xem" onclick="FilesPage.preview('${escAttr(name)}')">👁️</button>
+            ${editBtn}
+            ${downloadBtn}
+            ${cloudBtn}
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
+  // === DOM diffing (tasks 1.1-1.2, 4.1-4.2) ===
+
+  function diffFileRows(tbody, newFiles, isInput, silent) {
+    const tableWrap = document.getElementById('file-table-wrap');
+    // Save scroll position (task 4.1)
+    const savedScrollTop = tableWrap ? tableWrap.scrollTop : 0;
+
+    // Build map of new files by name
+    const newFileMap = new Map();
+    newFiles.forEach((f, i) => {
+      const name = f.name || f.filename || 'unknown';
+      newFileMap.set(name, { file: f, index: i });
+    });
+
+    // Build map of existing rows by data-filename
+    const existingRows = tbody.querySelectorAll('tr[data-filename]');
+    const existingMap = new Map();
+    existingRows.forEach(row => {
+      existingMap.set(row.getAttribute('data-filename'), row);
+    });
+
+    // If existing tbody has no data-filename rows (first render or empty), do full innerHTML
+    if (existingRows.length === 0) {
+      tbody.innerHTML = newFiles.map((f, i) => buildRowHTML(f, i, isInput, silent)).join('');
+      if (tableWrap) tableWrap.scrollTop = savedScrollTop;
+      return;
+    }
+
+    // Remove rows that no longer exist
+    existingRows.forEach(row => {
+      const fname = row.getAttribute('data-filename');
+      if (!newFileMap.has(fname)) {
+        row.remove();
+      }
+    });
+
+    // Update existing rows or add new ones
+    let prevRow = null;
+    newFiles.forEach((f, i) => {
+      const name = f.name || f.filename || 'unknown';
+      const existingRow = existingMap.get(name);
+      const newRowHTML = buildRowHTML(f, i, isInput, true); // always silent for diff updates
+
+      if (existingRow) {
+        // Update row content if changed (compare innerHTML of cells)
+        const tempDiv = document.createElement('tbody');
+        tempDiv.innerHTML = newRowHTML;
+        const newRow = tempDiv.firstElementChild;
+
+        // Compare inner content (skip animation attributes)
+        if (existingRow.innerHTML !== newRow.innerHTML) {
+          existingRow.innerHTML = newRow.innerHTML;
+        }
+        // Update index number
+        const indexCell = existingRow.querySelector('td:first-child');
+        if (indexCell && indexCell.textContent !== String(i + 1)) {
+          indexCell.textContent = i + 1;
+        }
+        // Ensure data-filename is set
+        existingRow.setAttribute('data-filename', name);
+        prevRow = existingRow;
+      } else {
+        // Insert new row at correct position
+        const tempDiv = document.createElement('tbody');
+        tempDiv.innerHTML = newRowHTML;
+        const newRow = tempDiv.firstElementChild;
+        if (prevRow && prevRow.nextSibling) {
+          tbody.insertBefore(newRow, prevRow.nextSibling);
+        } else if (!prevRow) {
+          tbody.insertBefore(newRow, tbody.firstChild);
+        } else {
+          tbody.appendChild(newRow);
+        }
+        prevRow = newRow;
+      }
+    });
+
+    // Restore scroll position (task 4.2)
+    if (tableWrap) tableWrap.scrollTop = savedScrollTop;
+  }
+
+  // === File count helper ===
+
+  function _updateFileCount(metrics) {
+    const countEl = document.getElementById('file-count');
+    if (!countEl) return;
+
+    if (_activeFolder === 'output' && metrics) {
+      const totalProcessed = metrics.total_files || 0;
+      countEl.innerHTML = `${_files.length} file <span style="font-size:12px;color:var(--text-muted);margin-left:8px;">💡 Thư mục Kết quả chứa ${_files.length} file vật lý trên SharePoint (bao gồm cả các bản nháp/chạy lại), trong đó Dashboard ghi nhận ${totalProcessed} file input gốc đã được xử lý hoàn tất.</span>`;
+    } else {
+      countEl.textContent = `${_files.length} file`;
+    }
   }
 
   function switchFolder(folder) {
     _activeFolder = folder;
     _previewFile = null;
+    // Clear pending data and hide banner when switching folders (task 6.1)
+    _pendingData = null;
+    _hideBanner();
+    // Clear selection and metadata cache when switching folders
+    _selectedFiles.clear();
+    _expandedRows.clear();
+    _metadataCache.clear();
 
     document.querySelectorAll('#file-tabs .tab-item').forEach(t => {
       t.classList.toggle('active', t.dataset.folder === folder);
@@ -163,6 +509,9 @@ window.FilesPage = (() => {
     document.getElementById('preview-panel')?.classList.add('hidden');
     loadFiles();
     startRefresh();
+    // Re-bind interaction tracking for the table
+    _unbindInteractionTracking();
+    _bindInteractionTracking();
   }
 
   async function loadFiles(silent = false) {
@@ -171,7 +520,8 @@ window.FilesPage = (() => {
     if (!tbody) return;
 
     const isInput = _activeFolder === 'input';
-    const colSpan = isInput ? 6 : 5;
+    const isAdmin = isAdminRole();
+    const colSpan = isInput ? (isAdmin ? 8 : 7) : (isAdmin ? 7 : 6);
 
     const uploadBtn = document.getElementById('btn-upload-file');
     if (uploadBtn) {
@@ -180,7 +530,7 @@ window.FilesPage = (() => {
 
     const uploadHint = document.getElementById('upload-hint-container');
     if (uploadHint) {
-      uploadHint.style.display = isInput ? 'flex' : 'none';
+      uploadHint.style.display = isInput && isAdmin ? 'flex' : 'none';
     }
 
     // Update the thead dynamically
@@ -188,6 +538,8 @@ window.FilesPage = (() => {
     if (thead) {
       thead.innerHTML = `
         <tr>
+          ${isAdmin ? '<th style="width:30px;"><input type="checkbox" class="file-checkbox" id="select-all-cb" onchange="FilesPage.toggleSelectAll()"></th>' : ''}
+          <th style="width:30px;"></th>
           <th style="width:40px;">#</th>
           <th>Tên file</th>
           <th>Kích thước</th>
@@ -198,6 +550,7 @@ window.FilesPage = (() => {
       `;
     }
 
+    // Show loading spinner only on initial (non-silent) load (task 1.5)
     if (!silent) {
       tbody.innerHTML = `<tr><td colspan="${colSpan}"><div class="text-center" style="padding:30px;"><span class="spinner"></span></div></td></tr>`;
     }
@@ -217,16 +570,16 @@ window.FilesPage = (() => {
         return; // No changes, skip DOM update
       }
       _lastFilesHash = newHash;
-      _files = newFiles;
 
-      if (countEl) {
-        if (_activeFolder === 'output' && metrics) {
-          const totalProcessed = metrics.total_files || 0;
-          countEl.innerHTML = `${_files.length} file <span style="font-size:12px;color:var(--text-muted);margin-left:8px;">💡 Thư mục Kết quả chứa ${_files.length} file vật lý trên SharePoint (bao gồm cả các bản nháp/chạy lại), trong đó Dashboard ghi nhận ${totalProcessed} file input gốc đã được xử lý hoàn tất.</span>`;
-        } else {
-          countEl.textContent = `${_files.length} file`;
-        }
+      // Interaction-aware: defer DOM update if user is interacting (task 2.4)
+      if (silent && (_isUserInteracting || _previewFile)) {
+        _pendingData = { newFiles, isInput, metrics };
+        _showBanner(); // task 3.3
+        return;
       }
+
+      _files = newFiles;
+      _updateFileCount(metrics);
 
       if (_files.length === 0) {
         tbody.innerHTML = `
@@ -241,43 +594,12 @@ window.FilesPage = (() => {
         return;
       }
 
-      tbody.innerHTML = _files.map((f, i) => {
-        const name = f.name || f.filename || 'unknown';
-        const size = formatSize(f.size || 0);
-        const date = f.modified || f.date || '—';
-        const status = getStatusBadge(f.status);
-        const webUrl = f.web_url || '';
-
-        const cloudBtn = webUrl
-          ? `<a href="${escAttr(webUrl)}" target="_blank" class="btn btn-ghost btn-sm" title="Xem trên SharePoint" style="text-decoration:none;">☁️</a>`
-          : '';
-        const downloadUrl = `/api/files/${_activeFolder}/${encodeURIComponent(name)}/download`;
-        const downloadBtn = `<a href="${downloadUrl}" download class="btn btn-ghost btn-sm" title="Tải về" style="text-decoration:none;">📥</a>`;
-
-        // No animation for silent (auto) refresh
-        const animClass = silent ? '' : `class="animate-in" style="animation-delay:${i * 30}ms"`;
-
-        return `
-          <tr ${animClass}>
-            <td class="text-muted">${i + 1}</td>
-            <td>
-              <span style="cursor:pointer;color:var(--accent-blue);" onclick="FilesPage.preview('${escAttr(name)}')">
-                ${escHtml(name)}
-              </span>
-            </td>
-            <td class="text-muted text-mono" style="font-size:12px;">${size}</td>
-            <td class="text-muted" style="font-size:12px;">${escHtml(date)}</td>
-            ${isInput ? `<td>${status}</td>` : ''}
-            <td>
-              <div style="display:flex;gap:4px;align-items:center;">
-                <button class="btn btn-ghost btn-sm" title="Xem" onclick="FilesPage.preview('${escAttr(name)}')">👁️</button>
-                ${downloadBtn}
-                ${cloudBtn}
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
+      // Use DOM diffing for silent refresh, full innerHTML for initial load (tasks 1.4-1.5)
+      if (silent) {
+        diffFileRows(tbody, _files, isInput, true);
+      } else {
+        tbody.innerHTML = _files.map((f, i) => buildRowHTML(f, i, isInput, false)).join('');
+      }
     } catch (e) {
       if (!silent) {
         tbody.innerHTML = `<tr><td colspan="${colSpan}"><div class="text-center text-red" style="padding:30px;">Lỗi tải file: ${escHtml(e.message)}</div></td></tr>`;
@@ -422,7 +744,7 @@ window.FilesPage = (() => {
     
     html += `
       <div style="margin-top:16px; display:flex; gap:10px; align-items:center;">
-        <a href="/api/files/template" download class="btn btn-primary btn-sm" style="text-decoration:none;">📥 Tải file mẫu (.xlsx)</a>
+        <button class="btn btn-primary btn-sm" onclick="FilesPage.downloadTemplate()">📥 Tải file mẫu (.xlsx)</button>
         <button class="btn btn-secondary btn-sm" onclick="FilesPage.closePreview()">✕ Đóng</button>
       </div>
     `;
@@ -431,86 +753,15 @@ window.FilesPage = (() => {
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  async function loadTree() {
-    const el = document.getElementById('folder-tree');
-    if (!el) return;
-
-    try {
-      const data = await API.getFileTree();
-      if (typeof data === 'string') {
-        el.innerHTML = `<pre style="line-height:1.8;padding:4px 0;">${escHtml(data)}</pre>`;
-      } else if (data && typeof data === 'object') {
-        el.innerHTML = renderTreeObj(data);
-      } else {
-        el.textContent = 'Không có dữ liệu';
-      }
-    } catch (e) {
-      el.innerHTML = `<span class="text-muted">Không thể tải cấu trúc thư mục</span>`;
-    }
-  }
-
-  function expandAllTree(isOpen) {
-    const details = document.querySelectorAll('#folder-tree details');
-    details.forEach(d => {
-      if (isOpen) {
-        d.setAttribute('open', '');
-      } else {
-        d.removeAttribute('open');
-      }
-    });
-  }
-
-  function renderTreeObj(obj) {
-    let html = '<div class="tree-root" style="padding: 4px; display: flex; flex-direction: column; gap: 8px;">';
-    const keys = Object.keys(obj);
-    keys.forEach(key => {
-      const val = obj[key];
-      const allFiles = [];
-      if (Array.isArray(val)) {
-        val.forEach(item => {
-          if (item && typeof item === 'object' && Array.isArray(item.files)) {
-            item.files.forEach(f => allFiles.push(f.name || f));
-          } else {
-            allFiles.push(item);
-          }
-        });
-      }
-      
-      const folderObj = FOLDERS.find(f => f.id === key);
-      const displayLabel = folderObj ? folderObj.label : key;
-      const isInput = key === 'input';
-      html += `
-        <details ${isInput ? 'open' : ''} style="cursor: pointer; background: rgba(255,255,255,0.01); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px;">
-          <summary style="font-weight: 600; color: var(--text-primary); font-size: 13px; display: flex; align-items: center; gap: 6px; user-select: none;">
-            <span style="font-size: 14px;">📁</span> ${escHtml(displayLabel)} <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">(${allFiles.length} file)</span>
-          </summary>
-          <ul style="list-style: none; padding-left: 20px; margin: 8px 0 0 0; border-left: 1px dashed var(--border); display: flex; flex-direction: column; gap: 6px;">
-            ${allFiles.length > 0 
-              ? allFiles.map(file => `
-                  <li style="font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
-                    <span>📄</span> <span class="tree-file-link" style="color: var(--accent-blue); text-decoration: underline;" onclick="FilesPage.preview('${escAttr(String(file))}')">${escHtml(String(file))}</span>
-                  </li>
-                `).join('')
-              : `<li style="font-style: italic; color: var(--text-muted); font-size: 12px; padding: 2px 0;">Thư mục trống</li>`
-            }
-          </ul>
-        </details>
-      `;
-    });
-    html += '</div>';
-    return html;
-  }
-
-
-
   function startRefresh() {
     stopRefresh();
+    // Interval changed from 30s to 60s (task 5.1)
     _refreshInterval = setInterval(() => {
-      // Chỉ tự động tải lại nếu người dùng không mở xem trước file
+      // Auto-refresh if user is not previewing — interaction check is inside loadFiles
       if (!_previewFile) {
         loadFiles(true);
       }
-    }, 30000);
+    }, 60000);
   }
 
   function stopRefresh() {
@@ -521,36 +772,102 @@ window.FilesPage = (() => {
   }
 
   function refresh() {
-    loadFiles();
-    loadTree();
+    // Clear pending data before manual refresh to avoid race condition (task 6.3)
+    _pendingData = null;
+    _hideBanner();
+    // Save and restore scroll position (task 4.3)
+    const tableWrap = document.getElementById('file-table-wrap');
+    const savedScroll = tableWrap ? tableWrap.scrollTop : 0;
+    loadFiles().then(() => {
+      if (tableWrap) tableWrap.scrollTop = savedScroll;
+    });
     Toast.info('Đã làm mới danh sách file');
   }
 
   async function handleUpload(inputEl) {
-    const file = inputEl.files[0];
-    if (!file) return;
+    if (!isAdminRole()) {
+      Toast.error('Bạn không có quyền tải file lên');
+      inputEl.value = '';
+      return;
+    }
+    const files = Array.from(inputEl.files);
+    if (files.length === 0) return;
 
-    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+    // Filter valid files
+    const validFiles = files.filter(f => f.name.toLowerCase().endsWith('.xlsx'));
+    if (validFiles.length === 0) {
       Toast.error('Chỉ chấp nhận file .xlsx');
       inputEl.value = '';
       return;
     }
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    API.onLoading();
-    try {
-      const res = await API.uploadFile(formData);
-      Toast.success(res.message || 'Tải file lên thành công');
+    if (validFiles.length > 10) {
+      Toast.error('Tối đa 10 file mỗi lần upload');
       inputEl.value = '';
-      refresh();
-    } catch (e) {
-      Toast.error('Lỗi tải file: ' + e.message);
-      inputEl.value = '';
-    } finally {
-      API.offLoading();
+      return;
     }
+
+    inputEl.value = '';
+    _doMultiUpload(validFiles);
+  }
+
+  async function _doMultiUpload(files) {
+    if (!isAdminRole()) {
+      Toast.error('Bạn không có quyền tải file lên');
+      return;
+    }
+    // Show upload progress overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'upload-progress-overlay';
+    overlay.id = 'upload-progress-overlay';
+    overlay.innerHTML = `
+      <div class="upload-progress-panel">
+        <h3 style="margin:0 0 16px;font-size:15px;">📤 Đang tải ${files.length} file...</h3>
+        <div id="upload-progress-list">
+          ${files.map((f, i) => `
+            <div class="upload-progress-item" id="upload-item-${i}">
+              <span class="file-name">${escHtml(f.name)}</span>
+              <div class="progress-bar-wrap"><div class="progress-bar-fill" id="upload-bar-${i}" style="width:0%;"></div></div>
+              <span class="progress-pct" id="upload-pct-${i}">0%</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const formData = new FormData();
+      formData.append('file', files[i]);
+      try {
+        await uploadWithProgress(formData, (pct) => {
+          const bar = document.getElementById(`upload-bar-${i}`);
+          const pctEl = document.getElementById(`upload-pct-${i}`);
+          if (bar) bar.style.width = pct + '%';
+          if (pctEl) pctEl.textContent = pct + '%';
+        });
+        const item = document.getElementById(`upload-item-${i}`);
+        if (item) { item.classList.add('success'); item.querySelector('.progress-pct').textContent = '✅'; }
+        successCount++;
+      } catch (e) {
+        const item = document.getElementById(`upload-item-${i}`);
+        if (item) { item.classList.add('error'); item.querySelector('.progress-pct').textContent = '❌'; }
+        failCount++;
+      }
+    }
+
+    // Show result for 1.5s then remove overlay
+    setTimeout(() => {
+      document.getElementById('upload-progress-overlay')?.remove();
+      if (failCount > 0) {
+        Toast.error(`Tải ${successCount}/${files.length} file thành công, ${failCount} thất bại`);
+      } else {
+        Toast.success(`Đã tải ${successCount} file thành công`);
+      }
+      refresh();
+    }, 1500);
   }
 
   async function syncSharePoint() {
@@ -566,8 +883,311 @@ window.FilesPage = (() => {
     }
   }
 
+  // === Multi-file upload (tasks 3.1-4.5) ===
+
+  function uploadWithProgress(formData, onProgress) {
+    return API.uploadWithProgress('/files/upload', formData, onProgress);
+  }
+
+  // === Drag & Drop (tasks 5.1-5.4) ===
+
+  function _initDragDrop() {
+    const container = document.getElementById('file-table-wrap');
+    if (!container) return;
+
+    container.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      _dragCounter++;
+      if (_activeFolder === 'input' && isAdminRole()) {
+        const zone = document.getElementById('file-drop-zone');
+        if (zone) zone.classList.add('active');
+      }
+    });
+
+    container.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      _dragCounter--;
+      if (_dragCounter <= 0) {
+        _dragCounter = 0;
+        const zone = document.getElementById('file-drop-zone');
+        if (zone) zone.classList.remove('active');
+      }
+    });
+
+    container.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+
+    container.addEventListener('drop', (e) => {
+      e.preventDefault();
+      _dragCounter = 0;
+      const zone = document.getElementById('file-drop-zone');
+      if (zone) zone.classList.remove('active');
+
+      if (!isAdminRole()) {
+        Toast.error('Bạn không có quyền tải file lên');
+        return;
+      }
+
+      if (_activeFolder !== 'input') {
+        Toast.error('Chỉ có thể tải file vào thư mục Đầu vào');
+        return;
+      }
+
+      const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.xlsx'));
+      if (files.length === 0) {
+        Toast.error('Chỉ chấp nhận file .xlsx');
+        return;
+      }
+      if (files.length > 10) {
+        Toast.error('Tối đa 10 file mỗi lần upload');
+        return;
+      }
+
+      _doMultiUpload(files);
+    });
+  }
+
+  // === Row detail / metadata (tasks 6.1-6.4) ===
+
+  function toggleRowDetail(filename) {
+    const tbody = document.getElementById('file-tbody');
+    if (!tbody) return;
+
+    if (_expandedRows.has(filename)) {
+      _expandedRows.delete(filename);
+      const detailRow = tbody.querySelector(`tr.detail-row[data-detail-for="${CSS.escape(filename)}"]`);
+      if (detailRow) detailRow.remove();
+      const icon = tbody.querySelector(`tr[data-filename="${CSS.escape(filename)}"] .expand-icon`);
+      if (icon) icon.classList.remove('expanded');
+      return;
+    }
+
+    _expandedRows.add(filename);
+    const icon = tbody.querySelector(`tr[data-filename="${CSS.escape(filename)}"] .expand-icon`);
+    if (icon) icon.classList.add('expanded');
+
+    const fileRow = tbody.querySelector(`tr[data-filename="${CSS.escape(filename)}"]`);
+    if (!fileRow) return;
+
+    const isInput = _activeFolder === 'input';
+    const isAdmin = isAdminRole();
+    const colSpan = isInput ? (isAdmin ? 8 : 7) : (isAdmin ? 7 : 6);
+    const detailTr = document.createElement('tr');
+    detailTr.className = 'detail-row';
+    detailTr.setAttribute('data-detail-for', filename);
+    detailTr.innerHTML = `<td colspan="${colSpan}"><div class="metadata-grid"><span class="text-muted" style="font-size:12px;"><span class="spinner" style="width:12px;height:12px;"></span> Đang tải metadata...</span></div></td>`;
+    fileRow.after(detailTr);
+
+    _loadMetadata(filename, detailTr);
+  }
+
+  async function _loadMetadata(filename, detailTr) {
+    const cacheKey = `${_activeFolder}/${filename}`;
+    let metadata = _metadataCache.get(cacheKey);
+
+    if (!metadata) {
+      try {
+        metadata = await API.get(`/files/${_activeFolder}/${encodeURIComponent(filename)}/metadata`);
+        _metadataCache.set(cacheKey, metadata);
+      } catch (e) {
+        const td = detailTr.querySelector('td');
+        if (td) td.innerHTML = `<div class="text-muted" style="font-size:12px;">⚠️ Không thể tải metadata: ${escHtml(e.message)}</div>`;
+        return;
+      }
+    }
+
+    const td = detailTr.querySelector('td');
+    if (!td) return;
+
+    const cols = metadata.columns || [];
+    const colDisplay = cols.length > 5
+      ? cols.slice(0, 5).map(c => escHtml(c)).join(', ') + ` ... +${cols.length - 5} cột khác`
+      : cols.map(c => escHtml(c)).join(', ') || '—';
+    const source = metadata.source === 'sharepoint' ? '☁️ SharePoint' : '📤 Local';
+    const classifiedPct = metadata.classified_pct ?? null;
+
+    td.innerHTML = `
+      <div class="metadata-grid">
+        <div><span class="meta-label">Số dòng</span><div class="meta-value">${metadata.row_count ?? '—'}</div></div>
+        <div><span class="meta-label">Nguồn</span><div class="meta-value">${source}</div></div>
+        <div><span class="meta-label">Cột dữ liệu</span><div class="meta-value" style="font-size:11px;">${colDisplay}</div></div>
+        ${classifiedPct !== null ? `<div><span class="meta-label">Phân loại</span><div class="meta-value"><div style="display:flex;align-items:center;gap:6px;"><div style="width:80px;height:6px;background:var(--bg-tertiary);border-radius:3px;overflow:hidden;"><div style="height:100%;background:var(--accent-green);width:${classifiedPct}%;"></div></div><span style="font-size:11px;">${classifiedPct}%</span></div></div></div>` : ''}
+      </div>
+    `;
+  }
+
+  // === File selection / bulk (tasks 7.1-7.5) ===
+
+  function toggleFileSelection(filename) {
+    if (_selectedFiles.has(filename)) {
+      _selectedFiles.delete(filename);
+    } else {
+      _selectedFiles.add(filename);
+    }
+    _updateSelectionUI();
+  }
+
+  function toggleSelectAll() {
+    const headerCb = document.getElementById('select-all-cb');
+    if (headerCb && headerCb.checked) {
+      _files.forEach(f => _selectedFiles.add(f.name || f.filename || 'unknown'));
+    } else {
+      _selectedFiles.clear();
+    }
+    _updateSelectionUI();
+  }
+
+  function selectAllFiles() {
+    _files.forEach(f => _selectedFiles.add(f.name || f.filename || 'unknown'));
+    _updateSelectionUI();
+  }
+
+  function clearSelection() {
+    _selectedFiles.clear();
+    _updateSelectionUI();
+  }
+
+  function _updateSelectionUI() {
+    // Update row checkboxes and selected class
+    const tbody = document.getElementById('file-tbody');
+    if (tbody) {
+      tbody.querySelectorAll('tr[data-filename]').forEach(row => {
+        const fname = row.getAttribute('data-filename');
+        const cb = row.querySelector('.file-checkbox');
+        const isSelected = _selectedFiles.has(fname);
+        row.classList.toggle('selected', isSelected);
+        if (cb) cb.checked = isSelected;
+      });
+    }
+
+    // Update header checkbox
+    const headerCb = document.getElementById('select-all-cb');
+    if (headerCb) {
+      const total = _files.length;
+      const selected = _selectedFiles.size;
+      headerCb.checked = total > 0 && selected === total;
+      headerCb.indeterminate = selected > 0 && selected < total;
+    }
+
+    // Show/hide bulk toolbar
+    const toolbar = document.getElementById('bulk-toolbar');
+    const countEl = document.getElementById('bulk-count');
+    if (toolbar) {
+      toolbar.classList.toggle('visible', _selectedFiles.size > 0);
+    }
+    if (countEl) {
+      countEl.textContent = _selectedFiles.size;
+    }
+  }
+
+  // === Bulk delete (tasks 8.1-8.4) ===
+
+  function bulkDelete() {
+    if (_selectedFiles.size === 0) return;
+    const filenames = [..._selectedFiles];
+
+    const overlay = document.createElement('div');
+    overlay.className = 'bulk-confirm-overlay';
+    overlay.id = 'bulk-confirm-overlay';
+    overlay.innerHTML = `
+      <div class="bulk-confirm-dialog">
+        <h3>🗑️ Xóa local/cache ${filenames.length} file</h3>
+        <p style="font-size:13px;color:var(--text-secondary);margin:0 0 8px;">
+          Hành động này chỉ xóa bản local/cache trên máy chủ Web UI. SharePoint không bị xóa.
+        </p>
+        <ul class="file-list">
+          ${filenames.map(f => `<li>📄 ${escHtml(f)}</li>`).join('')}
+        </ul>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('bulk-confirm-overlay')?.remove()">Hủy</button>
+          <button class="btn btn-danger btn-sm" id="btn-confirm-bulk-delete">🗑️ Xóa local/cache</button>
+        </div>
+      </div>
+    `;
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+
+    document.getElementById('btn-confirm-bulk-delete')?.addEventListener('click', async () => {
+      overlay.remove();
+      try {
+        const res = await API.post('/files/bulk-delete', { folder: _activeFolder, filenames });
+        const deleted = res.deleted || [];
+        const failed = res.failed || [];
+        const deleteScope = res.delete_scope || 'local_cache';
+        if (failed.length > 0) {
+          Toast.error(`Xóa ${deleteScope} ${deleted.length}/${filenames.length} file. ${failed.length} file thất bại.`);
+        } else {
+          Toast.success(res.message || `Đã xóa local/cache ${deleted.length} file`);
+        }
+        clearSelection();
+        refresh();
+      } catch (e) {
+        Toast.error('Lỗi xóa file: ' + e.message);
+      }
+    });
+  }
+
+  function bulkDeleteSharePoint() {
+    if (_selectedFiles.size === 0) return;
+    const items = selectedFileItems();
+    const cloudItems = items.filter(item => item.id);
+    if (cloudItems.length === 0) {
+      Toast.error('Các file đang chọn không có SharePoint item id. Hãy bấm Làm mới/Đồng bộ SharePoint rồi thử lại.');
+      return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'bulk-confirm-overlay';
+    overlay.id = 'bulk-confirm-overlay';
+    overlay.innerHTML = `
+      <div class="bulk-confirm-dialog">
+        <h3>☁️ Xóa trên SharePoint ${cloudItems.length} file</h3>
+        <p style="font-size:13px;color:var(--text-secondary);margin:0 0 8px;">
+          Hành động này xóa file trên SharePoint Cloud. Bản local/cache không tự xóa trừ khi bạn chọn Xóa local/cache riêng.
+        </p>
+        <ul class="file-list">
+          ${cloudItems.map(f => `<li>☁️ ${escHtml(f.name)}</li>`).join('')}
+        </ul>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('bulk-confirm-overlay')?.remove()">Hủy</button>
+          <button class="btn btn-danger btn-sm" id="btn-confirm-sp-delete">☁️ Xóa trên SharePoint</button>
+        </div>
+      </div>
+    `;
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+
+    document.getElementById('btn-confirm-sp-delete')?.addEventListener('click', async () => {
+      overlay.remove();
+      try {
+        const res = await API.post('/files/sharepoint-delete', { folder: _activeFolder, items: cloudItems });
+        const deleted = res.remote_deleted || [];
+        const failed = res.failed || [];
+        const deleteScope = res.delete_scope || 'sharepoint';
+        if (failed.length > 0) {
+          Toast.error(`Xóa ${deleteScope} ${deleted.length}/${cloudItems.length} file. ${failed.length} file thất bại.`);
+        } else {
+          Toast.success(res.message || `Đã xóa SharePoint ${deleted.length} file`);
+        }
+        clearSelection();
+        refresh();
+      } catch (e) {
+        Toast.error('Lỗi xóa SharePoint: ' + e.message);
+      }
+    });
+  }
+
   function destroy() {
     _previewFile = null;
+    // Clean up pending data and interaction tracking (task 6.2)
+    _pendingData = null;
+    _isUserInteracting = false;
+    _unbindInteractionTracking();
     stopRefresh();
   }
 
@@ -585,6 +1205,10 @@ window.FilesPage = (() => {
 
   return {
     render, destroy, switchFolder, loadFiles, preview, closePreview, previewTemplate,
-    loadTree, refresh, expandAllTree, handleUpload, syncSharePoint
+    downloadTemplate, downloadFile,
+    refresh, handleUpload, syncSharePoint,
+    applyPendingData,
+    toggleFileSelection, toggleSelectAll, selectAllFiles, clearSelection, bulkDelete, bulkDeleteSharePoint,
+    toggleRowDetail, editKeywordAsset
   };
 })();

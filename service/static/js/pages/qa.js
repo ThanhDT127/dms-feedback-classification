@@ -1,48 +1,194 @@
 /* ============================================================
-   Visual QA & OpenDesign Dashboard Page
+   Hướng dẫn sử dụng (HDSD) — User Guide Page
+   Replaces Visual QA page. Route: #qa, module: QAPage
    ============================================================ */
 
 window.QAPage = (() => {
-  let _activeImageTab = 'dashboard'; // dashboard | classify | status
 
-  const CORE_SKILLS = [
-    { name: 'Visual design (frontend-design)', desc: 'Phong cách đậm nét, kiểu chữ Outfit/Inter cao cấp, bảng màu Tailwind/HSL curated' },
-    { name: 'Interactive prototype', desc: 'Mô hình React/HTML động, kịch bản dữ liệu chân thực và các chuyển đổi mượt mà' },
-    { name: 'Tweakable components', desc: 'Bổ sung bảng tinh chỉnh tham số trực quan ngay trong khung mô phỏng thử nghiệm' },
-    { name: 'Chrome DevTools MCP QA', desc: 'Tự động kiểm định CSS layout, cảnh báo responsive, chụp ảnh và thu thập lỗi console log' },
-    { name: 'Deck presentations (make-a-deck)', desc: 'Khung trình chiếu Canvas 1920x1080 cố định phục vụ trình bày cấp quản lý' },
-    { name: 'Responsive validation', desc: 'Tự động thay đổi kích thước viewport trên Chrome và Playwright kiểm tra rò rỉ layout' }
-  ];
+  // === Guide content sections (tasks 3.2-3.7) ===
 
-  const SCENARIOS = [
-    { name: 'Kiểm định Layout Trang Dashboard', page: 'Dashboard', status: 'PASS', time: '1.2s', detail: 'DevTools check: 0 errors, 2 warnings (CSS color contrast ratio OK)' },
-    { name: 'Kiểm định Quản lý Tập tin & Tải lên', page: 'Files', status: 'PASS', time: '2.5s', detail: 'Playwright click: 5 tabs verified, upload file test.xlsx OK' },
-    { name: 'Kiểm định Phân loại Văn bản Đơn lẻ', page: 'Classify', status: 'PASS', time: '4.8s', detail: 'API post /text: Response 200, Sentiment Tích cực, Labels matched OK' },
-    { name: 'Kiểm định Chuyển đổi và Tiến trình Đa nhiệm', page: 'Classify (Batch)', status: 'PASS', time: '3.1s', detail: 'WebSocket /ws/classify: progress bar update & live results stream OK' },
-    { name: 'Kiểm định Trình soạn thảo Prompt & Lưu cấu hình', page: 'Settings', status: 'PASS', time: '1.9s', detail: 'Save system prompt: file read/write direct verified, restart connection OK' },
-    { name: 'Kiểm tra Rò rỉ Ký tự & Trình duyệt Console Log', page: 'Hệ thống (Global)', status: 'PASS', time: '0.8s', detail: 'Chrome console log audit: 0 uncaught exception, UTF-8 unicode verified OK' }
-  ];
-
-  const IMAGE_MAP = {
-    dashboard: {
-      title: 'Trang Dashboard (Tổng quan)',
-      mockup: 'assets/dashboard_mockup_1779780269116.png',
-      live: 'assets/media__1779786344677.png', // We use this as live since we have these 3 images
-      desc: 'Thiết kế Mockup OpenDesign tinh tế tích hợp HSL gradients, so sánh với kết quả QA thực tế.'
+  const GUIDE_SECTIONS = [
+    {
+      id: 'overview',
+      icon: '🏠',
+      title: 'Tổng quan hệ thống',
+      content: `
+        <div class="hdsd-content">
+          <p><strong>Phân loại phản hồi tiếp thị</strong> là hệ thống tự động phân loại phản hồi khách hàng, giúp phân tích và xử lý dữ liệu tiếp thị nhanh chóng, chính xác.</p>
+          <p>Hệ thống hoạt động theo 4 bước xử lý chính:</p>
+          <div class="hdsd-step">
+            <span class="hdsd-step-num">1</span>
+            <div class="hdsd-step-text"><strong>Quét dữ liệu</strong> — Hệ thống tự động quét file Excel từ SharePoint Cloud hoặc nhận file tải lên trực tiếp.</div>
+          </div>
+          <div class="hdsd-step">
+            <span class="hdsd-step-num">2</span>
+            <div class="hdsd-step-text"><strong>Trích xuất sản phẩm</strong> — Sử dụng RAG (Retrieval-Augmented Generation) để so khớp nội dung phản hồi với danh mục sản phẩm bằng từ khóa.</div>
+          </div>
+          <div class="hdsd-step">
+            <span class="hdsd-step-num">3</span>
+            <div class="hdsd-step-text"><strong>Phân loại</strong> — LLM (Gemini) phân tích nội dung và gán nhãn phân loại vấn đề theo cấu hình prompt hệ thống.</div>
+          </div>
+          <div class="hdsd-step">
+            <span class="hdsd-step-num">4</span>
+            <div class="hdsd-step-text"><strong>Báo cáo</strong> — Kết quả được xuất ra file Excel, đẩy lên SharePoint Cloud và gửi thông báo qua Teams/Email.</div>
+          </div>
+        </div>
+      `
     },
-    classify: {
-      title: 'Trang Phân Loại (Classify)',
-      mockup: 'assets/classify_page_mockup_1779780299027.png',
-      live: 'assets/classify_page_mockup_1779780299027.png', // use mockup if no separate live is available, or use media__
-      desc: 'Bảng nhật ký quyết định (Decision Log) và 20 nhãn phân loại được kiểm định trực quan.'
+    {
+      id: 'classify',
+      icon: '⚡',
+      title: 'Hướng dẫn phân loại phản hồi',
+      content: `
+        <div class="hdsd-content">
+          <p>Trang <strong>Phân loại</strong> hỗ trợ 3 chế độ phân loại:</p>
+
+          <h4 style="color:var(--text-primary);font-size:13px;margin:16px 0 8px;">📝 Phân loại văn bản đơn lẻ</h4>
+          <ol>
+            <li>Chuyển sang tab <strong>"Văn bản"</strong></li>
+            <li>Nhập nội dung phản hồi vào ô văn bản</li>
+            <li>Chọn model AI (Gemini Flash / Pro)</li>
+            <li>Nhấn <strong>"⚡ Phân loại"</strong></li>
+            <li>Kết quả hiển thị ngay bên dưới: nhãn phân loại, sản phẩm liên quan, mức độ tin cậy</li>
+          </ol>
+
+          <h4 style="color:var(--text-primary);font-size:13px;margin:16px 0 8px;">📄 Phân loại file Excel</h4>
+          <ol>
+            <li>Chuyển sang tab <strong>"File"</strong></li>
+            <li>Kéo thả hoặc chọn file <code>.xlsx</code> để tải lên</li>
+            <li>Hệ thống tự động phát hiện cột nội dung (chứa chữ "Nội dung" hoặc "noi dung")</li>
+            <li>Chọn các cột bổ sung muốn giữ lại trong kết quả</li>
+            <li>Nhấn <strong>"Bắt đầu phân loại"</strong></li>
+            <li>Theo dõi tiến trình real-time qua thanh tiến trình WebSocket</li>
+          </ol>
+
+          <h4 style="color:var(--text-primary);font-size:13px;margin:16px 0 8px;">📦 Xử lý hàng loạt (Batch)</h4>
+          <ol>
+            <li>Chuyển sang tab <strong>"Hàng loạt"</strong></li>
+            <li>Thêm nhiều file vào hàng đợi</li>
+            <li>Hệ thống xử lý tuần tự từng file, hiển thị kết quả live sau mỗi dòng</li>
+            <li>Có thể <strong>tạm dừng / tiếp tục / hủy</strong> bất kỳ lúc nào</li>
+          </ol>
+
+          <p style="margin-top:12px;padding:10px 14px;background:rgba(59,130,246,0.05);border-radius:var(--radius-sm);border:1px solid rgba(59,130,246,0.15);font-size:12px;">
+            💡 <strong>Mẹo:</strong> Khi đang phân loại, bạn có thể chuyển sang tab khác rồi quay lại — tiến trình không bị mất.
+          </p>
+        </div>
+      `
     },
-    status: {
-      title: 'Playwright & DevTools Audit Flow',
-      mockup: 'assets/media__1779786344677.png',
-      live: 'assets/media__1779786344677.png',
-      desc: 'Bằng chứng ảnh chụp thực tế màn hình trình duyệt Google Chrome thông qua DevTools MCP.'
+    {
+      id: 'files',
+      icon: '📂',
+      title: 'Quản lý file',
+      content: `
+        <div class="hdsd-content">
+          <p>Trang <strong>Quản lý file</strong> cho phép duyệt và xem trước file trong các thư mục hệ thống.</p>
+
+          <h4 style="color:var(--text-primary);font-size:13px;margin:12px 0 8px;">📥 Tải file lên</h4>
+          <ul>
+            <li>Nhấn <strong>"📤 Tải file lên"</strong> hoặc kéo thả file <code>.xlsx</code> vào khu vực tải lên</li>
+            <li>File phải chứa cột nội dung có tiêu đề chứa từ "Nội dung" hoặc "noi dung"</li>
+            <li>Các cột thông tin bổ sung (Tên, Ngày, Mã phản hồi...) sẽ được giữ nguyên</li>
+          </ul>
+
+          <h4 style="color:var(--text-primary);font-size:13px;margin:12px 0 8px;">📁 Duyệt thư mục</h4>
+          <ul>
+            <li><strong>Đầu vào (Input)</strong> — File Excel gốc chờ phân loại</li>
+            <li><strong>Kết quả (Output)</strong> — File đã phân loại xong</li>
+            <li><strong>Lưu vết (Checkpoint)</strong> — Bản sao lưu tiến trình xử lý</li>
+            <li><strong>Từ khóa (Keyword)</strong> — File cấu hình từ khóa sản phẩm</li>
+            <li><strong>Mô hình (Model)</strong> — File cấu hình model AI</li>
+          </ul>
+
+          <h4 style="color:var(--text-primary);font-size:13px;margin:12px 0 8px;">☁️ Đồng bộ SharePoint</h4>
+          <p>Nhấn <strong>"☁️ Đồng bộ SharePoint"</strong> để tải file từ SharePoint Cloud về hệ thống. Watcher tự động quét và đồng bộ theo chu kỳ.</p>
+
+          <h4 style="color:var(--text-primary);font-size:13px;margin:12px 0 8px;">👁️ Xem trước file</h4>
+          <p>Nhấn vào tên file hoặc nút 👁️ để xem trước nội dung trực tiếp. Hỗ trợ xem Excel (bảng), JSON, và file văn bản.</p>
+        </div>
+      `
+    },
+    {
+      id: 'settings',
+      icon: '⚙️',
+      title: 'Cài đặt hệ thống',
+      content: `
+        <div class="hdsd-content">
+          <p>Trang <strong>Cài đặt</strong> cho phép điều chỉnh cấu hình hệ thống phân loại.</p>
+
+          <h4 style="color:var(--text-primary);font-size:13px;margin:12px 0 8px;">📝 System Prompt</h4>
+          <p>Chỉnh sửa prompt hệ thống dùng để hướng dẫn AI phân loại. Prompt định nghĩa các nhãn phân loại, cách thức phân tích, và format kết quả đầu ra.</p>
+
+          <h4 style="color:var(--text-primary);font-size:13px;margin:12px 0 8px;">🔑 Từ khóa sản phẩm</h4>
+          <p>Quản lý danh sách từ khóa để RAG so khớp sản phẩm. Tổ chức theo nhóm, thêm/xóa/sắp xếp trực tiếp. Hỗ trợ tự động hoàn thành và phát hiện trùng lặp.</p>
+
+          <h4 style="color:var(--text-primary);font-size:13px;margin:12px 0 8px;">🤖 Chọn Model AI</h4>
+          <ul>
+            <li><strong>Gemini Flash</strong> — Nhanh, phù hợp xử lý hàng loạt số lượng lớn</li>
+            <li><strong>Gemini Pro</strong> — Chính xác hơn, phù hợp phân loại phức tạp</li>
+          </ul>
+
+          <h4 style="color:var(--text-primary);font-size:13px;margin:12px 0 8px;">🔔 Cấu hình thông báo</h4>
+          <ul>
+            <li><strong>Microsoft Teams</strong> — Nhập Webhook URL để nhận thông báo khi phân loại hoàn tất</li>
+            <li><strong>Email</strong> — Cấu hình SMTP để gửi email kết quả</li>
+          </ul>
+
+          <h4 style="color:var(--text-primary);font-size:13px;margin:12px 0 8px;">📊 Nhãn phân loại</h4>
+          <p>Xem và quản lý danh sách nhãn phân loại. Theo dõi lịch sử thay đổi nhãn qua timeline.</p>
+        </div>
+      `
+    },
+    {
+      id: 'faq',
+      icon: '❓',
+      title: 'FAQ — Câu hỏi thường gặp',
+      content: `
+        <div class="hdsd-content">
+          <div class="hdsd-faq-item">
+            <div class="hdsd-faq-q">💬 File không upload được, báo lỗi "Chỉ chấp nhận file .xlsx"?</div>
+            <div class="hdsd-faq-a">Hệ thống chỉ hỗ trợ file Excel định dạng <code>.xlsx</code>. File <code>.xls</code> (Excel 97-2003) cần được chuyển đổi sang <code>.xlsx</code> trước khi tải lên. Mở file trong Excel → Save As → chọn định dạng <code>.xlsx</code>.</div>
+          </div>
+          <div class="hdsd-faq-item">
+            <div class="hdsd-faq-q">💬 Phân loại kết quả sai hoặc không chính xác?</div>
+            <div class="hdsd-faq-a">Kiểm tra và cập nhật System Prompt trong phần Cài đặt. Đảm bảo các nhãn phân loại được mô tả rõ ràng. Thử chuyển sang model <strong>Gemini Pro</strong> để cải thiện độ chính xác. Bổ sung từ khóa sản phẩm liên quan để tăng khả năng so khớp.</div>
+          </div>
+          <div class="hdsd-faq-item">
+            <div class="hdsd-faq-q">💬 Lỗi kết nối "Failed to fetch" hoặc "Network Error"?</div>
+            <div class="hdsd-faq-a">Kiểm tra kết nối mạng của bạn. Đảm bảo server backend đang chạy. Nếu dùng VPN, thử tắt VPN và kết nối lại. Kiểm tra API key Gemini trong cấu hình hệ thống.</div>
+          </div>
+          <div class="hdsd-faq-item">
+            <div class="hdsd-faq-q">💬 Thời gian xử lý file lớn mất bao lâu?</div>
+            <div class="hdsd-faq-a">Thời gian phụ thuộc vào số lượng dòng dữ liệu và model AI được chọn. Gemini Flash: ~0.5-1s/dòng. Gemini Pro: ~1-2s/dòng. File 1000 dòng mất khoảng 10-30 phút. Hệ thống hỗ trợ checkpoint nên không mất tiến trình nếu bị gián đoạn.</div>
+          </div>
+          <div class="hdsd-faq-item">
+            <div class="hdsd-faq-q">💬 Checkpoint hoạt động như thế nào?</div>
+            <div class="hdsd-faq-a">Hệ thống tự động lưu checkpoint sau mỗi batch xử lý (thường 10-20 dòng). Nếu quá trình bị gián đoạn (mất mạng, restart server), khi chạy lại hệ thống sẽ tiếp tục từ checkpoint cuối cùng, không xử lý lại các dòng đã hoàn thành.</div>
+          </div>
+          <div class="hdsd-faq-item">
+            <div class="hdsd-faq-q">💬 SharePoint không đồng bộ được?</div>
+            <div class="hdsd-faq-a">Kiểm tra cấu hình Azure AD (Client ID, Tenant ID, Client Secret) trong file <code>.env</code>. Đảm bảo ứng dụng Azure có quyền <code>Sites.ReadWrite.All</code>. Thử nhấn "☁️ Đồng bộ SharePoint" thủ công để xem chi tiết lỗi.</div>
+          </div>
+          <div class="hdsd-faq-item">
+            <div class="hdsd-faq-q">💬 Làm sao để thêm nhãn phân loại mới?</div>
+            <div class="hdsd-faq-a">Vào phần <strong>Cài đặt → System Prompt</strong>, thêm nhãn mới vào danh sách nhãn trong prompt. Mô tả rõ ràng tiêu chí phân loại cho nhãn mới. Sau khi lưu, nhãn mới sẽ được áp dụng cho các lần phân loại tiếp theo.</div>
+          </div>
+        </div>
+      `
     }
-  };
+  ];
+
+  // === Search text cache for filtering ===
+  let _searchableCache = null;
+
+  function _buildSearchCache() {
+    _searchableCache = GUIDE_SECTIONS.map(s => ({
+      id: s.id,
+      text: (s.title + ' ' + s.content.replace(/<[^>]+>/g, '')).toLowerCase()
+    }));
+  }
+
+  // === Render (task 4.1) ===
 
   function render() {
     const app = document.getElementById('app');
@@ -50,222 +196,131 @@ window.QAPage = (() => {
 
     app.innerHTML = `
       <div class="page-header animate-in">
-        <h2>🛡️ Visual QA & OpenDesign Automation</h2>
-        <p>Theo dõi kết quả tự động hóa thiết kế OpenDesign và kiểm thử trực quan Chrome DevTools MCP</p>
+        <h2>📖 Hướng dẫn sử dụng</h2>
+        <p>Tài liệu hướng dẫn sử dụng hệ thống Phân loại phản hồi tiếp thị</p>
       </div>
 
-      <!-- Overview Cards -->
-      <div class="stat-grid">
-        <div class="stat-card green animate-in">
-          <div class="stat-card-top">
-            <div>
-              <div style="display:flex;align-items:center;gap:8px;">
-                <span class="status-dot online"></span>
-                <span class="stat-card-value" style="font-size:22px;">CONNECTED</span>
-              </div>
-              <div class="stat-card-label">Chrome DevTools MCP</div>
-            </div>
-            <div class="stat-card-icon">🔌</div>
-          </div>
-        </div>
-
-        <div class="stat-card blue animate-in animate-in-delay-1">
-          <div class="stat-card-top">
-            <div>
-              <div class="stat-card-value">10 / 10</div>
-              <div class="stat-card-label">Core Design Skills Synced</div>
-            </div>
-            <div class="stat-card-icon">🎨</div>
-          </div>
-        </div>
-
-        <div class="stat-card purple animate-in animate-in-delay-2">
-          <div class="stat-card-top">
-            <div>
-              <div class="stat-card-value">100%</div>
-              <div class="stat-card-label">QA Scenario Pass Rate</div>
-            </div>
-            <div class="stat-card-icon">🏆</div>
-          </div>
-        </div>
+      <!-- Search bar -->
+      <div class="hdsd-search-bar animate-in animate-in-delay-1">
+        <span class="hdsd-search-icon">🔍</span>
+        <input type="text" id="hdsd-search" placeholder="Tìm kiếm hướng dẫn..." oninput="QAPage.handleSearch(this.value)">
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;" class="qa-grid-container">
-        
-        <!-- Left Column: Test scenarios -->
-        <div style="display:flex;flex-direction:column;gap:24px;">
-          
-          <!-- QA Scenarios card -->
-          <div class="card animate-in animate-in-delay-1" style="flex:1;">
-            <div class="card-header">
-              <span class="card-title"><span class="icon">🔍</span> Kịch bản kiểm thử tự động (Chrome Audit)</span>
-              <span class="badge badge-success">6/6 PASS</span>
-            </div>
-            <div style="padding-top:12px;">
-              <div style="display:flex;flex-direction:column;gap:12px;">
-                ${SCENARIOS.map(sc => `
-                  <div class="qa-scenario-item" style="border:1px solid var(--border);border-radius:6px;padding:12px;background:var(--bg-secondary);transition:all 0.2s ease;">
-                    <div style="display:flex;align-items:center;justify-content:between;margin-bottom:6px;">
-                      <span style="font-weight:600;color:var(--text-primary);font-size:13px;">${sc.name}</span>
-                      <span class="badge badge-success" style="font-size:10px;">${sc.status} (${sc.time})</span>
-                    </div>
-                    <p class="text-muted" style="font-size:11px;font-family:var(--font-mono);margin:0;">${sc.detail}</p>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          </div>
-
-          <!-- OpenDesign Core Skills synced -->
-          <div class="card animate-in animate-in-delay-2">
-            <div class="card-header">
-              <span class="card-title"><span class="icon">⚡</span> Kỹ năng đồng bộ thiết kế (Core Design Skills)</span>
-            </div>
-            <div style="padding-top:12px;">
-              <div style="display:grid;grid-template-columns:1fr;gap:12px;">
-                ${CORE_SKILLS.map(sk => `
-                  <div style="display:flex;gap:12px;align-items:start;">
-                    <span style="font-size:14px;padding-top:2px;">✨</span>
-                    <div>
-                      <h4 style="margin:0;font-size:13px;color:var(--text-primary);font-weight:600;">${sk.name}</h4>
-                      <p class="text-muted" style="margin:2px 0 0 0;font-size:11px;">${sk.desc}</p>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Right Column: Visual Regression Audit Images -->
-        <div style="display:flex;flex-direction:column;gap:24px;">
-          
-          <div class="card animate-in animate-in-delay-2" style="flex:1;">
-            <div class="card-header">
-              <span class="card-title"><span class="icon">🖼️</span> Đối chiếu thiết kế trực quan (Visual QA Grid)</span>
-              <div class="pill-tabs" style="padding:2px;" id="qa-image-tabs">
-                <button class="pill-tab ${_activeImageTab === 'dashboard' ? 'active' : ''}" style="padding:4px 10px;font-size:11px;" onclick="QAPage.setImageTab('dashboard')">DASHBOARD</button>
-                <button class="pill-tab ${_activeImageTab === 'classify' ? 'active' : ''}" style="padding:4px 10px;font-size:11px;" onclick="QAPage.setImageTab('classify')">CLASSIFY</button>
-                <button class="pill-tab ${_activeImageTab === 'status' ? 'active' : ''}" style="padding:4px 10px;font-size:11px;" onclick="QAPage.setImageTab('status')">AUDIT FLOW</button>
-              </div>
-            </div>
-
-            <div style="padding-top:16px;" id="qa-visual-body">
-              ${renderVisualBody()}
-            </div>
-          </div>
-
-        </div>
-
+      <!-- No results message -->
+      <div id="hdsd-no-results" class="hdsd-no-results" style="display:none;">
+        <div class="icon">🔍</div>
+        <p>Không tìm thấy kết quả phù hợp</p>
       </div>
 
-      <!-- Technical Audit Report (Walkthrough rendered dynamically in a beautiful card) -->
-      <div class="card animate-in animate-in-delay-3" style="margin-top:24px;margin-bottom:24px;">
-        <div class="card-header">
-          <span class="card-title"><span class="icon">📖</span> Báo cáo Nghiệm thu & Chuyển giao Kỹ thuật</span>
-          <span style="font-size:11px;" class="text-muted">walkthrough.md</span>
-        </div>
-        <div class="qa-report-body" style="padding-top:16px;line-height:1.7;">
-          <div style="border-left:4px solid var(--accent-blue);padding-left:16px;margin-bottom:20px;background:rgba(59, 130, 246, 0.05);padding-top:12px;padding-bottom:12px;border-radius:0 6px 6px 0;">
-            <h4 style="margin:0 0 6px 0;color:var(--text-primary);font-size:14px;font-weight:600;">💡 Tổng quan Tự động hóa Visual QA & Chrome DevTools MCP</h4>
-            <p class="text-muted" style="margin:0;font-size:12px;">Đã xây dựng thành công bộ kịch bản tự động hóa Playwright QA trực quan, kết hợp với các kỹ năng thiết kế cốt lõi của OpenDesign để chụp ảnh nghiệm thu, kiểm tra lỗi console, và đảm bảo layout hoàn hảo 100% không rò rỉ.</p>
+      <!-- Guide sections -->
+      <div id="hdsd-sections">
+        ${GUIDE_SECTIONS.map((section, i) => `
+          <div class="hdsd-section${section.id === 'overview' ? ' open' : ''} animate-in" style="animation-delay:${(i + 2) * 60}ms" data-id="${section.id}">
+            <div class="hdsd-section-header" onclick="QAPage.toggleSection('${section.id}')">
+              <h3><span>${section.icon}</span> ${section.title}</h3>
+              <span class="hdsd-chevron">▼</span>
+            </div>
+            <div class="hdsd-section-body">
+              ${section.content}
+            </div>
           </div>
-
-          <h3 style="font-size:14px;color:var(--text-primary);font-weight:700;margin:16px 0 8px 0;display:flex;align-items:center;gap:6px;">
-            <span style="color:var(--accent-green);">✓</span> 1. Nghiên cứu & Tích hợp OpenDesign
-          </h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px 0;padding-left:18px;">
-            Hệ thống đã đồng bộ toàn bộ 10 kỹ năng thiết kế nâng cao của OpenDesign sang thư mục cấu hình Antigravity của đại lý tại <code>C:\\Users\\RD03590\\.gemini\\config\\skills\\</code>. Cấu trúc HTML, kiểu dáng CSS kế thừa trực tiếp các token màu curated (HSL tailors, dark theme) và phông chữ <strong>Outfit/Inter</strong> cao cấp.
-          </p>
-
-          <h3 style="font-size:14px;color:var(--text-primary);font-weight:700;margin:16px 0 8px 0;display:flex;align-items:center;gap:6px;">
-            <span style="color:var(--accent-green);">✓</span> 2. Tự động hóa QA với Chrome DevTools MCP
-          </h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px 0;padding-left:18px;">
-            Sử dụng module <code>opendesign-devtools</code> để khởi chạy phiên Chrome Headless qua giao thức DevTools Protocol. Playwright tự động hóa hành vi nhấp chuột, nhập dữ liệu biểu mẫu phân loại, chuyển hướng qua 6 trang nghiệp vụ và trích xuất nhật ký lỗi. <strong>0 lỗi chưa được bắt giữ (uncaught exceptions)</strong> được phát hiện trong suốt 12 vòng kiểm thử.
-          </p>
-
-          <h3 style="font-size:14px;color:var(--text-primary);font-weight:700;margin:16px 0 8px 0;display:flex;align-items:center;gap:6px;">
-            <span style="color:var(--accent-green);">✓</span> 3. Bằng chứng nghiệm thu trực quan
-          </h3>
-          <p class="text-muted" style="font-size:12px;margin:0 0 12px 0;padding-left:18px;">
-            Toàn bộ 3 ảnh bằng chứng chụp màn hình nghiệm thu thực tế đã được kết xuất và serve tĩnh an toàn bởi FastAPI backend tại đường dẫn <code>/assets/</code> để hiển thị trực tiếp trong Dashboard Visual QA.
-          </p>
-        </div>
+        `).join('')}
       </div>
     `;
+
+    _buildSearchCache();
   }
 
-  function renderVisualBody() {
-    const item = IMAGE_MAP[_activeImageTab];
-    if (!item) return '';
+  // === Toggle section (task 4.2) ===
 
-    return `
-      <div class="qa-visual-container">
-        <h4 style="margin:0 0 12px 0;color:var(--text-primary);font-size:14px;font-weight:600;">${item.title}</h4>
-        <p class="text-muted" style="margin:0 0 16px 0;font-size:12px;">${item.desc}</p>
-        
-        <div class="qa-images-comparison" style="display:grid;grid-template-columns:1fr;gap:20px;">
-          <div>
-            <div style="font-weight:600;color:var(--text-secondary);font-size:11px;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;display:flex;align-items:center;justify-content:space-between;">
-              <span>🖼️ Ảnh chụp nghiệm thu thực tế (Chrome DevTools Audit)</span>
-              <span class="badge badge-success" style="font-size:9px;">ACTUAL RESOLUTION: 1920x1080</span>
-            </div>
-            <div class="qa-img-wrapper" style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg-primary);cursor:pointer;position:relative;" onclick="QAPage.showLightbox('${item.live}')">
-              <img src="${item.live}" alt="Actual Live Web Image" style="width:100%;height:auto;display:block;transition:transform 0.3s ease;" class="qa-img-hover"
-                   onerror="this.onerror=null;this.style.display='none';this.parentElement.innerHTML='<div style=\\'padding:60px 20px;text-align:center;color:var(--text-muted);font-size:13px;\\'><div style=\\'font-size:48px;margin-bottom:12px;\\'>🖼️</div>Ảnh không tải được<br><span style=\\'font-size:11px;opacity:0.6;\\'>${item.live}</span></div>';">
-              <div class="qa-img-overlay" style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);padding:8px 12px;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:space-between;opacity:0;transition:opacity 0.2s ease;">
-                <span>🔍 Nhấp để phóng to chi tiết</span>
-                <span>Playwright Verified ✓</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
+  function toggleSection(sectionId) {
+    const el = document.querySelector(`.hdsd-section[data-id="${sectionId}"]`);
+    if (el) {
+      el.classList.toggle('open');
+    }
   }
 
-  function setImageTab(tabName) {
-    if (!IMAGE_MAP[tabName]) return;
-    _activeImageTab = tabName;
+  // === Search functionality (tasks 4.3-4.5) ===
 
-    // Update active tab buttons UI
-    const container = document.getElementById('qa-image-tabs');
-    if (container) {
-      container.querySelectorAll('.pill-tab').forEach(btn => {
-        const text = btn.textContent.trim().toLowerCase();
-        btn.classList.toggle('active', text === tabName.toLowerCase() || (tabName === 'status' && text === 'audit flow'));
+  function handleSearch(query) {
+    const trimmed = query.trim().toLowerCase();
+    const sections = document.querySelectorAll('.hdsd-section');
+    const noResults = document.getElementById('hdsd-no-results');
+
+    // Reset if empty
+    if (!trimmed) {
+      sections.forEach(s => {
+        s.style.display = '';
+        // Restore original content (remove highlights)
+        const id = s.getAttribute('data-id');
+        const section = GUIDE_SECTIONS.find(gs => gs.id === id);
+        if (section) {
+          const body = s.querySelector('.hdsd-section-body');
+          if (body) body.innerHTML = section.content;
+        }
       });
+      // Reset: only overview open
+      sections.forEach(s => {
+        if (s.getAttribute('data-id') === 'overview') {
+          s.classList.add('open');
+        } else {
+          s.classList.remove('open');
+        }
+      });
+      if (noResults) noResults.style.display = 'none';
+      return;
     }
 
-    // Render image comparison body
-    const body = document.getElementById('qa-visual-body');
-    if (body) {
-      body.style.opacity = '0';
-      setTimeout(() => {
-        body.innerHTML = renderVisualBody();
-        body.style.transition = 'opacity 0.2s ease';
-        body.style.opacity = '1';
-      }, 100);
+    if (!_searchableCache) _buildSearchCache();
+
+    let matchCount = 0;
+    sections.forEach(s => {
+      const id = s.getAttribute('data-id');
+      const cached = _searchableCache.find(c => c.id === id);
+      const section = GUIDE_SECTIONS.find(gs => gs.id === id);
+
+      if (cached && cached.text.includes(trimmed)) {
+        s.style.display = '';
+        s.classList.add('open');
+        matchCount++;
+
+        // Highlight matching text in body
+        if (section) {
+          const body = s.querySelector('.hdsd-section-body');
+          if (body) body.innerHTML = highlightText(section.content, trimmed);
+        }
+      } else {
+        s.style.display = 'none';
+        s.classList.remove('open');
+      }
+    });
+
+    if (noResults) {
+      noResults.style.display = matchCount === 0 ? '' : 'none';
     }
   }
 
-  function showLightbox(imgUrl) {
-    if (window.App && typeof window.App.showModal === 'function') {
-      window.App.showModal(`
-        <div style="position:relative;background:var(--bg-primary);border-radius:8px;overflow:hidden;border:1px solid var(--border);max-width:90vw;max-height:85vh;display:flex;flex-direction:column;">
-          <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-weight:600;color:var(--text-primary);font-size:13px;">🔍 Visual QA Screenshot Viewer</span>
-            <button class="btn btn-ghost btn-sm" onclick="App.closeModal()" style="font-size:16px;padding:4px 8px;">✕</button>
-          </div>
-          <div style="overflow:auto;padding:12px;background:#050508;display:flex;justify-content:center;align-items:center;flex:1;">
-            <img src="${imgUrl}" alt="Full size Visual QA audit screenshot" style="max-width:100%;height:auto;border-radius:4px;box-shadow:0 10px 30px rgba(0,0,0,0.5);">
-          </div>
-        </div>
-      `);
-    }
+  // === Highlight matching text (task 4.4) ===
+
+  function highlightText(html, query) {
+    if (!query) return html;
+
+    // Only highlight text content, not HTML tags
+    const parts = html.split(/(<[^>]+>)/);
+    return parts.map(part => {
+      // If it's an HTML tag, keep as-is
+      if (part.startsWith('<')) return part;
+      // Highlight matches in text content
+      const regex = new RegExp(`(${escapeRegex(query)})`, 'gi');
+      return part.replace(regex, '<mark>$1</mark>');
+    }).join('');
   }
 
-  return { render, setImageTab, showLightbox };
+  function escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // === Module export (task 4.6) ===
+
+  return { render, toggleSection, handleSearch };
 })();

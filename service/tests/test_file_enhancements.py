@@ -9,6 +9,8 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
+from conftest import apply_auth_overrides
+
 
 class TestFileEnhancements:
     @pytest.fixture
@@ -21,6 +23,7 @@ class TestFileEnhancements:
         from dms.web.app import create_app
 
         app = create_app()
+        apply_auth_overrides(app)
         return TestClient(app, raise_server_exceptions=True)
 
     def test_get_template(self, client) -> None:

@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from dms.web.app import create_app
+from conftest import apply_auth_overrides
 
 
 @pytest.fixture
@@ -41,6 +42,7 @@ def client(tmp_path, monkeypatch):
     (tmp_path / "Keyword").mkdir(parents=True, exist_ok=True)
 
     app = create_app()
+    apply_auth_overrides(app)
     return TestClient(app)
 
 

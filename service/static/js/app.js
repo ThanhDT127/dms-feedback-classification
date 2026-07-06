@@ -10,17 +10,21 @@ window.App = (() => {
     jobs: [],
     metrics: {},
     sidebarOpen: false,
+    theme: 'dark',
+    user: null,
+    isAuthenticated: false,
   };
 
   /* ---- Page Registry ---- */
   const PAGES = {
+    login:     { module: () => window.LoginPage,     title: 'Đăng nhập' },
     dashboard: { module: () => window.DashboardPage, title: 'Tổng quan' },
     files:     { module: () => window.FilesPage,     title: 'Quản lý file' },
     classify:  { module: () => window.ClassifyPage,  title: 'Phân loại' },
     settings:  { module: () => window.SettingsPage,  title: 'Cài đặt' },
     pipeline:  { module: () => window.PipelinePage,  title: 'Pipeline' },
     metrics:   { module: () => window.MetricsPage,   title: 'Thống kê' },
-    qa:        { module: () => window.QAPage,        title: 'Visual QA (OpenDesign)' },
+    qa:        { module: () => window.QAPage,        title: 'Hướng dẫn sử dụng' },
   };
 
   const DEFAULT_PAGE = 'dashboard';
@@ -36,9 +40,27 @@ window.App = (() => {
   }
 
   function onHashChange() {
-    const page = getHash();
-    if (PAGES[page]) {
-      renderPage(page);
+    const pageName = getHash();
+
+    if (!state.isAuthenticated) {
+      renderPage('login');
+      return;
+    }
+
+    // Redirect away from login if already authenticated
+    if (pageName === 'login') {
+      window.location.hash = DEFAULT_PAGE;
+      return;
+    }
+
+    // Admin-only pages
+    if (['settings', 'pipeline'].includes(pageName) && state.user?.role !== 'admin') {
+      navigate('classify');
+      return;
+    }
+
+    if (PAGES[pageName]) {
+      renderPage(pageName);
     } else {
       // Unknown route → default
       window.location.hash = DEFAULT_PAGE;
@@ -61,7 +83,7 @@ window.App = (() => {
 
     // Update document title
     const def = PAGES[pageName];
-    document.title = `Phân loại phản hồi vấn đề — ${def.title}`;
+    document.title = `Phân loại phản hồi tiếp thị — ${def.title}`;
 
     // Update sidebar active
     if (window.Sidebar) {
@@ -118,6 +140,55 @@ window.App = (() => {
     if (overlay) overlay.classList.remove('open');
   }
 
+  /* ---- Theme ---- */
+  function initTheme() {
+    let theme = localStorage.getItem('dms-theme');
+    const hasManualPref = !!theme;
+    if (!theme) {
+      theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    state.theme = theme;
+    applyTheme(theme, true);
+
+    // Listen for system preference changes (only when no manual pref)
+    if (!hasManualPref) {
+      window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('dms-theme')) {
+          const newTheme = e.matches ? 'light' : 'dark';
+          state.theme = newTheme;
+          applyTheme(newTheme);
+          if (window.Sidebar) window.Sidebar.updateToggleIcon();
+          if (window.Charts && typeof window.Charts.applyThemeColors === 'function') window.Charts.applyThemeColors();
+        }
+      });
+    }
+  }
+
+  function toggleTheme() {
+    const newTheme = state.theme === 'dark' ? 'light' : 'dark';
+    state.theme = newTheme;
+    localStorage.setItem('dms-theme', newTheme);
+    applyTheme(newTheme);
+    if (window.Sidebar) window.Sidebar.updateToggleIcon();
+    if (window.Charts && typeof window.Charts.applyThemeColors === 'function') {
+      requestAnimationFrame(() => window.Charts.applyThemeColors());
+    }
+  }
+
+  function applyTheme(theme, isInitial) {
+    if (isInitial) document.documentElement.classList.add('no-transition');
+    document.documentElement.setAttribute('data-theme', theme);
+    const meta = document.getElementById('meta-theme-color');
+    if (meta) meta.content = theme === 'light' ? '#f8fafc' : '#0f1117';
+    if (isInitial) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          document.documentElement.classList.remove('no-transition');
+        });
+      });
+    }
+  }
+
   /* ---- Modal ---- */
   function showModal(content) {
     const overlay = document.getElementById('modal-overlay');
@@ -134,14 +205,28 @@ window.App = (() => {
   }
 
   /* ---- Init ---- */
-  function init() {
-    // Render sidebar
-    if (window.Sidebar) {
-      window.Sidebar.render();
+  async function init() {
+    initTheme();
+
+    // Check auth state
+    const token = API.getAccessToken();
+    if (token) {
+      try {
+        const user = await API.get('/auth/me', { silent: true });
+        state.user = user;
+        state.isAuthenticated = true;
+      } catch {
+        API.clearTokens();
+        state.user = null;
+        state.isAuthenticated = false;
+      }
     }
 
     // Setup router
     window.addEventListener('hashchange', onHashChange);
+
+    // Listen for auth:expired
+    window.addEventListener('auth:expired', () => logout());
 
     // Modal close on overlay click
     const overlay = document.getElementById('modal-overlay');
@@ -159,6 +244,16 @@ window.App = (() => {
       }
     });
 
+    if (!state.isAuthenticated) {
+      renderPage('login');
+      return;
+    }
+
+    // Render sidebar
+    if (window.Sidebar) {
+      window.Sidebar.render();
+    }
+
     // Initial route
     if (!window.location.hash) {
       window.location.hash = DEFAULT_PAGE;
@@ -174,9 +269,26 @@ window.App = (() => {
     init();
   }
 
+  function setUser(user) {
+    state.user = user;
+    state.isAuthenticated = true;
+  }
+
+  function logout() {
+    if (state.isAuthenticated && API.logout) {
+      API.logout({ silent: true }).catch(() => {});
+    }
+    API.clearTokens();
+    state.user = null;
+    state.isAuthenticated = false;
+    renderPage('login');
+  }
+
   return {
     state, navigate, renderPage,
     toggleSidebar, closeSidebar,
-    showModal, closeModal
+    showModal, closeModal,
+    toggleTheme,
+    setUser, logout
   };
 })();

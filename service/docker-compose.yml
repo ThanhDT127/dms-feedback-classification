@@ -17,6 +17,8 @@ services:
       - LOG_DIR=/app/data/logs
       - GCP_SERVICE_ACCOUNT_JSON=/app/data/sa-key.json
       - GOOGLE_APPLICATION_CREDENTIALS=/app/data/sa-key.json
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-secret-key}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin123}
     volumes:
       - ./src:/app/src
       - ./scripts:/app/scripts:ro
@@ -59,7 +61,10 @@ services:
       - LOG_DIR=/app/data/logs
       - GCP_SERVICE_ACCOUNT_JSON=/app/data/sa-key.json
       - GOOGLE_APPLICATION_CREDENTIALS=/app/data/sa-key.json
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-secret-key}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin123}
     volumes:
+      - ./data:/app/data
       - ./src:/app/src
       - ./scripts:/app/scripts:ro
       - ./static:/app/static

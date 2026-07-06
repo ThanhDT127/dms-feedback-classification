@@ -6,21 +6,60 @@ import json
 import logging
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from .. import deps
+from ..deps import get_admin_user, get_current_user
 
 logger = logging.getLogger("dms-web")
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
 
+def _apply_label_payload(payload: dict) -> None:
+    from ...pipeline.issue_classifier import (
+        LABEL_DEFINITIONS,
+        MINOR_ORDER,
+        MINOR_TO_MAJOR,
+    )
+
+    LABEL_DEFINITIONS.clear()
+    LABEL_DEFINITIONS.update(payload["label_definitions"])
+    MINOR_ORDER.clear()
+    MINOR_ORDER.extend(payload["minor_order"])
+    MINOR_TO_MAJOR.clear()
+    MINOR_TO_MAJOR.update(payload["minor_to_major"])
+
+
+def _load_persisted_labels() -> None:
+    settings = deps.get_settings()
+    if settings is None or not settings.label_config_path.is_file():
+        return
+    try:
+        data = json.loads(settings.label_config_path.read_text(encoding="utf-8"))
+        if all(k in data for k in ("label_definitions", "minor_order", "minor_to_major")):
+            _apply_label_payload(data)
+    except Exception as exc:
+        logger.warning("Cannot load persisted labels: %s", exc)
+
+
+def _save_persisted_labels(payload: dict) -> None:
+    settings = deps.get_settings()
+    if settings is None:
+        return
+    settings.label_config_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = settings.label_config_path.with_suffix(settings.label_config_path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_path.replace(settings.label_config_path)
+
+
 # ---------- Labels ----------
 
 
 @router.get("/labels")
-async def get_labels():
+async def get_labels(user: dict = Depends(get_current_user)):
     """Trả về MINOR_ORDER, MINOR_TO_MAJOR và LABEL_DEFINITIONS."""
+    _load_persisted_labels()
     from ...pipeline.issue_classifier import (
         LABEL_DEFINITIONS,
         MINOR_ORDER,
@@ -34,11 +73,68 @@ async def get_labels():
     }
 
 
+@router.put("/labels")
+async def update_labels(payload: dict, admin: dict = Depends(get_admin_user)):
+    """Update labels and record history."""
+    from ...pipeline.issue_classifier import (
+        LABEL_DEFINITIONS,
+        MINOR_ORDER,
+        MINOR_TO_MAJOR,
+    )
+
+    # Validate
+    new_defs = payload.get("label_definitions")
+    new_order = payload.get("minor_order")
+    new_mapping = payload.get("minor_to_major")
+    if new_defs is None or new_order is None or new_mapping is None:
+        raise HTTPException(status_code=400, detail="Missing required fields: label_definitions, minor_order, minor_to_major")
+
+    # Record diff
+    old_labels = {
+        "label_definitions": dict(LABEL_DEFINITIONS),
+        "minor_order": list(MINOR_ORDER),
+        "minor_to_major": dict(MINOR_TO_MAJOR),
+    }
+    new_labels = {
+        "label_definitions": new_defs,
+        "minor_order": new_order,
+        "minor_to_major": new_mapping,
+    }
+
+    store = deps.get_label_history_store()
+    changes = 0
+    if store:
+        changes = store.record_diff(
+            old_labels,
+            new_labels,
+            user=admin.get("username") or admin.get("display_name") or "Admin",
+        )
+    _save_persisted_labels(new_labels)
+    _apply_label_payload(new_labels)
+
+    return {"success": True, "changes_recorded": changes}
+
+
+@router.get("/labels/history")
+async def get_label_history(
+    limit: int = 20,
+    offset: int = 0,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    admin: dict = Depends(get_admin_user),
+):
+    """Get label change history with pagination."""
+    store = deps.get_label_history_store()
+    if not store:
+        return {"items": [], "total": 0, "has_more": False}
+    return store.get_history(limit=limit, offset=offset, date_from=date_from, date_to=date_to)
+
+
 # ---------- Keywords ----------
 
 
 @router.get("/keywords/raw")
-async def get_raw_keywords():
+async def get_raw_keywords(admin: dict = Depends(get_admin_user)):
     """Trả về toàn bộ nội dung gốc của kw_map.json."""
     settings = deps.get_settings()
     if settings is None:
@@ -57,8 +153,48 @@ async def get_raw_keywords():
         ) from exc
 
 
+@router.get("/keywords/search")
+async def search_keywords(q: str = "", admin: dict = Depends(get_admin_user)):
+    """Search keywords across all groups with case-insensitive substring matching."""
+    if not q or len(q.strip()) < 1:
+        return {"results": []}
+
+    settings = deps.get_settings()
+    if settings is None:
+        return {"results": []}
+
+    kw_map_path = settings.kw_map_path
+    if not kw_map_path.is_file():
+        raise HTTPException(status_code=404, detail="kw_map.json not found")
+
+    try:
+        kw_map = json.loads(kw_map_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    query = q.strip().lower()
+    exact = []
+    partial = []
+
+    for group, keywords in kw_map.items():
+        if group == "manual_brand_alias":
+            continue
+        if not isinstance(keywords, list):
+            continue
+        for kw in keywords:
+            kw_str = str(kw)
+            kw_lower = kw_str.lower()
+            if kw_lower == query:
+                exact.append({"keyword": kw_str, "group": group})
+            elif query in kw_lower:
+                partial.append({"keyword": kw_str, "group": group})
+
+    results = (exact + partial)[:20]
+    return {"results": results}
+
+
 @router.get("/keywords")
-async def get_keywords():
+async def get_keywords(admin: dict = Depends(get_admin_user)):
     """Trả về keyword_hints từ kw_map.json."""
     from ...pipeline.issue_classifier import keyword_hints
 
@@ -84,7 +220,7 @@ async def get_keywords():
 
 
 @router.get("/brands")
-async def get_brands():
+async def get_brands(admin: dict = Depends(get_admin_user)):
     """Trả về brand_hints từ kw_map.json."""
     from ...pipeline.issue_classifier import brand_hints
 
@@ -111,7 +247,7 @@ async def get_brands():
 
 
 @router.get("/products")
-async def get_products():
+async def get_products(admin: dict = Depends(get_admin_user)):
     """Trả về tóm tắt danh mục sản phẩm."""
     settings = deps.get_settings()
     if settings is None:
@@ -150,7 +286,7 @@ async def get_products():
 
 
 @router.put("/keywords")
-async def save_keywords(data: dict):
+async def save_keywords(data: dict, admin: dict = Depends(get_admin_user)):
     """Lưu danh sách keyword gợi ý vào file kw_map.json."""
     settings = deps.get_settings()
     if settings is None:
@@ -174,7 +310,7 @@ async def save_keywords(data: dict):
 
 
 @router.get("/products/list")
-async def list_products():
+async def list_products(admin: dict = Depends(get_admin_user)):
     """Trả về toàn bộ danh sách sản phẩm theo từng sheet trong file Excel."""
     settings = deps.get_settings()
     if settings is None:
@@ -209,7 +345,7 @@ async def list_products():
 
 
 @router.put("/products")
-async def save_products(payload: dict):
+async def save_products(payload: dict, admin: dict = Depends(get_admin_user)):
     """Lưu danh sách sản phẩm mới cho một sheet cụ thể vào file Excel Phân Chia Nhóm Sản Phẩm V2.xlsx, bảo toàn các sheet khác."""
     settings = deps.get_settings()
     if settings is None:
@@ -300,7 +436,7 @@ def _update_config_asset_state(asset_key: str, sp_response: dict) -> None:
 
 
 @router.post("/sync-keywords-to-sp")
-async def sync_keywords_to_sharepoint():
+async def sync_keywords_to_sharepoint(admin: dict = Depends(get_admin_user)):
     """Upload kw_map.json từ local lên thư mục Keyword/ trên SharePoint."""
     settings = deps.get_settings()
     if settings is None:
@@ -337,7 +473,7 @@ async def sync_keywords_to_sharepoint():
 
 
 @router.post("/sync-products-to-sp")
-async def sync_products_to_sharepoint():
+async def sync_products_to_sharepoint(admin: dict = Depends(get_admin_user)):
     """Upload file Excel sản phẩm từ local lên thư mục Keyword/ trên SharePoint."""
     settings = deps.get_settings()
     if settings is None:

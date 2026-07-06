@@ -9,11 +9,13 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel
 
+from ...exceptions import SharePointError
 from ...settings import get_settings
-from ..deps import get_sharepoint_client
+from ..deps import get_admin_user, get_current_user, get_sharepoint_client
 
 logger = logging.getLogger("dms-web")
 
@@ -73,12 +75,12 @@ def _validate_safe_path(base_dir: Path, filename: str) -> Path:
 
 
 @router.get("/tree", name="file_tree")
-async def get_folder_tree():
+async def get_folder_tree(user: dict = Depends(get_current_user)):
     """Trả về cấu trúc cây thư mục."""
     tree: dict = {}
     folder_map = _get_folder_map()
     for folder_name in folder_map.keys():
-        files = await list_files(folder_name)
+        files = await list_files(folder_name, user=user)
         tree[folder_name] = [
             {
                 "path": files[0].get("source_dir", folder_name) if files else folder_name,
@@ -89,7 +91,7 @@ async def get_folder_tree():
 
 
 @router.get("/seen", name="seen_files")
-async def get_seen_files():
+async def get_seen_files(user: dict = Depends(get_current_user)):
     """Trả về nội dung seen_files.json."""
     seen_path = WORK_DIR / "seen_files.json"
     if not seen_path.is_file():
@@ -102,7 +104,7 @@ async def get_seen_files():
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile):
+async def upload_file(file: UploadFile, admin: dict = Depends(get_admin_user)):
     """Upload file .xlsx vào thư mục work/input/."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="Thiếu tên file")
@@ -168,7 +170,7 @@ async def upload_file(file: UploadFile):
 
 
 @router.get("/template")
-async def get_template():
+async def get_template(user: dict = Depends(get_current_user)):
     """Tải file template Excel mẫu cho việc phân loại phản hồi."""
     try:
         df = pd.DataFrame(
@@ -196,7 +198,7 @@ async def get_template():
 
 
 @router.post("/sync")
-async def sync_sharepoint():
+async def sync_sharepoint(admin: dict = Depends(get_admin_user)):
     """Đồng bộ thủ công hai chiều: tải về Input mới và đẩy lên Output mới."""
     sp_client = get_sharepoint_client()
     settings = get_settings()
@@ -291,7 +293,7 @@ async def sync_sharepoint():
 
 
 @router.get("/{folder}")
-async def list_files(folder: str):
+async def list_files(folder: str, user: dict = Depends(get_current_user)):
     """Liệt kê các file trong thư mục chỉ định (Duyệt SharePoint Cloud hoặc Local Fallback)."""
     folder_lower = folder.lower()
 
@@ -300,6 +302,8 @@ async def list_files(folder: str):
         "input": get_settings().sp_input_folder,
         "output": get_settings().sp_output_folder,
         "checkpoint": get_settings().sp_checkpoint_folder,
+        "keyword": get_settings().sp_keyword_folder,
+        "model": get_settings().sp_model_folder,
     }
 
     sp_folder = sp_folder_map.get(folder_lower)
@@ -346,6 +350,7 @@ async def list_files(folder: str):
                         "modified": item.get("lastModifiedDateTime", "—"),
                         "extension": Path(name).suffix.lstrip("."),
                         "source_dir": "SharePoint",
+                        "source": "sharepoint",
                         "status": status,
                         "id": item_id,
                         "web_url": item.get("webUrl"),
@@ -384,10 +389,214 @@ async def list_files(folder: str):
                             status = s_info.get("status", "done")
                             break
                 info["status"] = status
+                info["source"] = "local_cache"
+                info["id"] = None
                 info["web_url"] = None
                 files.append(info)
 
     return files
+
+
+class BulkDeleteRequest(BaseModel):
+    folder: str
+    filenames: list[str]
+
+
+class SharePointDeleteItem(BaseModel):
+    name: str
+    id: str | None = None
+
+
+class SharePointDeleteRequest(BaseModel):
+    folder: str
+    items: list[SharePointDeleteItem] = []
+    filenames: list[str] = []
+
+
+def _get_sharepoint_folder_map() -> dict[str, str]:
+    settings = get_settings()
+    return {
+        "input": settings.sp_input_folder,
+        "output": settings.sp_output_folder,
+        "checkpoint": settings.sp_checkpoint_folder,
+        "keyword": settings.sp_keyword_folder,
+        "model": settings.sp_model_folder,
+    }
+
+
+@router.get("/{folder}/{filename}/metadata")
+async def get_file_metadata(
+    folder: str,
+    filename: str,
+    user: dict = Depends(get_current_user),
+):
+    """Trả về metadata chi tiết của file Excel hoặc các định dạng khác (row_count, columns, source)."""
+    folder_lower = folder.lower()
+    dirs = _get_folder_map().get(folder_lower)
+    if dirs is None:
+        raise HTTPException(status_code=400, detail=f"Thư mục không hợp lệ: {folder}")
+
+    file_path = None
+    source = "local"
+
+    # Resolve local path first
+    for dir_path in dirs:
+        try:
+            candidate = _validate_safe_path(dir_path, filename)
+            if candidate.is_file():
+                file_path = candidate
+                # If path resides in SharePoint cache dir
+                if "config_assets" in str(dir_path) or "sharepoint" in str(dir_path).lower():
+                    source = "sharepoint"
+                break
+        except HTTPException:
+            continue
+
+    if file_path is None:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy file: {filename}")
+
+    # Check if SharePoint file based on seen_files or webUrl
+    seen_path = WORK_DIR / "seen_files.json"
+    if seen_path.is_file():
+        try:
+            seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
+            for _fid, s_info in seen_data.items():
+                if s_info.get("name") == filename:
+                    if s_info.get("web_url") or s_info.get("id"):
+                        source = "sharepoint"
+                    break
+        except Exception:
+            pass
+
+    ext = file_path.suffix.lower()
+    row_count = None
+    columns = []
+
+    if ext in {".xlsx", ".xls"}:
+        try:
+            # Fast columns read
+            df_cols = pd.read_excel(file_path, nrows=0)
+            columns = list(df_cols.columns)
+
+            # Fast row count using openpyxl for .xlsx
+            if ext == ".xlsx":
+                import openpyxl
+
+                wb = openpyxl.load_workbook(file_path, read_only=True)
+                sheet = wb.active
+                row_count = max(0, sheet.max_row - 1)
+                wb.close()
+            else:
+                df = pd.read_excel(file_path)
+                row_count = len(df)
+        except Exception as exc:
+            logger.warning("Không thể đọc metadata của file Excel %s: %s", filename, exc)
+            # fallback
+            row_count = None
+            columns = []
+
+    return {"row_count": row_count, "columns": columns, "source": source}
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_files(
+    payload: BulkDeleteRequest,
+    admin: dict = Depends(get_admin_user),
+):
+    """Xóa hàng loạt file được chọn trong thư mục chỉ định (admin only)."""
+    folder = payload.folder.lower()
+    filenames = payload.filenames
+    dirs = _get_folder_map().get(folder)
+    if dirs is None:
+        raise HTTPException(status_code=400, detail=f"Thư mục không hợp lệ: {folder}")
+    if not filenames:
+        raise HTTPException(status_code=400, detail="Danh sách file xóa trống")
+
+    deleted = []
+    failed = []
+
+    for name in filenames:
+        file_deleted = False
+        for dir_path in dirs:
+            try:
+                candidate = _validate_safe_path(dir_path, name)
+                if candidate.is_file():
+                    candidate.unlink()
+                    deleted.append(name)
+                    file_deleted = True
+                    break
+            except Exception as exc:
+                failed.append({"name": name, "reason": str(exc)})
+                file_deleted = True
+                break
+        if not file_deleted:
+            failed.append({"name": name, "reason": "File không tồn tại"})
+
+    success_count = len(deleted)
+    total_count = len(filenames)
+    return {
+        "deleted": deleted,
+        "failed": failed,
+        "delete_scope": "local_cache",
+        "message": (
+            f"Đã xóa local/cache {success_count}/{total_count} file. "
+            "SharePoint không bị xóa; dùng Xóa trên SharePoint nếu cần xóa file Cloud."
+        ),
+    }
+
+
+@router.post("/sharepoint-delete")
+async def delete_sharepoint_files(
+    payload: SharePointDeleteRequest,
+    admin: dict = Depends(get_admin_user),
+):
+    """Delete selected files from SharePoint explicitly. Local/cache delete is separate."""
+    folder = payload.folder.lower()
+    sp_folder = _get_sharepoint_folder_map().get(folder)
+    if not sp_folder:
+        raise HTTPException(status_code=400, detail=f"Thư mục không hỗ trợ SharePoint delete: {folder}")
+
+    requested: list[SharePointDeleteItem] = list(payload.items)
+    requested.extend(SharePointDeleteItem(name=name) for name in payload.filenames)
+    if not requested:
+        raise HTTPException(status_code=400, detail="Danh sách file xóa trống")
+
+    sp_client = get_sharepoint_client()
+    if sp_client is None:
+        raise HTTPException(status_code=503, detail="SharePoint chưa được cấu hình hoặc không kết nối được")
+
+    ids_by_name: dict[str, str] = {}
+    missing_id = [item.name for item in requested if not item.id]
+    if missing_id:
+        try:
+            for item in sp_client.list_folder_items(sp_folder):
+                if "file" in item and item.get("name"):
+                    ids_by_name[item["name"]] = item.get("id", "")
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"Không thể liệt kê SharePoint: {exc}") from exc
+
+    remote_deleted: list[str] = []
+    failed: list[dict] = []
+
+    for item in requested:
+        item_id = item.id or ids_by_name.get(item.name)
+        if not item_id:
+            failed.append({"name": item.name, "reason": "Không tìm thấy SharePoint item id"})
+            continue
+        try:
+            sp_client.delete_item(item_id)
+            remote_deleted.append(item.name)
+        except SharePointError as exc:
+            failed.append({"name": item.name, "reason": str(exc)})
+        except Exception as exc:
+            failed.append({"name": item.name, "reason": f"Lỗi không xác định: {exc}"})
+
+    return {
+        "delete_scope": "sharepoint",
+        "remote_deleted": remote_deleted,
+        "failed": failed,
+        "message": f"Đã xóa SharePoint {len(remote_deleted)}/{len(requested)} file.",
+    }
 
 
 MAX_PREVIEW_BYTES = 512_000  # 500 KB cap for JSON / text files
@@ -413,7 +622,7 @@ def _safe_dataframe_records(df: pd.DataFrame) -> list[dict]:
 
 
 @router.get("/{folder}/{filename}/preview")
-async def preview_file(folder: str, filename: str, max_rows: int = 20):
+async def preview_file(folder: str, filename: str, max_rows: int = 20, user: dict = Depends(get_current_user)):
     """Đọc preview file — hỗ trợ Excel, CSV, JSON, text (SharePoint Cloud hoặc Local Fallback)."""
     folder_lower = folder.lower()
 
@@ -598,7 +807,7 @@ def cleanup_file(path: Path) -> None:
 
 
 @router.get("/{folder}/{filename}/download")
-async def download_file(folder: str, filename: str, background_tasks: BackgroundTasks):
+async def download_file(folder: str, filename: str, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
     """Tải file — hỗ trợ Excel, CSV, JSON, text (SharePoint Cloud hoặc Local Fallback)."""
     folder_lower = folder.lower()
 

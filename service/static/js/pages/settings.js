@@ -30,12 +30,20 @@ window.SettingsPage = (() => {
     { id: 'model',    icon: '🤖', label: 'Model' },
     { id: 'prompt',   icon: '📝', label: 'Prompt / Dữ liệu' },
     { id: 'pipeline', icon: '🔧', label: 'Pipeline' },
+    { id: 'labels',   icon: '🏷️', label: 'Nhãn' },
     { id: 'sharepoint', icon: '🔑', label: 'SharePoint' },
     { id: 'notify',   icon: '🔔', label: 'Thông báo' },
   ];
 
+  // Label history state
+  let _labelHistory = [];
+  let _labelHistoryOffset = 0;
+  let _labelHistoryHasMore = false;
+
   function render() {
     const app = document.getElementById('app');
+    const isAdmin = App.state?.user?.role === 'admin';
+    const tabs = isAdmin ? [...TABS, { id: 'users', icon: '👥', label: 'Người dùng' }] : TABS;
     app.innerHTML = `
       <div class="page-header">
         <h2>⚙️ Cài đặt</h2>
@@ -44,7 +52,7 @@ window.SettingsPage = (() => {
 
       <!-- Tabs -->
       <div class="tabs" id="settings-tabs">
-        ${TABS.map(t => `
+        ${tabs.map(t => `
           <div class="tab-item ${t.id === _activeTab ? 'active' : ''}"
                data-tab="${t.id}"
                onclick="SettingsPage.switchTab('${t.id}')">
@@ -104,11 +112,13 @@ window.SettingsPage = (() => {
         switchSubTab(_activeSubTab);
         break;
       case 'pipeline':   el.innerHTML = renderPipelineTab(); break;
+      case 'labels':     el.innerHTML = renderLabelsTab(); loadLabelHistory(); break;
       case 'sharepoint': el.innerHTML = renderSharePointTab(); break;
       case 'notify':     
         el.innerHTML = renderNotifyTab(); 
         updateEmailCount();
         break;
+      case 'users':      el.innerHTML = renderUsersTab(); loadUsers(); break;
     }
   }
 
@@ -162,8 +172,11 @@ window.SettingsPage = (() => {
         <div id="apikey-fields" ${!isApiKey ? 'class="hidden"' : ''}>
           <div class="form-group">
             <label class="form-label">API Key</label>
-            <input type="password" class="form-input" id="set-apikey" value="${esc(s.gemini_api_key || s.api_key || '')}" placeholder="••••••••••••">
-            <span class="form-hint" style="font-size:11px;color:var(--text-muted);">Key sẽ được mã hóa bảo mật khi lưu</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="password" class="form-input" id="set-apikey" value="${esc(s.gemini_api_key || s.api_key || '')}" placeholder="••••••••••••">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-reveal-apikey" onclick="SettingsPage.revealApiKey()" title="Hiện/ẩn API key" style="white-space:nowrap;">👁️ Hiện</button>
+            </div>
+            <span class="form-hint" style="font-size:11px;color:var(--text-muted);">Key được ẩn trên giao diện; file .env cần được bảo vệ quyền truy cập</span>
           </div>
         </div>
 
@@ -241,6 +254,33 @@ window.SettingsPage = (() => {
       data.api_key = apiKeyEl.value;
     }
     return data;
+  }
+
+  async function revealApiKey() {
+    const input = document.getElementById('set-apikey');
+    const btn = document.getElementById('btn-reveal-apikey');
+    if (!input || !btn) return;
+
+    if (input.type === 'text') {
+      input.type = 'password';
+      btn.textContent = '👁️ Hiện';
+      return;
+    }
+
+    try {
+      btn.disabled = true;
+      btn.textContent = 'Đang tải...';
+      const res = await API.getSecret('gemini_api_key');
+      input.value = res.value || '';
+      input.type = 'text';
+      btn.textContent = '🙈 Ẩn';
+      if (!res.value) Toast.info('Chưa có API key được lưu');
+    } catch (e) {
+      Toast.error('Không thể hiện API key: ' + e.message);
+      btn.textContent = '👁️ Hiện';
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   async function saveModelSettings() {
@@ -431,26 +471,53 @@ window.SettingsPage = (() => {
                         onclick="SettingsPage.syncKeywordsToSP()">☁️ Đồng bộ SharePoint</button>
               `
               : `
+                <button class="btn btn-success btn-sm" onclick="SettingsPage.focusFirstKeywordInput()">➕ Thêm từ khóa</button>
+                <button class="btn btn-secondary btn-sm" onclick="SettingsPage.addKeywordGroup()">➕ Nhóm mới</button>
                 <button class="btn btn-secondary btn-sm" onclick="SettingsPage.cancelEditKeywords()">🔙 Quay lại</button>
                 <button class="btn btn-primary btn-sm" onclick="SettingsPage.saveKeywords()">💾 Lưu thay đổi</button>
+                <button class="btn btn-sm" id="btn-sync-keywords" style="background:rgba(59,130,246,0.15);color:var(--accent-blue);border:1px solid rgba(59,130,246,0.3);" 
+                        onclick="SettingsPage.syncKeywordsToSP()">☁️ Đồng bộ SharePoint</button>
               `
             }
           </div>
         </div>
 
-        <div style="max-height: 400px; overflow-y: auto; padding-right: 8px;">
-          ${categories.map(cat => `
-            <div class="form-group mb-4" style="border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px; margin-bottom:16px;">
-              <label class="form-label" style="font-weight:600; display:flex; justify-content:space-between; font-size:12px;">
-                <span>🏷️ ${esc(cat)}</span>
-                <span style="font-size:11px; font-weight:normal; color:var(--text-muted);">(${_rawKeywords[cat].length} từ khóa)</span>
+        <div style="margin-bottom:12px;">
+          <input type="text" class="form-input" placeholder="🔍 Lọc nhóm hoặc từ khóa..."
+                 oninput="SettingsPage.filterKeywordGroups(this.value)"
+                 style="font-size:12px;padding:8px 10px;">
+        </div>
+
+        <div id="kw-groups-container" style="max-height: 400px; overflow-y: auto; padding-right: 8px;">
+          ${categories.map(cat => {
+            const keywords = _rawKeywords[cat] || [];
+            return `
+            <div class="form-group mb-4 kw-group" data-group="${esc(cat)}" 
+                 ${isEditing ? 'draggable="true"' : ''}
+                 style="border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px; margin-bottom:16px;"
+                 ${isEditing ? `ondragstart="SettingsPage._kwDragStart(event)" ondragover="SettingsPage._kwDragOver(event)" ondrop="SettingsPage._kwDrop(event)" ondragend="SettingsPage._kwDragEnd(event)"` : ''}>
+              <label class="form-label" style="font-weight:600; display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+                <span style="display:flex;align-items:center;gap:6px;">
+                  ${isEditing ? '<span class="kw-drag-handle">☰</span>' : ''}
+                  🏷️ <span class="kw-group-name" ${isEditing ? `ondblclick="SettingsPage.renameKeywordGroup('${esc(cat)}', this)"` : ''}>${esc(cat)}</span>
+                </span>
+                <span style="display:flex;align-items:center;gap:8px;">
+                  <span style="font-size:11px; font-weight:normal; color:var(--text-muted);">(${keywords.length} từ khóa)</span>
+                  ${isEditing ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--accent-red);padding:2px 6px;" onclick="SettingsPage.deleteKeywordGroup('${esc(cat)}')">🗑️</button>` : ''}
+                </span>
               </label>
-              <input type="text" class="form-input keyword-input" data-cat="${esc(cat)}" 
-                     ${!isEditing ? 'disabled' : ''}
-                     value="${esc(_rawKeywords[cat].join(', '))}" placeholder="Nhập từ khóa gợi ý..." 
-                     style="font-size:12px; padding:6px 10px; ${isEditing ? 'border-color:var(--accent-blue);' : 'background:rgba(255,255,255,0.01);opacity:0.8;'}" />
+              <div style="position:relative;">
+                <input type="text" class="form-input keyword-input" data-cat="${esc(cat)}" 
+                       ${!isEditing ? 'disabled' : ''}
+                       value="${esc(keywords.join(', '))}" placeholder="Nhập từ khóa gợi ý..." 
+                       ${isEditing ? `oninput="SettingsPage._kwAutocomplete(event, '${esc(cat)}')"` : ''}
+                       onkeydown="${isEditing ? `SettingsPage._kwDropdownNav(event, '${esc(cat)}')` : ''}"
+                       style="font-size:12px; padding:6px 10px; ${isEditing ? 'border-color:var(--accent-blue);' : 'background:rgba(255,255,255,0.01);opacity:0.8;'}" />
+                <div class="kw-autocomplete-dropdown" id="kw-ac-${esc(cat)}"></div>
+              </div>
             </div>
-          `).join('')}
+          `;
+          }).join('')}
         </div>
       </div>
     `;
@@ -460,6 +527,29 @@ window.SettingsPage = (() => {
     _editStates.keywords = true;
     _backups.keywords = JSON.parse(JSON.stringify(_rawKeywords));
     renderSubTabContent();
+  }
+
+  function filterKeywordGroups(query) {
+    const q = String(query || '').trim().toLowerCase();
+    document.querySelectorAll('#kw-groups-container .kw-group').forEach(group => {
+      const name = (group.dataset.group || '').toLowerCase();
+      const input = group.querySelector('.keyword-input');
+      const keywords = (input?.value || '').toLowerCase();
+      group.style.display = !q || name.includes(q) || keywords.includes(q) ? '' : 'none';
+    });
+  }
+
+  function focusFirstKeywordInput() {
+    const input = document.querySelector('#kw-groups-container .keyword-input:not([disabled])');
+    if (!input) {
+      Toast.info('Bấm Chỉnh sửa trước khi thêm từ khóa');
+      return;
+    }
+    input.focus();
+    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const suffix = input.value.trim() ? ', ' : '';
+    input.value = input.value + suffix;
+    input.setSelectionRange(input.value.length, input.value.length);
   }
 
   function cancelEditKeywords() {
@@ -477,6 +567,14 @@ window.SettingsPage = (() => {
       data[cat] = val;
     });
 
+    // Check for duplicates before saving
+    const allDupes = _checkAllDuplicates(data);
+    if (allDupes.size > 0) {
+      const msg = `Có ${allDupes.size} từ khóa lặp giữa các nhóm. Hệ thống vẫn lưu dữ liệu.`;
+      if (Toast.warning) Toast.warning(msg);
+      else Toast.info(msg);
+    }
+
     try {
       await API.put('/pipeline/keywords', data);
       _rawKeywords = data;
@@ -486,6 +584,269 @@ window.SettingsPage = (() => {
     } catch (e) {
       Toast.error('Lỗi lưu từ khóa: ' + e.message);
     }
+  }
+
+  // === Keyword Group Management (tasks 2-3) ===
+
+  function addKeywordGroup() {
+    const name = prompt('Nhập tên nhóm keyword mới:');
+    if (!name || !name.trim()) return;
+    const trimmed = name.trim();
+    if (_rawKeywords[trimmed]) {
+      Toast.error(`Nhóm "${trimmed}" đã tồn tại`);
+      return;
+    }
+    _rawKeywords[trimmed] = [];
+    renderSubTabContent();
+    // Scroll to new group
+    setTimeout(() => {
+      const container = document.getElementById('kw-groups-container');
+      if (container) container.scrollTop = container.scrollHeight;
+    }, 100);
+    Toast.success(`Đã tạo nhóm "${trimmed}"`);
+  }
+
+  function deleteKeywordGroup(cat) {
+    const keywords = _rawKeywords[cat] || [];
+    if (keywords.length > 0) {
+      if (!confirm(`Nhóm "${cat}" có ${keywords.length} từ khóa. Bạn có chắc muốn xóa?`)) return;
+    }
+    delete _rawKeywords[cat];
+    renderSubTabContent();
+    Toast.info(`Đã xóa nhóm "${cat}"`);
+  }
+
+  function renameKeywordGroup(oldName, labelEl) {
+    if (!_editStates.keywords) return;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'kw-rename-input';
+    input.value = oldName;
+    labelEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const doRename = () => {
+      const newName = input.value.trim();
+      if (!newName || newName === oldName) {
+        const span = document.createElement('span');
+        span.className = 'kw-group-name';
+        span.textContent = oldName;
+        span.ondblclick = () => renameKeywordGroup(oldName, span);
+        input.replaceWith(span);
+        return;
+      }
+      if (_rawKeywords[newName]) {
+        Toast.error(`Nhóm "${newName}" đã tồn tại`);
+        input.focus();
+        return;
+      }
+      // Copy data to new key, delete old
+      _rawKeywords[newName] = _rawKeywords[oldName];
+      delete _rawKeywords[oldName];
+      renderSubTabContent();
+      Toast.success(`Đã đổi tên "${oldName}" → "${newName}"`);
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); doRename(); }
+      if (e.key === 'Escape') {
+        const span = document.createElement('span');
+        span.className = 'kw-group-name';
+        span.textContent = oldName;
+        span.ondblclick = () => renameKeywordGroup(oldName, span);
+        input.replaceWith(span);
+      }
+    });
+    input.addEventListener('blur', doRename);
+  }
+
+  // === Drag & Drop Reorder (tasks 4.1-4.2) ===
+
+  let _kwDragSource = null;
+
+  function _kwDragStart(e) {
+    _kwDragSource = e.currentTarget;
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', e.currentTarget.dataset.group);
+  }
+
+  function _kwDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const target = e.currentTarget;
+    if (target !== _kwDragSource) {
+      target.classList.add('drag-over');
+    }
+  }
+
+  function _kwDrop(e) {
+    e.preventDefault();
+    const target = e.currentTarget;
+    target.classList.remove('drag-over');
+    if (!_kwDragSource || target === _kwDragSource) return;
+
+    const srcGroup = _kwDragSource.dataset.group;
+    const tgtGroup = target.dataset.group;
+
+    // Reorder keys in _rawKeywords
+    const keys = Object.keys(_rawKeywords);
+    const srcIdx = keys.indexOf(srcGroup);
+    const tgtIdx = keys.indexOf(tgtGroup);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+
+    keys.splice(srcIdx, 1);
+    keys.splice(tgtIdx, 0, srcGroup);
+
+    const reordered = {};
+    keys.forEach(k => { reordered[k] = _rawKeywords[k]; });
+    _rawKeywords = reordered;
+    renderSubTabContent();
+  }
+
+  function _kwDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    document.querySelectorAll('.kw-group.drag-over').forEach(el => el.classList.remove('drag-over'));
+    _kwDragSource = null;
+  }
+
+  // === Autocomplete (tasks 5.1-5.4) ===
+
+  let _kwAcTimer = null;
+  let _kwAcHighlight = -1;
+
+  function _kwAutocomplete(e, cat) {
+    const input = e.target;
+    const val = input.value;
+    // Get last keyword being typed (after last comma)
+    const parts = val.split(',');
+    const query = (parts[parts.length - 1] || '').trim();
+
+    if (query.length < 2) {
+      _kwHideDropdown(cat);
+      return;
+    }
+
+    // Debounce 300ms
+    if (_kwAcTimer) clearTimeout(_kwAcTimer);
+    _kwAcTimer = setTimeout(async () => {
+      try {
+        const res = await API.get(`/pipeline/keywords/search?q=${encodeURIComponent(query)}`);
+        const results = res.results || [];
+        _kwShowDropdown(cat, results, input);
+      } catch (e) {
+        _kwHideDropdown(cat);
+      }
+    }, 300);
+  }
+
+  function _kwShowDropdown(cat, results, input) {
+    const dd = document.getElementById(`kw-ac-${cat}`);
+    if (!dd || results.length === 0) { _kwHideDropdown(cat); return; }
+
+    _kwAcHighlight = -1;
+    dd.innerHTML = results.map((r, i) => `
+      <div class="kw-autocomplete-item" data-idx="${i}" data-keyword="${escAttr(String(r.keyword))}">
+        <span>${esc(r.keyword)}</span>
+        <span class="kw-ac-group">${esc(r.group)}</span>
+      </div>
+    `).join('');
+    dd.querySelectorAll('.kw-autocomplete-item').forEach(item => {
+      item.addEventListener('click', () => _kwSelectAc(cat, item.dataset.keyword || ''));
+    });
+    dd.classList.add('visible');
+    dd._results = results;
+  }
+
+  function _kwHideDropdown(cat) {
+    const dd = document.getElementById(`kw-ac-${cat}`);
+    if (dd) { dd.classList.remove('visible'); dd.innerHTML = ''; }
+    _kwAcHighlight = -1;
+  }
+
+  function _kwSelectAc(cat, keyword) {
+    const input = document.querySelector(`.keyword-input[data-cat="${cat}"]`);
+    if (!input) return;
+
+    // Check for duplicate in same group
+    const existing = input.value.split(',').map(v => v.trim().toLowerCase()).filter(Boolean);
+    if (existing.includes(keyword.toLowerCase())) {
+      Toast.error(`"${keyword}" từ khóa đã có trong nhóm này`);
+      _kwHideDropdown(cat);
+      return;
+    }
+
+    // Append keyword after last comma
+    const parts = input.value.split(',').map(v => v.trim()).filter(Boolean);
+    parts.push(keyword);
+    input.value = parts.join(', ');
+    _kwHideDropdown(cat);
+    input.focus();
+
+    Toast.success(`Đã thêm từ khóa "${keyword}"`);
+  }
+
+  function _kwDropdownNav(e, cat) {
+    const dd = document.getElementById(`kw-ac-${cat}`);
+    if (!dd || !dd.classList.contains('visible') || !dd._results) return;
+
+    const items = dd.querySelectorAll('.kw-autocomplete-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      _kwAcHighlight = Math.min(_kwAcHighlight + 1, items.length - 1);
+      items.forEach((it, i) => it.classList.toggle('highlighted', i === _kwAcHighlight));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      _kwAcHighlight = Math.max(_kwAcHighlight - 1, 0);
+      items.forEach((it, i) => it.classList.toggle('highlighted', i === _kwAcHighlight));
+    } else if (e.key === 'Enter' && _kwAcHighlight >= 0) {
+      e.preventDefault();
+      const selected = dd._results[_kwAcHighlight];
+      if (selected) _kwSelectAc(cat, selected.keyword);
+    } else if (e.key === 'Escape') {
+      _kwHideDropdown(cat);
+    }
+  }
+
+  // === Duplicate Detection (tasks 6.1-6.3) ===
+
+  function _checkDuplicatesForGroup(cat) {
+    if (!_rawKeywords) return [];
+    const myKeywords = (_rawKeywords[cat] || []).map(k => k.toLowerCase());
+    const dupes = [];
+    for (const [otherCat, otherKws] of Object.entries(_rawKeywords)) {
+      if (otherCat === cat || otherCat === 'manual_brand_alias') continue;
+      for (const kw of otherKws) {
+        if (myKeywords.includes(kw.toLowerCase())) {
+          dupes.push({ keyword: kw, group: otherCat });
+        }
+      }
+    }
+    return dupes;
+  }
+
+  function _checkAllDuplicates(data) {
+    const seen = new Map(); // keyword -> [groups]
+    const dupes = new Map();
+    for (const [cat, keywords] of Object.entries(data)) {
+      if (cat === 'manual_brand_alias') continue;
+      for (const kw of keywords) {
+        const lower = kw.toLowerCase();
+        if (!seen.has(lower)) {
+          seen.set(lower, [cat]);
+        } else {
+          seen.get(lower).push(cat);
+          dupes.set(kw, seen.get(lower));
+        }
+      }
+    }
+    return dupes;
+  }
+
+  function _updateDuplicateWarnings() {
+    // Re-render to show updated duplicate badges
+    renderSubTabContent();
   }
 
   /* ---- Products Excel Sub-tab ---- */
@@ -591,6 +952,8 @@ window.SettingsPage = (() => {
                 <button class="btn btn-primary btn-sm" style="padding:4px 10px; font-size:12px;" onclick="SettingsPage.saveProducts()">
                   💾 Lưu thay đổi
                 </button>
+                <button class="btn btn-sm" id="btn-sync-products" style="padding:4px 10px; font-size:12px; background:rgba(59,130,246,0.15);color:var(--accent-blue);border:1px solid rgba(59,130,246,0.3);" 
+                        onclick="SettingsPage.syncProductsToSP()">☁️ Đồng bộ SharePoint</button>
               `
               : `
                 <button class="btn btn-secondary btn-sm" style="padding:4px 10px; font-size:12px;" onclick="SettingsPage.toggleEditProducts()">✏️ Chỉnh sửa</button>
@@ -902,6 +1265,10 @@ window.SettingsPage = (() => {
     return d.innerHTML;
   }
 
+  function escAttr(s) {
+    return esc(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   function destroy() {}
 
   /* ---- Sync to SharePoint ---- */
@@ -915,7 +1282,7 @@ window.SettingsPage = (() => {
       const res = await API.syncKeywordsToSP();
       Toast.success(res.message || 'Đã đồng bộ từ khóa lên SharePoint');
     } catch (e) {
-      Toast.error('Đồng bộ thất bại: ' + e.message);
+      Toast.error('Lỗi đồng bộ từ khóa lên SharePoint: ' + e.message);
     } finally {
       btn.disabled = false;
       btn.innerHTML = origText;
@@ -932,19 +1299,420 @@ window.SettingsPage = (() => {
       const res = await API.syncProductsToSP();
       Toast.success(res.message || 'Đã đồng bộ sản phẩm lên SharePoint');
     } catch (e) {
-      Toast.error('Đồng bộ thất bại: ' + e.message);
+      Toast.error('Lỗi đồng bộ sản phẩm lên SharePoint: ' + e.message);
     } finally {
       btn.disabled = false;
       btn.innerHTML = origText;
     }
   }
 
+  // === Label Timeline (tasks 4.1-4.5) ===
+
+  function renderLabelsTab() {
+    return `
+      <div class="animate-in">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <p class="form-hint" style="color:var(--text-muted); font-size:12px; margin:0;">
+            Lịch sử thay đổi nhãn phân loại. Nhấn vào mục để xem chi tiết.
+          </p>
+        </div>
+
+        <div class="timeline-filter">
+          <label style="font-size:12px;color:var(--text-muted);">Từ ngày:</label>
+          <input type="date" id="label-date-from">
+          <label style="font-size:12px;color:var(--text-muted);">Đến ngày:</label>
+          <input type="date" id="label-date-to">
+          <button class="btn btn-secondary btn-sm" onclick="SettingsPage.filterLabelHistory()">🔍 Lọc</button>
+        </div>
+
+        <div id="label-timeline" class="timeline-container"></div>
+
+        <div id="label-load-more" class="hidden" style="text-align:center;margin-top:12px;">
+          <button class="btn btn-secondary btn-sm" onclick="SettingsPage.loadMoreLabelHistory()">📋 Xem thêm</button>
+        </div>
+      </div>
+    `;
+  }
+
+  async function loadLabelHistory(append = false) {
+    if (!append) {
+      _labelHistoryOffset = 0;
+      _labelHistory = [];
+    }
+
+    const dateFrom = document.getElementById('label-date-from')?.value || '';
+    const dateTo = document.getElementById('label-date-to')?.value || '';
+
+    let url = `/pipeline/labels/history?limit=20&offset=${_labelHistoryOffset}`;
+    if (dateFrom) url += `&date_from=${dateFrom}`;
+    if (dateTo) url += `&date_to=${dateTo}`;
+
+    try {
+      const res = await API.get(url);
+      const items = res.items || [];
+      _labelHistoryHasMore = res.has_more || false;
+
+      if (append) {
+        _labelHistory.push(...items);
+      } else {
+        _labelHistory = items;
+      }
+
+      _labelHistoryOffset += items.length;
+      _renderTimeline();
+    } catch (e) {
+      Toast.error('Lỗi tải lịch sử nhãn: ' + e.message);
+    }
+  }
+
+  function _renderTimeline() {
+    const container = document.getElementById('label-timeline');
+    if (!container) return;
+
+    if (_labelHistory.length === 0) {
+      container.innerHTML = `
+        <div class="timeline-empty">
+          <div class="empty-icon">📋</div>
+          <p>Chưa có lịch sử thay đổi nhãn</p>
+        </div>
+      `;
+    } else {
+      container.innerHTML = _labelHistory.map((entry, i) => _renderTimelineEntry(entry, i)).join('');
+    }
+
+    // Show/hide load more
+    const loadMoreBtn = document.getElementById('label-load-more');
+    if (loadMoreBtn) {
+      loadMoreBtn.classList.toggle('hidden', !_labelHistoryHasMore);
+    }
+  }
+
+  function _renderTimelineEntry(entry, index) {
+    const actionIcons = { add: '➕', edit: '✏️', delete: '❌' };
+    const actionLabels = { add: 'Thêm', edit: 'Sửa', delete: 'Xóa' };
+    const icon = actionIcons[entry.action] || '📝';
+    const actionLabel = actionLabels[entry.action] || entry.action;
+
+    // Format timestamp to VN format
+    let timeStr = entry.timestamp || '';
+    try {
+      const d = new Date(timeStr);
+      timeStr = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    } catch { /* keep original */ }
+
+    const oldVal = entry.old_value != null ? (typeof entry.old_value === 'object' ? JSON.stringify(entry.old_value, null, 2) : String(entry.old_value)) : null;
+    const newVal = entry.new_value != null ? (typeof entry.new_value === 'object' ? JSON.stringify(entry.new_value, null, 2) : String(entry.new_value)) : null;
+
+    return `
+      <div class="timeline-entry action-${esc(entry.action)}" onclick="this.classList.toggle('expanded')">
+        <div class="timeline-header">
+          <span class="timeline-title">
+            ${icon} <strong>${esc(entry.label_name)}</strong>
+            <span class="chip" style="font-size:10px;">${actionLabel}</span>
+            <span class="text-muted" style="font-size:11px;">(${esc(entry.field)})</span>
+          </span>
+          <span class="timeline-meta">
+            <span>👤 ${esc(entry.user || 'Admin')}</span>
+            <span>🕐 ${timeStr}</span>
+          </span>
+        </div>
+        ${oldVal != null || newVal != null ? `
+          <div class="timeline-details">
+            <div class="timeline-diff">
+              ${oldVal != null ? `<div class="diff-old"><div style="font-size:10px;color:var(--accent-red);margin-bottom:4px;">Giá trị cũ:</div>${esc(oldVal)}</div>` : '<div></div>'}
+              ${newVal != null ? `<div class="diff-new"><div style="font-size:10px;color:var(--accent-green);margin-bottom:4px;">Giá trị mới:</div>${esc(newVal)}</div>` : '<div></div>'}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  function filterLabelHistory() {
+    loadLabelHistory(false);
+  }
+
+  function loadMoreLabelHistory() {
+    loadLabelHistory(true);
+  }
+
+  /* ---- Users Tab (Admin) ---- */
+  let _users = [];
+
+  function renderUsersTab() {
+    return `
+      <div class="card animate-in" style="max-width:900px;">
+        <div class="card-header">
+          <span class="card-title"><span class="icon">👥</span> Quản lý người dùng</span>
+          <button class="btn btn-primary btn-sm" onclick="SettingsPage.createUser()">➕ Thêm người dùng</button>
+        </div>
+        <div class="table-wrap">
+          <table class="table" id="users-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Tên đăng nhập</th>
+                <th>Tên hiển thị</th>
+                <th>Vai trò</th>
+                <th>Trạng thái</th>
+                <th style="width:120px;">Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="6"><div class="text-center" style="padding:30px;"><span class="spinner"></span></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  async function loadUsers() {
+    const tbody = document.getElementById('users-tbody');
+    if (!tbody) return;
+    try {
+      const res = await API.get('/users');
+      _users = res.users || res;
+      if (_users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="padding:30px;"><div class="empty-state-icon">👤</div><p class="empty-state-text">Chưa có người dùng</p></div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = _users.map((u, i) => `
+        <tr>
+          <td class="text-muted">${i + 1}</td>
+          <td><strong>${esc(u.username)}</strong></td>
+          <td>${esc(u.display_name || '—')}</td>
+          <td><span class="badge ${u.role === 'admin' ? 'badge-blue' : 'badge-muted'}">${esc(u.role)}</span></td>
+          <td><span class="badge ${u.is_active !== false ? 'badge-green' : 'badge-red'}">${u.is_active !== false ? 'Hoạt động' : 'Vô hiệu'}</span></td>
+          <td>
+            <div style="display:flex;gap:4px;">
+              <button class="btn btn-ghost btn-sm" onclick="SettingsPage.editUser('${esc(u.username)}')" title="Sửa">✏️</button>
+              <button class="btn btn-ghost btn-sm" onclick="SettingsPage.deleteUser('${esc(u.username)}')" title="Xóa" style="color:var(--accent-red);">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="text-center text-red" style="padding:30px;">Lỗi tải danh sách: ${esc(e.message)}</div></td></tr>`;
+    }
+  }
+
+  function createUser() {
+    App.showModal(`
+      <div style="max-width:400px;">
+        <h3 style="margin-bottom:16px;">➕ Thêm người dùng</h3>
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">Tên đăng nhập</label>
+          <input type="text" class="form-input" id="new-user-username" placeholder="username" required>
+        </div>
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">Tên hiển thị</label>
+          <input type="text" class="form-input" id="new-user-display" placeholder="Tên hiển thị">
+        </div>
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">Mật khẩu</label>
+          ${PasswordControls.renderInput({
+            id: 'new-user-password',
+            toggleId: 'new-user-password-toggle',
+            hintId: 'new-user-password-ascii-hint',
+            placeholder: 'Mật khẩu',
+            autocomplete: 'new-password',
+            required: true,
+          })}
+        </div>
+        <div class="form-group" style="margin-bottom:16px;">
+          <label class="form-label">Vai trò</label>
+          <select class="form-select" id="new-user-role">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-secondary btn-sm" onclick="App.closeModal()">Hủy</button>
+          <button class="btn btn-primary btn-sm" id="btn-create-user">💾 Tạo</button>
+        </div>
+      </div>
+    `);
+    document.getElementById('btn-create-user')?.addEventListener('click', async () => {
+      const username = document.getElementById('new-user-username')?.value?.trim();
+      const display_name = document.getElementById('new-user-display')?.value?.trim();
+      const password = PasswordControls.normalizeInput('new-user-password', 'new-user-password-ascii-hint');
+      const role = document.getElementById('new-user-role')?.value;
+      if (!username || !password) { Toast.error('Vui lòng nhập đầy đủ thông tin'); return; }
+      try {
+        await API.post('/users', { username, password, display_name, role, is_active: true });
+        Toast.success(`Đã tạo người dùng "${username}"`);
+        App.closeModal();
+        loadUsers();
+      } catch (e) {
+        Toast.error('Lỗi tạo người dùng: ' + e.message);
+      }
+    });
+  }
+
+  function editUser(username) {
+    const user = _users.find(u => u.username === username);
+    if (!user) return;
+    App.showModal(`
+      <div style="max-width:400px;">
+        <h3 style="margin-bottom:16px;">✏️ Sửa người dùng: ${esc(username)}</h3>
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">Tên hiển thị</label>
+          <input type="text" class="form-input" id="edit-user-display" value="${esc(user.display_name || '')}">
+        </div>
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">Mật khẩu mới (để trống nếu không đổi)</label>
+          ${PasswordControls.renderInput({
+            id: 'edit-user-password',
+            toggleId: 'edit-user-password-toggle',
+            hintId: 'edit-user-password-ascii-hint',
+            placeholder: 'Để trống nếu không đổi',
+            autocomplete: 'new-password',
+          })}
+        </div>
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">Vai trò</label>
+          <select class="form-select" id="edit-user-role">
+            <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
+            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:16px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="edit-user-active" ${user.is_active !== false ? 'checked' : ''}>
+            Hoạt động
+          </label>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-secondary btn-sm" onclick="App.closeModal()">Hủy</button>
+          <button class="btn btn-primary btn-sm" id="btn-save-user">💾 Lưu</button>
+        </div>
+      </div>
+    `);
+    document.getElementById('btn-save-user')?.addEventListener('click', async () => {
+      const data = {
+        display_name: document.getElementById('edit-user-display')?.value?.trim(),
+        role: document.getElementById('edit-user-role')?.value,
+        is_active: document.getElementById('edit-user-active')?.checked,
+      };
+      const newPass = PasswordControls.normalizeInput('edit-user-password', 'edit-user-password-ascii-hint');
+      if (newPass) data.password = newPass;
+      try {
+        await API.put(`/users/${username}`, data);
+        Toast.success(`Đã cập nhật người dùng "${username}"`);
+        App.closeModal();
+        loadUsers();
+      } catch (e) {
+        Toast.error('Lỗi cập nhật: ' + e.message);
+      }
+    });
+  }
+
+  async function deleteUser(username) {
+    if (!confirm(`Bạn có chắc muốn xóa người dùng "${username}"?`)) return;
+    try {
+      await API.del(`/users/${username}`);
+      Toast.success(`Đã xóa người dùng "${username}"`);
+      loadUsers();
+    } catch (e) {
+      Toast.error('Lỗi xóa người dùng: ' + e.message);
+    }
+  }
+
+  function openPromptAssetEditor() {
+    if (window.App?.state?.user?.role !== 'admin') {
+      Toast.error('Bạn không có quyền chỉnh sửa prompt');
+      return;
+    }
+    _activeTab = 'prompt';
+    _activeSubTab = 'prompt_text';
+    _editStates.prompt = true;
+    _backups.prompt = _prompt;
+    window.location.hash = '#settings';
+    if (window.App) App.renderPage('settings');
+    setTimeout(() => {
+      switchTab('prompt');
+      switchSubTab('prompt_text');
+      document.getElementById('prompt-textarea')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      Toast.info('Đã mở editor System Prompt. Dùng Lưu thay đổi để lưu vào file hệ thống.');
+    }, 50);
+  }
+
+  async function openKeywordAssetEditor() {
+    if (window.App?.state?.user?.role !== 'admin') {
+      Toast.error('Bạn không có quyền chỉnh sửa từ khóa');
+      return;
+    }
+    _activeTab = 'prompt';
+    _activeSubTab = 'keywords';
+    if (!_rawKeywords) {
+      try {
+        _rawKeywords = await API.get('/pipeline/keywords/raw');
+      } catch (e) {
+        Toast.error('Không thể tải từ khóa: ' + e.message);
+        return;
+      }
+    }
+    _editStates.keywords = true;
+    _backups.keywords = JSON.parse(JSON.stringify(_rawKeywords));
+    window.location.hash = '#settings';
+    if (window.App) App.renderPage('settings');
+    setTimeout(() => {
+      switchTab('prompt');
+      switchSubTab('keywords');
+      document.getElementById('kw-groups-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      Toast.info('Đã mở editor từ khóa. Dùng Lưu thay đổi để lưu local, Đồng bộ SharePoint để đẩy lên Cloud.');
+    }, 50);
+  }
+
+  async function openProductAssetEditor() {
+    if (window.App?.state?.user?.role !== 'admin') {
+      Toast.error('Bạn không có quyền chỉnh sửa sản phẩm');
+      return;
+    }
+    _activeTab = 'prompt';
+    _activeSubTab = 'products';
+    if (!_productsData) {
+      try {
+        const res = await API.get('/pipeline/products/list');
+        _productsData = res.sheets || {};
+        _productsColumns = {};
+        _productsSheetNames = res.sheet_names || ['Lọc lần 1', 'Lọc lần 2', 'Lọc lần 3'];
+        for (const name of _productsSheetNames) {
+          _productsColumns[name] = _productsData[name]?.columns || ['Sản phẩm', 'Dòng SP', 'Model'];
+          _productsData[name] = _productsData[name]?.products || [];
+        }
+        _activeProductSheet = _productsSheetNames[0] || 'Lọc lần 1';
+      } catch (e) {
+        Toast.error('Không thể tải bảng sản phẩm: ' + e.message);
+        return;
+      }
+    }
+    _editStates.products = true;
+    _backups.products = JSON.parse(JSON.stringify(_productsData));
+    window.location.hash = '#settings';
+    if (window.App) App.renderPage('settings');
+    setTimeout(() => {
+      switchTab('prompt');
+      switchSubTab('products');
+      document.getElementById('products-edit-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      Toast.info('Đã mở editor sản phẩm. Dùng Lưu thay đổi để lưu local, Đồng bộ SharePoint để đẩy lên Cloud.');
+    }, 50);
+  }
+
   return {
-    render, destroy, switchTab, onBackendChange, testConnection,
+    render, destroy, switchTab, onBackendChange, testConnection, revealApiKey,
     toggleEditPrompt, cancelEditPrompt, copyPrompt, savePrompt, saveModelSettings, savePipelineSettings,
     switchSubTab, renderSubTabContent, toggleEditKeywords, cancelEditKeywords, saveKeywords,
+    filterKeywordGroups, focusFirstKeywordInput,
     toggleEditProducts, cancelEditProducts, switchProductSheet, saveProducts, addProductRow, deleteProductRow,
     updateEmailCount, saveNotificationSettings,
-    syncKeywordsToSP, syncProductsToSP
+    syncKeywordsToSP, syncProductsToSP,
+    addKeywordGroup, deleteKeywordGroup, renameKeywordGroup,
+    _kwDragStart, _kwDragOver, _kwDrop, _kwDragEnd,
+    _kwAutocomplete, _kwDropdownNav, _kwSelectAc,
+    renderLabelsTab, loadLabelHistory, filterLabelHistory, loadMoreLabelHistory,
+    createUser, editUser, deleteUser, loadUsers,
+    openPromptAssetEditor, openKeywordAssetEditor, openProductAssetEditor
   };
 })();

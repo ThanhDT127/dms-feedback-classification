@@ -3,9 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="DMS - Hệ thống phân loại phản hồi khách hàng">
-  <meta name="theme-color" content="#0f1117">
-  <title>DMS Phân loại phản hồi</title>
+  <meta name="description" content="Phân loại phản hồi tiếp thị — Hệ thống phân loại phản hồi khách hàng">
+  <meta name="theme-color" content="#0f1117" id="meta-theme-color">
+  <title>Phân loại phản hồi tiếp thị</title>
+  <script>
+    // FOUC prevention: apply theme before render
+    (function() {
+      var theme = localStorage.getItem('dms-theme');
+      if (!theme) {
+        theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      }
+      document.documentElement.setAttribute('data-theme', theme);
+      var meta = document.getElementById('meta-theme-color');
+      if (meta) meta.content = theme === 'light' ? '#f8fafc' : '#0f1117';
+    })();
+  </script>
 
   <!-- Favicon -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
@@ -33,7 +45,7 @@
     <!-- Top bar for mobile -->
     <header class="topbar">
       <button class="topbar-menu" onclick="window.App.toggleSidebar()" aria-label="Menu">☰</button>
-      <span class="topbar-title">DMS Phân loại phản hồi</span>
+      <span class="topbar-title">Phân loại phản hồi tiếp thị</span>
     </header>
 
     <!-- Page container -->
@@ -49,18 +61,20 @@
   </div>
 
   <!-- Scripts (order matters) -->
-  <script src="js/api.js?v=1.0.1"></script>
+  <script src="js/api.js?v=1.0.2"></script>
   <script src="js/ws.js?v=1.0.1"></script>
   <script src="js/components/toast.js?v=1.0.1"></script>
   <script src="js/components/charts.js?v=1.0.4"></script>
+  <script src="js/components/password.js?v=1.0.1"></script>
   <script src="js/components/sidebar.js?v=1.0.1"></script>
   <script src="js/pages/dashboard.js?v=1.0.1"></script>
-  <script src="js/pages/files.js?v=1.0.1"></script>
+  <script src="js/pages/files.js?v=1.0.2"></script>
   <script src="js/pages/classify.js?v=1.0.8"></script>
-  <script src="js/pages/settings.js?v=1.0.1"></script>
+  <script src="js/pages/settings.js?v=1.0.2"></script>
   <script src="js/pages/pipeline.js?v=1.0.1"></script>
   <script src="js/pages/metrics.js?v=1.0.1"></script>
   <script src="js/pages/qa.js?v=1.0.1"></script>
-  <script src="js/app.js?v=1.0.1"></script>
+  <script src="js/pages/login.js?v=1.0.1"></script>
+  <script src="js/app.js?v=1.0.2"></script>
 </body>
 </html>

@@ -8,12 +8,13 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from ...settings import SERVICE_DIR
 from .. import deps
+from ..deps import get_current_user
 
 logger = logging.getLogger("dms-web")
 
@@ -36,7 +37,7 @@ class TextClassifyRequest(BaseModel):
 
 
 @router.post("/text")
-async def classify_text(body: TextClassifyRequest):
+async def classify_text(body: TextClassifyRequest, user: dict = Depends(get_current_user)):
     """Phân loại một đoạn văn bản."""
     gemini = deps.get_gemini()
     if gemini is None:
@@ -193,6 +194,7 @@ async def classify_file(
     request: Request,
     file: UploadFile,
     mode: str = Form("single"),
+    user: dict = Depends(get_current_user),
 ):
     """Upload và phân loại file Excel trong background."""
     if not file.filename:
@@ -272,14 +274,14 @@ async def classify_file(
 
 
 @router.get("/jobs")
-async def list_jobs(request: Request):
+async def list_jobs(request: Request, user: dict = Depends(get_current_user)):
     """Liệt kê tất cả các job phân loại."""
     jobs: dict = request.app.state.jobs
     return list(jobs.values())
 
 
 @router.get("/jobs/{job_id}")
-async def get_job(request: Request, job_id: str):
+async def get_job(request: Request, job_id: str, user: dict = Depends(get_current_user)):
     """Lấy trạng thái của một job."""
     jobs: dict = request.app.state.jobs
     job = jobs.get(job_id)
@@ -289,7 +291,7 @@ async def get_job(request: Request, job_id: str):
 
 
 @router.delete("/jobs/{job_id}")
-async def cancel_job(request: Request, job_id: str):
+async def cancel_job(request: Request, job_id: str, user: dict = Depends(get_current_user)):
     """Hủy một job (đánh dấu cancelled, thread sẽ dừng tự nhiên)."""
     jobs: dict = request.app.state.jobs
     job = jobs.get(job_id)
@@ -304,7 +306,7 @@ async def cancel_job(request: Request, job_id: str):
 
 
 @router.get("/jobs/{job_id}/download")
-async def download_job_result(request: Request, job_id: str):
+async def download_job_result(request: Request, job_id: str, user: dict = Depends(get_current_user)):
     """Tải file Excel kết quả phân loại."""
     jobs: dict = request.app.state.jobs
     job = jobs.get(job_id)
@@ -342,7 +344,7 @@ async def download_job_result(request: Request, job_id: str):
 
 
 @router.post("/jobs/{job_id}/sharepoint")
-async def upload_job_to_sharepoint(request: Request, job_id: str):
+async def upload_job_to_sharepoint(request: Request, job_id: str, user: dict = Depends(get_current_user)):
     """Upload cả file input và output của job lên SharePoint."""
     jobs: dict = request.app.state.jobs
     job = jobs.get(job_id)
