@@ -241,10 +241,9 @@ graph TD
         Runner[Pipeline Coordinator / Runner]
         
         subgraph Pipeline ["AI Processing Pipeline"]
-            ML[Stage 1: ML Baseline <br/> TF-IDF + Logistic Regression]
-            LLM[Stage 2: LLM Refinement <br/> Gemini 2.5 Flash Lite]
-            RAG[Stage 3: Product RAG <br/> BM25 Okapi + RapidFuzz]
-            Post[Stage 4: Post-Processing <br/> Guardrail Validation]
+            RAG[Stage 1: Product RAG <br/> BM25 Okapi + Trích xuất LLM]
+            LLM[Stage 2: Phân loại LLM <br/> Gemini 2.5 Flash Lite]
+            Post[Stage 3: Hậu xử lý <br/> Guardrail Validation]
         end
         
         DB[(Local Cache / Excel DB)]
@@ -260,11 +259,10 @@ graph TD
     Poll -->|Trigger Job| Runner
     Web -->|Manual Job Upload| Runner
     
-    Runner -->|Load Comments| ML
-    ML -->|Category Candidates| LLM
-    LLM -->|Extract Terms| RAG
-    RAG -->|Matched Catalog Models| Post
-    Post -->|Final Labels & Metadata| Runner
+    Runner -->|Load Comments| RAG
+    RAG -->|Matched Product Context| LLM
+    LLM -->|Raw JSON Labels| Post
+    Post -->|Validated Metadata & Labels| Runner
     
     Runner -->|Save State| Reconcile
     Runner -->|Save Local Copy| DB
@@ -274,11 +272,11 @@ graph TD
     Runner -->|Alert| Email
 ```
 
-### 1. Phân loại Hybrid ML & LLM
-Dịch vụ triển khai mô hình phân loại kép:
-* **Giai đoạn 1 (ML Baseline):** Sử dụng các vector hóa TF-IDF cục bộ kết hợp với mô hình One-Vs-Rest Logistic Regression để dự đoán nhanh các nhãn ứng cử viên tiềm năng.
-* **Giai đoạn 2 (LLM Tinh chỉnh):** Gửi phản hồi kèm danh sách nhãn dự phòng từ ML sang Gemini 2.5 Flash Lite. LLM đánh giá các biên giới ngữ nghĩa (như phân biệt giữa "Báo lỗi" và "Y/c cải tiến") và trả về kết quả JSON có cấu trúc.
-* **Giai đoạn 3 (Hậu xử lý):** Các quy tắc Python (guardrails) làm sạch kết quả JSON (loại bỏ nhãn đối thủ nếu không nhắc tới hãng nào, xóa nhãn "Tin trung lập" nếu bất kỳ nhãn lỗi/yêu cầu nào khác được kích hoạt).
+### 1. Quy trình xử lý AI nhiều giai đoạn
+Dịch vụ triển khai quy trình phân loại và truy vấn thông tin qua 3 giai đoạn chính:
+* **Giai đoạn 1 (Đối chiếu sản phẩm RAG):** Trích xuất các model và dòng sản phẩm ứng viên từ danh mục sản phẩm của Rạng Đông bằng cơ chế tìm kiếm BM25 chỉ mục kép (gốc và không dấu) kết hợp trích xuất từ khóa thô bằng LLM và đối chiếu từ khóa fallback.
+* **Giai đoạn 2 (Phân loại bằng LLM):** Gửi phản hồi kèm theo các gợi ý sản phẩm từ bước RAG sang Gemini 2.5 Flash Lite. LLM thực hiện phân loại có cấu trúc dựa trên các biên giới ngữ nghĩa nghiệp vụ (như phân biệt giữa "Báo lỗi" và "Y/c cải tiến") và trả về JSON sạch.
+* **Giai đoạn 3 (Hậu xử lý & Guardrails):** Xác thực và làm sạch kết quả JSON thông qua tập luật Python (như áp dụng cổng chặn hãng đối thủ, thiết lập nhãn trung lập mặc định khi không kích hoạt nhãn nào, loại bỏ các nhãn mâu thuẫn).
 
 ### 2. Luồng đối chiếu RAG BM25 + LLM
 Để ánh xạ các từ lóng, viết tắt, hoặc tên model viết sai chính tả trong comment về danh mục sản phẩm chính thức của Rạng Đông:
