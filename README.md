@@ -243,10 +243,9 @@ graph TD
         Runner[Pipeline Coordinator / Runner]
         
         subgraph Pipeline ["AI Processing Pipeline"]
-            ML[Stage 1: ML Baseline <br/> TF-IDF + Logistic Regression]
-            LLM[Stage 2: LLM Refinement <br/> Gemini 2.5 Flash Lite]
-            RAG[Stage 3: Product RAG <br/> BM25 Okapi + RapidFuzz]
-            Post[Stage 4: Post-Processing <br/> Guardrail Validation]
+            RAG[Stage 1: Product RAG <br/> BM25 Okapi + LLM Extraction]
+            LLM[Stage 2: LLM Classification <br/> Gemini 2.5 Flash Lite]
+            Post[Stage 3: Post-Processing <br/> Guardrail Validation]
         end
         
         DB[(Local Cache / Excel DB)]
@@ -262,11 +261,10 @@ graph TD
     Poll -->|Trigger Job| Runner
     Web -->|Manual Job Upload| Runner
     
-    Runner -->|Load Comments| ML
-    ML -->|Category Candidates| LLM
-    LLM -->|Extract Terms| RAG
-    RAG -->|Matched Catalog Models| Post
-    Post -->|Final Labels & Metadata| Runner
+    Runner -->|Load Comments| RAG
+    RAG -->|Matched Product Context| LLM
+    LLM -->|Raw JSON Labels| Post
+    Post -->|Validated Metadata & Labels| Runner
     
     Runner -->|Save State| Reconcile
     Runner -->|Save Local Copy| DB
@@ -276,11 +274,11 @@ graph TD
     Runner -->|Alert| Email
 ```
 
-### 1. Hybrid ML & LLM Classification
-The service implements a hybrid classification model:
-* **Stage 1 (ML Baseline):** Uses local TF-IDF vectorizers (character & word n-grams) combined with a One-Vs-Rest Logistic Regression classifier to calculate preliminary probability scores.
-* **Stage 2 (LLM Refinement):** Sends the comment and baseline candidates to Gemini 2.5 Flash Lite. The LLM evaluates semantic boundary rules (e.g. "Báo lỗi" vs "Y/c cải tiến") and outputs structured JSON.
-* **Stage 3 (Post-Processing):** Python-based guardrails validate the JSON output (e.g. stripping competitor labels if no competitor brand is found, and removing "Tin trung lập" if any other issue label is triggered).
+### 1. Multi-Stage AI Pipeline
+The service implements a multi-stage classification and information retrieval pipeline:
+* **Stage 1 (Product RAG Matching):** Extracts candidate models and lines from Rạng Đông's product catalog using a dual-index BM25 search (raw and unaccented) combined with LLM keyword extraction and keyword rule fallbacks.
+* **Stage 2 (LLM Classification):** Sends the comment and the matched product hints to Gemini 2.5 Flash Lite. The LLM performs structured classification based on business semantic boundary rules (e.g. "Báo lỗi" vs "Y/c cải tiến") and returns clean JSON.
+* **Stage 3 (Post-Processing & Guardrails):** Validates and sanitizes the JSON output via Python guardrails (e.g. enforcing competitor brand gates, applying neutral fallback defaults, and resolving category contradictions).
 
 ### 2. Custom BM25 + LLM RAG Matching
 To match slang, abbreviations, or misspelled product names in comments to Rạng Đông's product catalog:
