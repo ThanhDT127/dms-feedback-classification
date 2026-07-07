@@ -215,6 +215,22 @@ Khi có nhu cầu phân loại nhanh một tệp Excel mà không muốn chờ c
 
 ---
 
+#### Ý nghĩa trạng thái job phân loại thủ công
+
+Khi tải file Excel lên ở tab **Phân loại > Một file**, hệ thống tạo một job bền vững. Nếu tải lại trình duyệt hoặc chuyển tab, UI sẽ khôi phục trạng thái job từ máy chủ.
+
+| Trạng thái | Ý nghĩa | Người dùng cần làm gì |
+| --- | --- | --- |
+| `queued` | File đã được nhận và đang chờ tới lượt xử lý. Nếu `retry_count > 0`, đây là job đang chờ chạy lại. | Chờ hệ thống chuyển sang `running`; không cần upload lại file. |
+| `running` | Pipeline đang xử lý workbook. | Theo dõi progress bar, số dòng đã xử lý, step hiện tại và các batch kết quả. |
+| `completed` | Job đã hoàn tất và file output đã sẵn sàng. | Bấm **Tải file kết quả**; nếu có link SharePoint thì có thể mở trực tiếp. |
+| `error` | Job thất bại trong quá trình xử lý. | Đọc thông báo lỗi ngắn. Người dùng thường nên thử lại với file khác hoặc liên hệ admin để retry job. |
+| `cancelled` | Job đã bị hủy trước khi hoàn tất. | Progress sẽ dừng. Có thể chọn file khác; admin có thể retry nếu file input vẫn còn. |
+
+Nút **Dừng/Hủy** trên job đang chờ sẽ hủy ngay. Với job đang chạy, hệ thống ghi nhận yêu cầu hủy và worker sẽ dừng ở ranh giới batch an toàn kế tiếp rồi chuyển sang `cancelled`. Job đã `completed`, `error`, hoặc `cancelled` không tiếp tục nhận progress WebSocket cũ; trạng thái terminal từ máy chủ luôn được ưu tiên.
+
+---
+
 ### 3.3. Hiểu cấu trúc tệp Excel đầu ra và cơ chế chèn cột an toàn
 Để bảo toàn cấu trúc tệp Excel ban đầu của người dùng nghiệp vụ và tránh hiện tượng lệch hàng dữ liệu, hệ thống áp dụng cơ chế **Zero Row-Shifting**:
 

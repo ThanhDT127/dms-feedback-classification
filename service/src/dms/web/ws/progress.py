@@ -14,71 +14,88 @@ router = APIRouter(tags=["ws"])
 
 @router.websocket("/ws/classify/{job_id}")
 async def ws_classify_progress(websocket: WebSocket, job_id: str):
-    """Stream classification progress for a specific job.
-
-    Sends periodic JSON messages with job status:
-    - {"type": "progress", "data": {status, percent, rows_done, total_rows}}
-    - {"type": "complete", "data": {output_path, duration_seconds, ...}}
-    - {"type": "error", "data": {error}}
-    """
-    # Validate authentication token
+    """Stream classification progress for a specific durable job."""
     token = websocket.query_params.get("token")
     if not token:
         await websocket.close(code=4001, reason="Missing authentication token")
         return
+
     from .. import deps
+
     settings = deps.get_settings()
-    if settings:
-        from ...jwt_utils import decode_token
-        import jwt as pyjwt
-        try:
-            decode_token(token, settings.jwt_secret_key, expected_type="access")
-        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError, ValueError):
-            await websocket.close(code=4001, reason="Invalid or expired token")
-            return
+    if not settings:
+        await websocket.close(code=4001, reason="Server configuration unavailable")
+        return
 
-    await websocket.accept()
+    import jwt as pyjwt
 
-    jobs: dict = websocket.app.state.jobs
-    job = jobs.get(job_id)
-    if job is None:
+    from ...jwt_utils import decode_token
+
+    try:
+        payload = decode_token(token, settings.jwt_secret_key, expected_type="access")
+    except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError, ValueError):
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        return
+
+    username = payload.get("sub")
+    if not username:
+        await websocket.close(code=4001, reason="Invalid token payload")
+        return
+
+    user_store = deps.get_user_store()
+    job_store = deps.get_classification_job_store()
+    if user_store is None or job_store is None:
+        await websocket.close(code=4001, reason="Server state unavailable")
+        return
+
+    user = user_store.get_user(username)
+    if not user or user.get("is_active", True) is False:
+        await websocket.close(code=4001, reason="User unavailable")
+        return
+
+    job = job_store.get_job(job_id, include_results=False)
+    if job is None or not (
+        user.get("role") == "admin" or job.get("owner_username") == user.get("username")
+    ):
+        await websocket.accept()
         await websocket.send_json(
             {
                 "type": "error",
-                "data": {"error": f"Không tìm thấy job: {job_id}"},
+                "data": {"error": f"Khong tim thay job: {job_id}"},
             }
         )
         await websocket.close(code=4004)
         return
 
+    await websocket.accept()
+
     last_sent_rows = -1
-    last_sent_results_count = 0
+    last_sent_result_seq = 0
     last_sent_step = None
     last_sent_step_status = None
+    terminal_sent = False
+
     try:
         while True:
-            job = jobs.get(job_id)
+            job = job_store.get_job(job_id, include_results=False)
             if job is None:
                 await websocket.send_json(
                     {
                         "type": "error",
-                        "data": {"error": "Job đã bị xóa"},
+                        "data": {"error": "Job da bi xoa"},
                     }
                 )
                 break
 
             status = job.get("status", "unknown")
 
-            # 1. Send any new batch results
-            all_results = job.get("results", [])
-            if len(all_results) > last_sent_results_count:
-                new_results = all_results[last_sent_results_count:]
-                last_sent_results_count = len(all_results)
+            new_results = job_store.list_results_after(job_id, last_sent_result_seq)
+            if new_results:
+                last_sent_result_seq = max(int(r.get("_seq", 0)) for r in new_results)
                 await websocket.send_json(
                     {"type": "batch_result", "data": {"results": new_results}}
                 )
 
-            # 2. Send progress update when rows_done OR step changes
             current_rows = job.get("rows_done", 0)
             current_step = job.get("step")
             current_step_status = job.get("step_status")
@@ -95,13 +112,6 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
                 last_sent_step_status = current_step_status
 
                 if status == "completed":
-                    # Send final batch results if any are left
-                    if len(all_results) > last_sent_results_count:
-                        new_results = all_results[last_sent_results_count:]
-                        await websocket.send_json(
-                            {"type": "batch_result", "data": {"results": new_results}}
-                        )
-
                     await websocket.send_json(
                         {
                             "type": "complete",
@@ -113,9 +123,11 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
                                 "percent": 100,
                                 "output_path": job.get("output_path", ""),
                                 "duration_seconds": job.get("duration_seconds", 0),
+                                "sp_web_url": job.get("sp_web_url"),
                             },
                         }
                     )
+                    terminal_sent = True
                     break
 
                 if status == "error":
@@ -125,10 +137,11 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
                             "data": {
                                 "job_id": job_id,
                                 "status": "error",
-                                "error": job.get("error", "Lỗi không xác định"),
+                                "error": job.get("error", "Loi khong xac dinh"),
                             },
                         }
                     )
+                    terminal_sent = True
                     break
 
                 if status == "cancelled":
@@ -141,9 +154,9 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
                             },
                         }
                     )
+                    terminal_sent = True
                     break
 
-                # Progress update
                 await websocket.send_json(
                     {
                         "type": "progress",
@@ -162,9 +175,19 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
             await asyncio.sleep(0.5)
 
     except WebSocketDisconnect:
-        logger.debug("WebSocket client ngắt kết nối cho job %s", job_id)
+        logger.debug("WebSocket client disconnected for job %s", job_id)
     except Exception as exc:
-        logger.warning("WebSocket lỗi cho job %s: %s", job_id, exc)
+        logger.warning("WebSocket error for job %s: %s", job_id, exc)
+        if not terminal_sent:
+            try:
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "data": {"job_id": job_id, "status": "error", "error": str(exc)},
+                    }
+                )
+            except Exception:
+                pass
     finally:
         try:
             await websocket.close()

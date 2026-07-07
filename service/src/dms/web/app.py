@@ -49,9 +49,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # --- Shared state ---
-    app.state.jobs = {}  # job_id -> job info dict
-
     # --- API routers ---
     app.include_router(auth_router)
     app.include_router(user_router)
@@ -153,6 +150,26 @@ def create_app() -> FastAPI:
                 "Web server failed to restore state from SharePoint Check_Point/: %s", exc
             )
 
+        try:
+            from . import deps
+
+            worker_manager = deps.get_classification_worker_manager()
+            if worker_manager is not None:
+                worker_manager.start()
+        except Exception as exc:
+            logger.warning("Classification worker could not start: %s", exc)
+
         logger.info("DMS Web UI sẵn sàng tại http://0.0.0.0:8000")
+
+    @app.on_event("shutdown")
+    async def on_shutdown():
+        try:
+            from . import deps
+
+            worker_manager = deps.get_classification_worker_manager()
+            if worker_manager is not None:
+                worker_manager.stop()
+        except Exception as exc:
+            logger.warning("Classification worker shutdown failed: %s", exc)
 
     return app

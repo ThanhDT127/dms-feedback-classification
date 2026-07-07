@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import re
-
+from pathlib import Path
 
 STATIC = Path(__file__).resolve().parents[1] / "static"
 
@@ -245,3 +244,36 @@ def test_model_api_key_reveal_contract():
     assert "SettingsPage.revealApiKey()" in settings_js
     assert "btn-reveal-apikey" in settings_js
     assert "API.getSecret('gemini_api_key')" in settings_js
+
+
+def test_classify_queue_aware_job_status_contract():
+    classify_js = _read("js/pages/classify.js")
+
+    for expected in [
+        "jobStatusMeta",
+        "isTerminalStatus",
+        "refreshCurrentJobStatus",
+        "renderTerminalJobActions",
+        "Đang xếp hàng",
+        "Đang chờ chạy lại",
+        "Job đã hủy",
+    ]:
+        assert expected in classify_js
+
+    assert "data-mode=\"jobs\"" in classify_js
+    assert "API.cancelJob(jobId)" in classify_js
+    assert "API.retryJob(jobId)" in classify_js
+
+
+def test_admin_job_operations_exports_and_api_contract():
+    classify_js = _read("js/pages/classify.js")
+    api_js = _read("js/api.js")
+
+    for expected in ["loadAdminJobs", "cancelAdminJob", "retryAdminJob"]:
+        assert expected in _page_exports(classify_js)
+
+    assert "function getJobMetrics()" in api_js
+    assert "function cancelJob(jobId)" in api_js
+    assert "function retryJob(jobId)" in api_js
+    assert "/classify/jobs/metrics" in api_js
+    assert "/retry" in api_js

@@ -6,8 +6,10 @@ import logging
 import threading
 from typing import Any
 
+import jwt as pyjwt
 from fastapi import Depends, Header, HTTPException
 
+from ..jwt_utils import decode_token
 from ..settings import SERVICE_DIR, Settings
 
 logger = logging.getLogger("dms-web")
@@ -31,6 +33,12 @@ def _get_or_create(key: str, factory):
 def reset() -> None:
     """Clear all cached singletons (useful for testing)."""
     with _lock:
+        worker_manager = _cache.get("classification_worker_manager")
+        if worker_manager is not None and hasattr(worker_manager, "stop"):
+            try:
+                worker_manager.stop()
+            except Exception as exc:
+                logger.warning("Could not stop cached classification worker manager: %s", exc)
         _cache.clear()
 
 
@@ -60,6 +68,26 @@ def get_label_history_store():
     return _get_or_create("label_history_store", _factory)
 
 
+def get_classification_job_store():
+    """Return a singleton ClassificationJobStore."""
+    from ..classification_jobs import ClassificationJobStore
+
+    def _factory():
+        settings = get_settings()
+        if settings is None:
+            return None
+        return ClassificationJobStore(settings.classification_jobs_db_path)
+
+    return _get_or_create("classification_job_store", _factory)
+
+
+def get_classification_worker_manager():
+    """Return the in-process classification worker manager."""
+    from ..classification_worker import build_default_worker_manager
+
+    return _get_or_create("classification_worker_manager", build_default_worker_manager)
+
+
 def get_user_store():
     """Return a singleton UserStore."""
     from ..user_store import UserStore
@@ -86,15 +114,12 @@ async def get_current_user(authorization: str = Header(None)) -> dict:
     if settings is None:
         raise HTTPException(status_code=500, detail="Server configuration error")
 
-    from ..jwt_utils import decode_token
-    import jwt as pyjwt
-
     try:
         payload = decode_token(token, settings.jwt_secret_key, expected_type="access")
-    except pyjwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except (pyjwt.InvalidTokenError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except pyjwt.ExpiredSignatureError as exc:
+        raise HTTPException(status_code=401, detail="Token has expired") from exc
+    except (pyjwt.InvalidTokenError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid token") from exc
 
     username = payload.get("sub")
     if not username:
@@ -113,7 +138,10 @@ async def get_current_user(authorization: str = Header(None)) -> dict:
     return user
 
 
-async def get_admin_user(user: dict = Depends(get_current_user)):
+CURRENT_USER_DEP = Depends(get_current_user)
+
+
+async def get_admin_user(user: dict = CURRENT_USER_DEP):
     """FastAPI dependency: require admin role."""
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")

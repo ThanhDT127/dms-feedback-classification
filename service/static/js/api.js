@@ -193,6 +193,9 @@ window.API = (() => {
   function classifyText(data)    { return post('/classify/text', data); }
   function classifyFile(formData){ return upload('/classify/file', formData); }
   function getJobs()             { return get('/classify/jobs'); }
+  function getJobMetrics()       { return get('/classify/jobs/metrics'); }
+  function cancelJob(jobId)      { return del(`/classify/jobs/${encodeURIComponent(jobId)}`); }
+  function retryJob(jobId)       { return post(`/classify/jobs/${encodeURIComponent(jobId)}/retry`, null); }
   function getSettings()         { return get('/settings'); }
   function putSettings(data)     { return put('/settings', data); }
   function getSecret(key)        { return get(`/settings/secret/${encodeURIComponent(key)}`); }
@@ -265,7 +268,7 @@ window.API = (() => {
     setTokens, getAccessToken, clearTokens, refreshToken,
     getHealth, getMetrics, getMetricsDaily,
     getFiles, getFilePreview, getFileTree, getFilesSeen,
-    uploadFile, classifyText, classifyFile, getJobs,
+    uploadFile, classifyText, classifyFile, getJobs, getJobMetrics, cancelJob, retryJob,
     getSettings, putSettings, getSecret, getPrompt, getModels, testConnection,
     getLabels, getKeywords, getBrands, getLogs,
     syncKeywordsToSP, syncProductsToSP, syncSharePoint, uploadJobToSharePoint,

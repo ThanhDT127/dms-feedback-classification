@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -14,7 +15,7 @@ import pandas as pd
 from openpyxl.utils import get_column_letter
 from unidecode import unidecode
 
-from ..exceptions import PipelineError
+from ..exceptions import PipelineCancelled, PipelineError
 from ..gemini_client import GeminiClient
 from ..metrics import MetricsCollector
 from ..settings import Settings
@@ -169,9 +170,18 @@ class PipelineRunner:
         output_path: str | Path,
         ckpt_path: str | Path,
         progress_callback: callable | None = None,
+        cancellation_check: Callable[[], bool] | None = None,
     ) -> dict:
         try:
-            return self._run_pipeline(input_path, output_path, ckpt_path, progress_callback)
+            return self._run_pipeline(
+                input_path,
+                output_path,
+                ckpt_path,
+                progress_callback,
+                cancellation_check,
+            )
+        except PipelineCancelled:
+            raise
         except Exception as exc:
             raise PipelineError(str(exc)) from exc
 
@@ -181,6 +191,7 @@ class PipelineRunner:
         output_path: str | Path,
         ckpt_path: str | Path,
         progress_callback: callable | None = None,
+        cancellation_check: Callable[[], bool] | None = None,
     ) -> dict:
         input_path = Path(input_path)
         output_path = Path(output_path)
@@ -238,6 +249,8 @@ class PipelineRunner:
         batch_index = start_idx // self.settings.llm_batch_size
 
         for i in range(start_idx, n_total, self.settings.llm_batch_size):
+            if cancellation_check is not None and cancellation_check():
+                raise PipelineCancelled("Classification job was cancelled.")
             batch = texts[i : i + self.settings.llm_batch_size]
             batch_index += 1
             logger.info("Batch %d: rows %d-%d", batch_index, i, i + len(batch) - 1)
@@ -249,6 +262,8 @@ class PipelineRunner:
                     progress_callback(step=1, step_status="running")
                 except Exception:
                     pass
+            if cancellation_check is not None and cancellation_check():
+                raise PipelineCancelled("Classification job was cancelled.")
             rag_batch = self._run_rag_with_retry(batch)
             if progress_callback is not None:
                 try:
@@ -266,6 +281,8 @@ class PipelineRunner:
                     progress_callback(step=3, step_status="running")
                 except Exception:
                     pass
+            if cancellation_check is not None and cancellation_check():
+                raise PipelineCancelled("Classification job was cancelled.")
             try:
                 # Call pure-LLM classify_batch directly using RAG products as hints
                 issue_list = self.issue_classifier.classify_batch(
@@ -341,6 +358,9 @@ class PipelineRunner:
                 self._save_output(rows_out, all_cols, output_path)
                 self._save_checkpoint(ckpt_path, done)
                 logger.info("Checkpoint %d/%d -> %s", done, n_total, ckpt_path)
+
+            if cancellation_check is not None and cancellation_check():
+                raise PipelineCancelled("Classification job was cancelled.")
 
             if progress_callback is not None:
                 new_results_batch = []
