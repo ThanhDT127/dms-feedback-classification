@@ -25,6 +25,10 @@ class PipelineError(DMSError):
     """Raised when pipeline processing fails."""
 
 
+class PipelineCancelled(PipelineError):
+    """Raised when a cooperative cancellation request stops pipeline work."""
+
+
 class ModelArtifactError(DMSError):
     """Raised when local baseline-model artifacts are missing or invalid."""
 

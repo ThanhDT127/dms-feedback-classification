@@ -80,7 +80,7 @@ The Watcher is the core scheduling pipeline, executing in a continuous loop usin
 Serves a clean HTML/JS Dashboard interface for manual processing, operational monitoring, and configuration tuning.
 * **Logical Folder Routing**: Lists, previews, and deletes files in local directories or SharePoint folders (Inputs, Outputs, Checkpoints, Keywords, and Models).
 * **Real-time Log Streaming**: Uses WebSockets to read the active JSONLines logging file (`logs/dms-service.jsonl`) and stream filtered outputs directly to the UI console.
-* **Asynchronous Background Processing**: Allows users to upload custom feedback spreadsheets and trigger classification jobs in background threads while tracking execution progress via WebSockets.
+* **Durable Queued Processing**: Allows users to upload custom feedback spreadsheets as persisted queue jobs. A classification worker loop claims queued jobs, enforces configured concurrency and per-user limits, records heartbeat/retry/cancel state, and streams progress via WebSockets. Job metadata, ownership, progress, live result summaries, output paths, and terminal states are persisted in a SQLite WAL job store under `WORK_DIR` instead of process-local RAM.
 * **Hot Config Updates**: Exposes endpoints to inspect and modify `kw_map.json` or update prompt templates directly.
 
 ---
@@ -95,6 +95,8 @@ service/src/dms/
 ├── __init__.py                # Package declaration
 ├── __main__.py                # Composition root / Watcher entry point
 ├── auth.py                    # Microsoft Graph OAuth Authentication Provider
+├── classification_jobs.py     # Durable SQLite job store for manual classification jobs
+├── classification_worker.py   # Queue worker runtime for manual classification jobs
 ├── cleanup.py                 # Retention housekeeping utility
 ├── config_assets.py           # SharePoint config assets synchronization
 ├── exceptions.py              # Application-specific exceptions
@@ -122,7 +124,7 @@ service/src/dms/
     ├── deps.py                # Shared thread-safe lazy singleton container
     │
     ├── api/                   # API routers
-    │   ├── classify.py        # Real-time text & file classification background jobs
+    │   ├── classify.py        # Real-time text classification and queued file jobs
     │   ├── files.py           # Physical/SharePoint file storage explorer
     │   ├── metrics_api.py     # Health dashboard, daily analytics and logs
     │   ├── pipeline_api.py    # Rules, keyword hints, and catalog configuration
@@ -140,6 +142,8 @@ service/src/dms/
 | `src/dms/__init__.py` | Declares package exports and sets baseline variables. |
 | `src/dms/__main__.py` | The composition root. Bootstraps Pydantic configurations, config asset sync services, starts the logging environment, hooks `SIGINT`/`SIGTERM` handlers, and starts `Watcher.run_forever`. |
 | `src/dms/auth.py` | Connects to Azure Active Directory via Client Credentials flow (tenant, client ID, client secret) to retrieve access tokens for SharePoint and Mail APIs. |
+| `src/dms/classification_jobs.py` | Maintains the SQLite WAL-backed queue/job database, atomic claim transitions, retry counters, cancellation flags, heartbeat timestamps, and queue metrics. |
+| `src/dms/classification_worker.py` | Runs the queue worker loop that claims user-uploaded classification jobs, calls `PipelineRunner`, retries recoverable failures, handles cooperative cancellation, and can later run as `python -m dms.classification_worker`. |
 | `src/dms/cleanup.py` | Scans temporary staging directories, output sheets, and log files. Automatically unlinks items exceeding configured TTL thresholds. |
 | `src/dms/config_assets.py` | Syncs assets like `kw_map.json` and model files from SharePoint to local disk. Updates cached settings paths when changes are detected. |
 | `src/dms/exceptions.py` | Standardizes errors across modules (e.g. `ConfigurationError`, `PipelineError`, `ConfigAssetSyncError`). |
@@ -158,7 +162,7 @@ service/src/dms/
 | `src/dms/pipeline/runner.py` | Coordinates the processing of a single Excel file. Manages header/text-column detection, batch iteration, checkpoint writes, and output formatting. |
 | `src/dms/web/app.py` | Constructs the FastAPI application instance. Configures CORS, mounts static paths, and performs state recovery tasks during the startup event. |
 | `src/dms/web/deps.py` | Implements a thread-safe dependency injection container. Caches singletons like the SharePoint client, pipeline runner, and metrics collector. |
-| `src/dms/web/api/classify.py` | Exposes endpoints to process single text samples and run file-level background jobs. |
+| `src/dms/web/api/classify.py` | Exposes endpoints to process single text samples, enqueue file-level jobs, inspect durable job state, cancel jobs, retry failed/cancelled jobs, and read admin queue metrics. |
 | `src/dms/web/api/files.py` | Exposes endpoints to explore folders (local and SharePoint), upload input files, verify schema structures, trigger manual syncs, and serve template Excel spreadsheets. |
 | `src/dms/web/api/metrics_api.py` | Exposes endpoints to monitor service health, retrieve metrics history, parse logs, and construct analytics charts. |
 | `src/dms/web/api/pipeline_api.py` | Exposes endpoints to retrieve labels, query keywords, extract brand maps, and update hints. |
@@ -419,11 +423,11 @@ All API endpoints return JSON-formatted errors when operations fail. Standard HT
   * **Errors**: `503 Service Unavailable` if `GeminiClient` or `IssueClassifier` are uninitialized.
 
 * **POST `/api/classify/file`**
-  * **Description**: Uploads a spreadsheet and triggers an asynchronous background thread execution.
+  * **Description**: Uploads a spreadsheet, creates a durable `queued` classification job owned by the authenticated user, and returns immediately. The classification worker claims the job later according to global and per-user limits.
   * **Form Data** (`multipart/form-data`):
     * `file`: Binary file upload (`.xlsx` only, max 50MB).
     * `mode`: Job mode (e.g. `single` - default).
-  * **Response** (`202 Accepted`):
+  * **Response** (`200 OK`):
     ```json
     {
       "job_id": "job_3f4b2670_e092_4c64_a5cc_293231182390",
@@ -432,15 +436,16 @@ All API endpoints return JSON-formatted errors when operations fail. Standard HT
       "message": "Đã tạo job phân loại: job_3f4b2670_e092_4c64_a5cc_293231182390"
     }
     ```
-  * **Errors**: `400 Bad Request` if not a `.xlsx` file, `413 Content Too Large` if >50MB.
+  * **Errors**: `400 Bad Request` if not a `.xlsx` file, `413 Content Too Large` if >50MB, `429 Too Many Requests` if the authenticated user reached configured queued or running job limits. Limit rejections are logged with username, limit type, configured limit, and current count.
 
 * **GET `/api/classify/jobs`**
-  * **Description**: Lists all active and historically completed in-memory background jobs.
+  * **Description**: Lists durable classification jobs visible to the authenticated user. Normal users see only their own jobs; admins can see all jobs.
   * **Response** (`200 OK`):
     ```json
     [
       {
         "job_id": "job_3f4b2670_...",
+        "owner_username": "alice",
         "status": "completed",
         "filename": "feedback_june.xlsx",
         "mode": "single",
@@ -459,12 +464,12 @@ All API endpoints return JSON-formatted errors when operations fail. Standard HT
     ```
 
 * **GET `/api/classify/jobs/{job_id}`**
-  * **Description**: Returns detail status for a specific background classification job.
+  * **Description**: Returns durable detail status for a specific background classification job, including restored live result summaries when available.
   * **Response** (`200 OK`): Returns the specific job status dictionary (similar to `/jobs` array items).
-  * **Errors**: `404 Not Found` if the job ID is missing.
+  * **Errors**: `404 Not Found` if the job ID is missing or the authenticated normal user does not own the job.
 
 * **DELETE `/api/classify/jobs/{job_id}`**
-  * **Description**: Cancels a currently running classification job. Sets job status to `"cancelled"`.
+  * **Description**: Cancels a queued job immediately. For a running job, persists `cancellation_requested=true`; the worker stops at the next safe pipeline batch boundary and then marks the job `cancelled`.
   * **Response** (`200 OK`):
     ```json
     {
@@ -475,7 +480,7 @@ All API endpoints return JSON-formatted errors when operations fail. Standard HT
 * **GET `/api/classify/jobs/{job_id}/download`**
   * **Description**: Downloads the processed output workbook spreadsheet from disk.
   * **Response** (`200 OK`): Binary stream with `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` content type.
-  * **Errors**: `400 Bad Request` if the job is not completed, `404 Not Found` if the output file was cleared from disk.
+  * **Errors**: `400 Bad Request` if the job is not completed, `404 Not Found` if the job is missing, not owned by the authenticated normal user, or the output file was cleared from disk.
 
 * **POST `/api/classify/jobs/{job_id}/sharepoint`**
   * **Description**: Manually uploads both input and completed output workbooks of a finished job to SharePoint.
@@ -486,7 +491,47 @@ All API endpoints return JSON-formatted errors when operations fail. Standard HT
       "sp_web_url": "https://example.sharepoint.com/..."
     }
     ```
+
+  * **Migration note**: Jobs created before this durable job store was deployed lived only in the web process memory and are not migrated. Deploy when no manual classification job is actively running, or accept that only post-deployment jobs are restorable after process restart.
   * **Errors**: `503 Service Unavailable` if SharePoint is offline or credentials are missing.
+
+* **GET `/api/classify/jobs/metrics`**
+  * **Description**: Admin-only queue health summary computed from the durable classification job store.
+  * **Response** (`200 OK`):
+    ```json
+    {
+      "counts": {
+        "queued": 1,
+        "running": 1,
+        "completed": 10,
+        "failed": 2,
+        "cancelled": 1,
+        "retrying": 1,
+        "total": 15
+      },
+      "avg_queue_wait_seconds": 3.2,
+      "avg_processing_seconds": 18.7
+    }
+    ```
+  * **Errors**: `403 Forbidden` for non-admin users.
+
+* **POST `/api/classify/jobs/{job_id}/retry`**
+  * **Description**: Admin-only retry for jobs in `error` or `cancelled` state. The input workbook must still exist on disk. Retry resets row progress, clears previous live result rows, increments `retry_count`, and moves the job back to `queued`; the worker claims it according to normal queue capacity.
+  * **Errors**: `400 Bad Request` if the job is not retryable, `404 Not Found` if the job or original input file is missing, `403 Forbidden` for non-admin users.
+
+#### Durable Classification Job Lifecycle
+
+Manual classification jobs now use the following durable lifecycle:
+
+| Status | Meaning | User-visible behavior | Admin action |
+| --- | --- | --- | --- |
+| `queued` | Job accepted and waiting to run, or waiting to rerun after retry. | Show queued/retrying message without treating `0/0` rows as failure. | Can cancel. |
+| `running` | Pipeline is actively processing the workbook and updating heartbeat metadata. | Show row progress, current step, and live result batches. | Can request cancellation; the worker stops at the next safe batch boundary. |
+| `completed` | Output workbook finished and can be downloaded. | Show download action and SharePoint link/upload action when available. | View metadata and durations. |
+| `error` | Pipeline failed. | Show concise error summary and retry guidance. | Can retry if input still exists. |
+| `cancelled` | Job was cancelled before completion. | Stop progress UI and show cancelled message. | Can retry if input still exists. |
+
+Job list/detail payloads include `owner_username`, `queued_at`, `started_at`, `completed_at`, `retry_count`, `last_retry_at`, `heartbeat_at`, `cancellation_requested`, `queue_wait_seconds`, `processing_seconds`, `terminal`, `can_cancel`, `can_retry`, and `error_summary` in addition to the original progress and output fields.
 
 ---
 
@@ -798,7 +843,7 @@ All API endpoints return JSON-formatted errors when operations fail. Standard HT
     ```
 
 * **WS `/ws/classify/{job_id}`**
-  * **Description**: WebSocket connection to stream real-time progress of a specific file classification job.
+  * **Description**: Authenticated WebSocket connection to stream real-time progress of a specific durable file classification job. The socket validates the access token and only streams jobs visible to that user.
   * **Message Format**:
     * *Progress*: `{"type": "progress", "data": { "status": "running", "percent": 45, "rows_done": 90, "total_rows": 200, "step": 3, "step_status": "running" }}`
     * *Batch Results*: `{"type": "batch_result", "data": { "results": [ ... ] }}`
@@ -1234,6 +1279,23 @@ MAX_RETRY=3
 BM25_MIN_SCORE=5.0
 # HTTP timeout boundary for external requests in seconds (Default: 30.0)
 HTTP_TIMEOUT_SECONDS=30.0
+
+# ==============================================================================
+# Manual Classification Worker Queue
+# ==============================================================================
+# Maximum user-uploaded classification jobs running at the same time (Default: 1)
+CLASSIFICATION_WORKER_CONCURRENCY=1
+# Maximum running manual classification jobs per normal user (Default: 1)
+CLASSIFICATION_PER_USER_RUNNING_LIMIT=1
+# Maximum queued manual classification jobs per normal user (Default: 3)
+CLASSIFICATION_PER_USER_QUEUED_LIMIT=3
+# Automatic retries for recoverable worker/pipeline failures (Default: 2)
+CLASSIFICATION_RETRY_COUNT=2
+# Requeue or fail running jobs whose heartbeat is older than this on startup (Default: 900)
+CLASSIFICATION_STALE_RUNNING_TIMEOUT_SECONDS=900
+# Worker polling and heartbeat cadence in seconds
+CLASSIFICATION_WORKER_POLL_INTERVAL_SECONDS=1.0
+CLASSIFICATION_WORKER_HEARTBEAT_SECONDS=15.0
 
 # ==============================================================================
 # Housekeeping and File Cleanup

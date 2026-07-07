@@ -66,6 +66,25 @@ class Settings(BaseSettings):
     cleanup_output_ttl_days: int = Field(7, alias="CLEANUP_OUTPUT_TTL_DAYS")
     cleanup_log_ttl_days: int = Field(7, alias="CLEANUP_LOG_TTL_DAYS")
     cleanup_staging_ttl_hours: int = Field(24, alias="CLEANUP_STAGING_TTL_HOURS")
+    classification_worker_concurrency: int = Field(
+        1, alias="CLASSIFICATION_WORKER_CONCURRENCY"
+    )
+    classification_per_user_running_limit: int = Field(
+        1, alias="CLASSIFICATION_PER_USER_RUNNING_LIMIT"
+    )
+    classification_per_user_queued_limit: int = Field(
+        3, alias="CLASSIFICATION_PER_USER_QUEUED_LIMIT"
+    )
+    classification_retry_count: int = Field(2, alias="CLASSIFICATION_RETRY_COUNT")
+    classification_stale_running_timeout_seconds: int = Field(
+        900, alias="CLASSIFICATION_STALE_RUNNING_TIMEOUT_SECONDS"
+    )
+    classification_worker_poll_interval_seconds: float = Field(
+        1.0, alias="CLASSIFICATION_WORKER_POLL_INTERVAL_SECONDS"
+    )
+    classification_worker_heartbeat_seconds: float = Field(
+        15.0, alias="CLASSIFICATION_WORKER_HEARTBEAT_SECONDS"
+    )
 
     # Auth
     jwt_secret_key: str = Field(default="dev-secret-key-change-me", alias="JWT_SECRET_KEY")
@@ -120,6 +139,22 @@ class Settings(BaseSettings):
                 raise ValueError("JWT_SECRET_KEY must be set to a strong value in production")
             if self.default_admin_password == "admin123":
                 raise ValueError("DEFAULT_ADMIN_PASSWORD must be changed in production")
+
+        positive_int_fields = (
+            "classification_worker_concurrency",
+            "classification_per_user_running_limit",
+            "classification_per_user_queued_limit",
+            "classification_stale_running_timeout_seconds",
+        )
+        for field_name in positive_int_fields:
+            if int(getattr(self, field_name)) < 1:
+                raise ValueError(f"{field_name} must be >= 1")
+        if int(self.classification_retry_count) < 0:
+            raise ValueError("classification_retry_count must be >= 0")
+        if float(self.classification_worker_poll_interval_seconds) <= 0:
+            raise ValueError("classification_worker_poll_interval_seconds must be > 0")
+        if float(self.classification_worker_heartbeat_seconds) <= 0:
+            raise ValueError("classification_worker_heartbeat_seconds must be > 0")
 
         return self
 
@@ -190,6 +225,10 @@ class Settings(BaseSettings):
     @property
     def label_history_db_path(self) -> Path:
         return self.work_dir / "label_history.db"
+
+    @property
+    def classification_jobs_db_path(self) -> Path:
+        return self.work_dir / "classification_jobs.db"
 
     @property
     def label_config_path(self) -> Path:

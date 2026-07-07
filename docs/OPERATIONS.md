@@ -492,3 +492,70 @@ Open the Web UI Dashboard (e.g., `http://<production-ip>:8501/#/metrics`) and ve
   ```bash
   docker compose logs -f watcher
   ```
+
+---
+
+## 13. Manual Classification Job Operations
+
+Manual uploads from the Web UI are tracked in a durable SQLite database at:
+
+```text
+<WORK_DIR>/classification_jobs.db
+```
+
+The web API initializes this database automatically with WAL mode. Do not delete it during routine cleanup unless you intentionally want to remove historical manual job metadata. Input/output workbooks remain separate files under `WORK_DIR/input` and `WORK_DIR/output`.
+
+### 13.1. Lifecycle
+
+| Status | Operational meaning | Action |
+| --- | --- | --- |
+| `queued` | Job has been accepted and is waiting to run. If `retry_count > 0`, it is waiting after an admin retry. | Admin may cancel. |
+| `running` | A classification worker has claimed the workbook and is processing it with heartbeat updates. | Admin may request cancellation; the worker stops at the next safe batch boundary. |
+| `completed` | Output file is available for download or SharePoint upload. | No retry needed. |
+| `error` | Pipeline failed. | Admin may retry if the original input file still exists. |
+| `cancelled` | Job was explicitly cancelled. | Admin may retry if the original input file still exists. |
+
+### 13.2. Admin Operations UI
+
+Open **Phân loại > Jobs** as an admin. The view shows:
+
+- Queue health counts: queued, running, failed, retrying, and average wait/run duration.
+- Job metadata: owner, filename, status, queued/started/completed timestamps, retry count, and short error summary.
+- Actions:
+  - **Hủy** for `queued` or `running` jobs.
+  - **Retry** for `error` or `cancelled` jobs.
+
+The same data is available through:
+
+```text
+GET  /api/classify/jobs
+GET  /api/classify/jobs/metrics
+POST /api/classify/jobs/{job_id}/retry
+DELETE /api/classify/jobs/{job_id}
+```
+
+Metrics and retry are admin-only. Normal users can only see and cancel their own authorized jobs through the classify page.
+
+### 13.3. Concurrency And Limits
+
+Manual uploads are executed by the classification worker queue. The web upload request only saves the workbook and creates a durable `queued` job; worker loops claim jobs when capacity is available.
+
+| Setting | Default | Purpose |
+| --- | ---: | --- |
+| `CLASSIFICATION_WORKER_CONCURRENCY` | `1` | Maximum user-uploaded classification jobs running globally. |
+| `CLASSIFICATION_PER_USER_RUNNING_LIMIT` | `1` | Maximum running jobs owned by one normal user. |
+| `CLASSIFICATION_PER_USER_QUEUED_LIMIT` | `3` | Maximum queued jobs owned by one normal user before uploads are rejected with HTTP 429. |
+| `CLASSIFICATION_RETRY_COUNT` | `2` | Automatic retries for recoverable provider/network-style worker failures. |
+| `CLASSIFICATION_STALE_RUNNING_TIMEOUT_SECONDS` | `900` | Startup recovery threshold for running jobs left behind by an unclean shutdown. |
+| `CLASSIFICATION_WORKER_POLL_INTERVAL_SECONDS` | `1.0` | How often idle worker loops check for queued jobs. |
+| `CLASSIFICATION_WORKER_HEARTBEAT_SECONDS` | `15.0` | Minimum heartbeat update cadence while a job is running. |
+
+Recommended first deployment: keep concurrency at `1` until Gemini quota and server memory are observed under real workbook sizes. Increase to `2` only if queue wait time is consistently too high and provider quota headroom is clear.
+
+### 13.4. Troubleshooting
+
+- **Retry returns 404 input missing**: the job metadata remains, but the original workbook under `WORK_DIR/input` was deleted. Ask the user to upload the workbook again.
+- **Queued job does not start**: check web container logs for worker startup errors, verify `CLASSIFICATION_WORKER_CONCURRENCY` is at least `1`, and check whether another job is consuming the global or per-user running slot.
+- **Running job stays running after restart**: on startup, stale running jobs are requeued or failed according to retry policy after `CLASSIFICATION_STALE_RUNNING_TIMEOUT_SECONDS`.
+- **Completed job cannot download**: the output path in metadata points to a file that was removed from `WORK_DIR/output`; rerun the job if the input is still available.
+- **Metrics look stale**: refresh the Jobs tab. Metrics are computed from `classification_jobs.db`, not from `metrics.json`.

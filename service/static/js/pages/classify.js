@@ -10,6 +10,8 @@ window.ClassifyPage = (() => {
   let _isPaused = false;
   let _lastTextResult = null;
   let _lastTextInput = '';
+  let _adminJobs = [];
+  let _adminJobMetrics = null;
 
   let _labelGroups = [];
 
@@ -23,6 +25,43 @@ window.ClassifyPage = (() => {
 
   function isAdmin() {
     return window.App?.state?.user?.role === 'admin';
+  }
+
+  function isTerminalStatus(status) {
+    return ['completed', 'error', 'cancelled'].includes(status);
+  }
+
+  function isRetryingJob(job) {
+    return job?.status === 'queued' && Number(job?.retry_count || 0) > 0;
+  }
+
+  function jobStatusMeta(job) {
+    const status = job?.status || 'unknown';
+    if (isRetryingJob(job)) {
+      return { label: 'Đang chờ chạy lại', badge: 'badge-purple', message: 'Job đang chờ chạy lại sau lỗi hoặc hủy trước đó.' };
+    }
+    const map = {
+      queued: { label: 'Đang xếp hàng', badge: 'badge-amber', message: 'Job đã được nhận và đang chờ tới lượt xử lý.' },
+      running: { label: 'Đang xử lý', badge: 'badge-blue', message: 'AI pipeline đang xử lý dữ liệu và sẽ cập nhật kết quả theo từng lô.' },
+      completed: { label: 'Hoàn tất', badge: 'badge-green', message: 'Job đã hoàn tất. Bạn có thể tải file kết quả hoặc mở liên kết SharePoint nếu có.' },
+      error: { label: 'Thất bại', badge: 'badge-red', message: 'Job thất bại. Vui lòng thử lại hoặc liên hệ admin nếu lỗi lặp lại.' },
+      cancelled: { label: 'Đã hủy', badge: 'badge-muted', message: 'Job đã bị hủy và không còn tiếp tục xử lý.' },
+    };
+    return map[status] || { label: status, badge: 'badge-muted', message: 'Trạng thái job chưa xác định.' };
+  }
+
+  function statusBadge(job) {
+    const meta = jobStatusMeta(job);
+    return `<span class="badge ${meta.badge}">${esc(meta.label)}</span>`;
+  }
+
+  function formatDateTime(value) {
+    if (!value) return '—';
+    try {
+      return new Date(value).toLocaleString('vi-VN');
+    } catch (_) {
+      return String(value);
+    }
   }
 
   function configPromptText() {
@@ -86,6 +125,7 @@ window.ClassifyPage = (() => {
           <button class="pill-tab active" data-mode="text" onclick="ClassifyPage.setMode('text')">📝 Đoạn văn bản</button>
           <button class="pill-tab" data-mode="file" onclick="ClassifyPage.setMode('file')">📄 Một file</button>
           <button class="pill-tab" data-mode="batch" onclick="ClassifyPage.setMode('batch')">📁 Nhiều file</button>
+          ${isAdmin() ? '<button class="pill-tab" data-mode="jobs" onclick="ClassifyPage.setMode(\'jobs\')">📋 Jobs</button>' : ''}
           ${isAdmin() ? '<button class="pill-tab" data-mode="config" onclick="ClassifyPage.setMode(\'config\')">⚙️ Cấu hình</button>' : ''}
         </div>
       </div>
@@ -99,7 +139,7 @@ window.ClassifyPage = (() => {
   }
 
   function setMode(mode) {
-    if (mode === 'config' && !isAdmin()) {
+    if ((mode === 'config' || mode === 'jobs') && !isAdmin()) {
       Toast.error('Bạn không có quyền truy cập cấu hình');
       mode = 'text';
     }
@@ -133,8 +173,9 @@ window.ClassifyPage = (() => {
         el.innerHTML = renderFileMode(); 
         if (_currentJob) {
           restoreActiveJobUI(_currentJob);
+          refreshCurrentJobStatus(_currentJob.job_id || _currentJob.id);
           // Reconnect WebSocket if the job is still active
-          if ((_currentJob.status === 'running' || _currentJob.status === 'queued') && (!_wsClient || !_wsClient.isOpen())) {
+          if ((_currentJob.status === 'running' || _currentJob.status === 'queued') && !_currentJob.terminal && (!_wsClient || !_wsClient.isOpen())) {
             connectJobWS(_currentJob.job_id || _currentJob.id);
           }
           // Restore pause button state (task 1.3)
@@ -155,6 +196,100 @@ window.ClassifyPage = (() => {
         el.innerHTML = renderConfigMode();
         loadConfigData();
         break;
+      case 'jobs':
+        el.innerHTML = renderAdminJobsMode();
+        loadAdminJobs();
+        break;
+    }
+  }
+
+  function renderJobStatusNotice(job) {
+    const progressWrap = document.getElementById('file-progress')?.querySelector('.card');
+    if (!progressWrap || !job) return;
+    let notice = document.getElementById('job-status-notice');
+    if (!notice) {
+      notice = document.createElement('div');
+      notice.id = 'job-status-notice';
+      notice.style.cssText = 'margin:12px 0;padding:10px 12px;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;';
+      progressWrap.insertBefore(notice, progressWrap.querySelector('.progress-wrap'));
+    }
+    const meta = jobStatusMeta(job);
+    const retry = Number(job.retry_count || 0) > 0 ? `<span class="text-muted" style="font-size:11px;">Retry: ${Number(job.retry_count || 0)}</span>` : '';
+    notice.innerHTML = `
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;">${statusBadge(job)} ${retry}</div>
+        <div class="text-muted" style="font-size:12px;margin-top:4px;">${esc(meta.message)}</div>
+      </div>
+      <div class="text-muted" style="font-size:11px;text-align:right;">
+        ${job.queued_at ? `<div>Queued: ${esc(formatDateTime(job.queued_at))}</div>` : ''}
+        ${job.started_at ? `<div>Started: ${esc(formatDateTime(job.started_at))}</div>` : ''}
+      </div>
+    `;
+  }
+
+  function renderTerminalJobActions(job) {
+    const progressWrap = document.getElementById('file-progress')?.querySelector('.card');
+    if (!progressWrap || !job) return;
+    let infoBar = document.getElementById('output-info-bar');
+    if (!infoBar) {
+      infoBar = document.createElement('div');
+      infoBar.id = 'output-info-bar';
+      infoBar.style.cssText = 'margin-top:12px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;';
+      progressWrap.appendChild(infoBar);
+    }
+    const jobId = job.job_id || job.id;
+    renderJobStatusNotice(job);
+
+    if (job.status === 'completed') {
+      const spLinkHtml = job.sp_web_url
+        ? `<a href="${escAttr(job.sp_web_url)}" target="_blank" class="btn btn-secondary btn-sm" style="text-decoration:none;">☁️ Xem SharePoint</a>`
+        : `<button class="btn btn-secondary btn-sm" id="btn-push-sp-${jobId}" onclick="ClassifyPage.pushToSharePoint('${jobId}')">☁️ Đẩy SharePoint</button>`;
+      infoBar.style.borderColor = 'var(--accent-green)';
+      infoBar.innerHTML = `
+        <div>
+          <div style="font-weight:600;font-size:13px;">Phân loại hoàn tất</div>
+          <div class="text-muted" style="font-size:11px;margin-top:2px;">${esc(job.output_path || '')}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="btn btn-success btn-sm" onclick="ClassifyPage.downloadJob('${jobId}')">📥 Tải file kết quả</button>
+          ${spLinkHtml}
+        </div>
+      `;
+    } else if (job.status === 'error') {
+      infoBar.style.borderColor = 'var(--accent-red)';
+      infoBar.innerHTML = `
+        <div>
+          <div style="font-weight:600;font-size:13px;color:var(--accent-red);">Job thất bại</div>
+          <div class="text-muted" style="font-size:12px;margin-top:2px;">${esc(job.error_summary || job.error || 'Vui lòng thử lại hoặc liên hệ admin.')}</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="ClassifyPage.resetJob()">Chọn file khác</button>
+      `;
+    } else if (job.status === 'cancelled') {
+      infoBar.style.borderColor = 'var(--border)';
+      infoBar.innerHTML = `
+        <div>
+          <div style="font-weight:600;font-size:13px;">Job đã hủy</div>
+          <div class="text-muted" style="font-size:12px;margin-top:2px;">Tiến trình đã dừng và sẽ không tiếp tục xử lý.</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="ClassifyPage.resetJob()">Chọn file khác</button>
+      `;
+    }
+  }
+
+  async function refreshCurrentJobStatus(jobId) {
+    if (!jobId) return;
+    try {
+      const job = await API.get(`/classify/jobs/${encodeURIComponent(jobId)}`, { silent: true });
+      _currentJob = { ...(_currentJob || {}), ...job };
+      if (isTerminalStatus(job.status)) {
+        if (_wsClient) {
+          _wsClient.close();
+          _wsClient = null;
+        }
+        restoreActiveJobUI(_currentJob);
+      }
+    } catch (e) {
+      console.warn('Không thể làm mới trạng thái job:', e);
     }
   }
 
@@ -215,6 +350,7 @@ window.ClassifyPage = (() => {
       const dl = document.getElementById('btn-download');
       if (dl) dl.classList.remove('hidden');
       document.getElementById('btn-reset-job')?.classList.remove('hidden');
+      renderTerminalJobActions(job);
 
       // Show completed info bar
       const jobId = job.job_id || job.id;
@@ -262,13 +398,28 @@ window.ClassifyPage = (() => {
       
       updateFileSteps(1, 'failed');
       document.getElementById('btn-reset-job')?.classList.remove('hidden');
+      renderTerminalJobActions(job);
+    } else if (job.status === 'cancelled') {
+      const bar = document.getElementById('file-progress-bar');
+      if (bar) {
+        bar.style.width = `${job.percent || 0}%`;
+        bar.style.backgroundColor = 'var(--border-light)';
+      }
+      const txt = document.getElementById('file-progress-text');
+      if (txt) txt.textContent = 'Job đã hủy';
+      const pctEl = document.getElementById('file-progress-pct');
+      if (pctEl) pctEl.textContent = 'Đã hủy';
+      updateFileSteps(job.step || 1, 'waiting');
+      document.getElementById('btn-reset-job')?.classList.remove('hidden');
+      renderTerminalJobActions(job);
     } else {
       // 'running' or 'queued'
       updateFileProgress({
         rows_done: job.rows_done ?? 0,
         total_rows: job.total_rows ?? 0,
         speed: 0,
-        eta: job.status === 'queued' ? 'Đang chờ xếp hàng...' : 'Đang xử lý...'
+        eta: isRetryingJob(job) ? 'Đang chờ chạy lại...' : (job.status === 'queued' ? 'Đang chờ xếp hàng...' : 'Đang xử lý...'),
+        status: job.status
       });
       updateFileSteps(job.step || 1, job.step_status || 'running');
     }
@@ -576,7 +727,7 @@ window.ClassifyPage = (() => {
      ============================================================ */
 
   function renderFileMode() {
-    const isJobActive = _currentJob && (_currentJob.status === 'running' || _currentJob.status === 'queued' || _currentJob.status === 'completed' || _currentJob.status === 'error');
+    const isJobActive = _currentJob && ['queued', 'running', 'completed', 'error', 'cancelled'].includes(_currentJob.status);
 
     return `
       ${renderExcelGuide()}
@@ -798,11 +949,12 @@ window.ClassifyPage = (() => {
       },
       onProgress: (data) => {
         console.log('[WS] Progress:', data);
+        if (_currentJob && isTerminalStatus(_currentJob.status)) return;
         // Null-safe: DOM elements may not exist if user is on another page (task 1.2)
         if (document.getElementById('file-progress-bar')) {
           updateFileProgress(data);
         }
-        if (data.step && document.getElementById('file-steps')) {
+        if (data.step && document.getElementById('file-pipeline-steps')) {
           updateFileSteps(data.step, data.step_status);
         }
         if (_currentJob) {
@@ -813,6 +965,7 @@ window.ClassifyPage = (() => {
         }
       },
       onBatchResult: (data) => {
+        if (_currentJob && isTerminalStatus(_currentJob.status)) return;
         appendBatchResults(data);
         if (_currentJob) {
           if (!_currentJob.results) _currentJob.results = [];
@@ -824,8 +977,8 @@ window.ClassifyPage = (() => {
         console.log('[WS] Complete:', data);
         onJobComplete(data);
         if (_currentJob) {
-          _currentJob.status = 'completed';
-          _currentJob.rows_done = data.rows_done;
+          _currentJob = { ..._currentJob, ...data, status: 'completed' };
+          restoreActiveJobUI(_currentJob);
         }
       },
       onError: (data) => {
@@ -840,6 +993,7 @@ window.ClassifyPage = (() => {
         if (_currentJob) {
           _currentJob.status = 'error';
           _currentJob.error = errMsg;
+          _currentJob.error_summary = errMsg;
         }
         
         // Show error visually
@@ -856,6 +1010,8 @@ window.ClassifyPage = (() => {
         updateFileSteps(1, 'failed');
         // Show reset button on error
         document.getElementById('btn-reset-job')?.classList.remove('hidden');
+        renderJobStatusNotice(_currentJob);
+        renderTerminalJobActions(_currentJob);
       },
       onMessage: (data) => {
         if (data.step) {
@@ -871,9 +1027,9 @@ window.ClassifyPage = (() => {
       const jobs = await API.getJobs();
       if (!Array.isArray(jobs) || jobs.length === 0) return;
 
-      // Find the most recent active job (running or queued) excluding batch jobs
+      // Find the most recent durable file job, including terminal jobs after reload.
       const activeJob = jobs
-        .filter(j => (j.status === 'running' || j.status === 'queued') && j.mode !== 'batch')
+        .filter(j => ['queued', 'running', 'completed', 'error', 'cancelled'].includes(j.status) && j.mode !== 'batch')
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
 
       if (activeJob) {
@@ -900,7 +1056,7 @@ window.ClassifyPage = (() => {
         // Populate progress bar and progress text
         updateFileProgress({
           rows_done: activeJob.rows_done,
-          rows_total: activeJob.total_rows,
+          total_rows: activeJob.total_rows,
           speed: 0,
           eta: 'Đang chạy ngầm...'
         });
@@ -933,8 +1089,9 @@ window.ClassifyPage = (() => {
           if (countEl) countEl.textContent = `${activeJob.results.length} dòng`;
         }
 
-        // Connect WebSocket
-        connectJobWS(activeJob.job_id);
+        if (!isTerminalStatus(activeJob.status)) {
+          connectJobWS(activeJob.job_id);
+        }
       }
     } catch (e) {
       console.warn('Lỗi kiểm tra active job:', e);
@@ -957,7 +1114,9 @@ window.ClassifyPage = (() => {
     if (bar) bar.style.width = (pct || 0) + '%';
     // Show helpful message when waiting for first batch
     if (text) {
-      if (done === 0 && total > 0 && data.status !== 'completed') {
+      if (data.status === 'queued') {
+        text.textContent = data.retry_count > 0 ? 'Đang chờ chạy lại' : 'Đang chờ xếp hàng';
+      } else if (done === 0 && total > 0 && data.status !== 'completed') {
         text.textContent = `Đang gọi AI xử lý... (0 / ${total} dòng)`;
       } else {
         text.textContent = `${done} / ${total} dòng`;
@@ -1071,13 +1230,24 @@ window.ClassifyPage = (() => {
     }
   }
 
-  function stopClassify() {
+  async function stopClassify() {
+    const jobId = _currentJob?.job_id || _currentJob?.id;
+    if (jobId) {
+      try {
+        await API.cancelJob(jobId);
+        _currentJob = { ..._currentJob, status: 'cancelled', terminal: true };
+        restoreActiveJobUI(_currentJob);
+      } catch (e) {
+        Toast.error('Không thể hủy job: ' + e.message);
+        return;
+      }
+    }
     if (_wsClient) {
       _wsClient.send({ action: 'stop' });
       _wsClient.close();
       _wsClient = null;
     }
-    Toast.warning('Đã dừng phân loại');
+    Toast.warning('Đã hủy job phân loại');
     // Show reset button
     document.getElementById('btn-reset-job')?.classList.remove('hidden');
   }
@@ -1572,6 +1742,134 @@ window.ClassifyPage = (() => {
     if (overlay) overlay.remove();
   }
 
+  // === Admin Job Operations ===
+
+  function renderAdminJobsMode() {
+    if (!isAdmin()) return '<div class="card"><p class="text-muted">Bạn không có quyền truy cập.</p></div>';
+    return `
+      <div class="card animate-in">
+        <div class="card-header">
+          <span class="card-title"><span class="icon">📋</span> Vận hành job phân loại</span>
+          <button class="btn btn-ghost btn-sm" onclick="ClassifyPage.loadAdminJobs()">🔄</button>
+        </div>
+        <div id="admin-job-metrics" class="grid-4" style="margin-bottom:16px;"></div>
+        <div class="table-wrap" style="max-height:520px;overflow:auto;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>Người tạo</th>
+                <th>File</th>
+                <th>Trạng thái</th>
+                <th>Queued</th>
+                <th>Started</th>
+                <th>Completed</th>
+                <th>Retry</th>
+                <th>Lỗi</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="admin-jobs-tbody">
+              <tr><td colspan="10" class="text-muted">Đang tải...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  async function loadAdminJobs() {
+    if (!isAdmin()) return;
+    try {
+      const [jobs, metrics] = await Promise.all([
+        API.getJobs(),
+        API.getJobMetrics()
+      ]);
+      _adminJobs = Array.isArray(jobs) ? jobs : [];
+      _adminJobMetrics = metrics || null;
+      renderAdminJobMetrics();
+      renderAdminJobsTable();
+    } catch (e) {
+      Toast.error('Không thể tải danh sách jobs: ' + e.message);
+    }
+  }
+
+  function renderMetricCard(label, value, hint = '') {
+    return `
+      <div style="padding:12px;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:8px;">
+        <div class="text-muted" style="font-size:11px;">${esc(label)}</div>
+        <div style="font-size:22px;font-weight:700;margin-top:4px;">${esc(String(value ?? 0))}</div>
+        ${hint ? `<div class="text-muted" style="font-size:11px;margin-top:2px;">${esc(hint)}</div>` : ''}
+      </div>
+    `;
+  }
+
+  function renderAdminJobMetrics() {
+    const el = document.getElementById('admin-job-metrics');
+    if (!el) return;
+    const counts = _adminJobMetrics?.counts || {};
+    el.innerHTML = [
+      renderMetricCard('Queued', counts.queued || 0, `Retrying: ${counts.retrying || 0}`),
+      renderMetricCard('Running', counts.running || 0),
+      renderMetricCard('Failed', counts.failed || 0),
+      renderMetricCard('Avg wait', `${_adminJobMetrics?.avg_queue_wait_seconds || 0}s`, `Avg run: ${_adminJobMetrics?.avg_processing_seconds || 0}s`),
+    ].join('');
+  }
+
+  function renderAdminJobsTable() {
+    const tbody = document.getElementById('admin-jobs-tbody');
+    if (!tbody) return;
+    if (!_adminJobs.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-muted">Chưa có job phân loại.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = _adminJobs.map(job => {
+      const jobId = job.job_id || job.id;
+      const error = job.error_summary || job.error || '';
+      const actions = [];
+      if (job.can_cancel || ['queued', 'running'].includes(job.status)) {
+        actions.push(`<button class="btn btn-danger btn-sm" onclick="ClassifyPage.cancelAdminJob('${jobId}')">Hủy</button>`);
+      }
+      if (job.can_retry || ['error', 'cancelled'].includes(job.status)) {
+        actions.push(`<button class="btn btn-secondary btn-sm" onclick="ClassifyPage.retryAdminJob('${jobId}')">Retry</button>`);
+      }
+      return `
+        <tr>
+          <td class="text-mono" style="font-size:11px;">${esc(jobId.slice(0, 8))}</td>
+          <td>${esc(job.owner_username || '')}</td>
+          <td class="wrap" style="max-width:220px;">${esc(job.filename || '')}</td>
+          <td>${statusBadge(job)}</td>
+          <td style="font-size:12px;">${esc(formatDateTime(job.queued_at || job.created_at))}</td>
+          <td style="font-size:12px;">${esc(formatDateTime(job.started_at))}</td>
+          <td style="font-size:12px;">${esc(formatDateTime(job.completed_at))}</td>
+          <td>${Number(job.retry_count || 0)}</td>
+          <td class="wrap" style="max-width:220px;font-size:12px;">${esc(error)}</td>
+          <td><div style="display:flex;gap:6px;">${actions.join('') || '<span class="text-muted">—</span>'}</div></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  async function cancelAdminJob(jobId) {
+    try {
+      await API.cancelJob(jobId);
+      Toast.success('Đã hủy job');
+      await loadAdminJobs();
+    } catch (e) {
+      Toast.error('Không thể hủy job: ' + e.message);
+    }
+  }
+
+  async function retryAdminJob(jobId) {
+    try {
+      await API.retryJob(jobId);
+      Toast.success('Đã đưa job vào hàng đợi retry');
+      await loadAdminJobs();
+    } catch (e) {
+      Toast.error('Không thể retry job: ' + e.message);
+    }
+  }
+
   // === Config Mode (tasks 3-6) ===
 
   function renderConfigMode() {
@@ -1977,6 +2275,7 @@ window.ClassifyPage = (() => {
     startFileClassify, togglePause, stopClassify, downloadResult, resetJob,
     batchDrop, handleBatchFiles, startBatch, clearBatch, removeBatchFile,
     pushToSharePoint,
+    loadAdminJobs, cancelAdminJob, retryAdminJob,
     previewTemplate, downloadTemplate, downloadJob, openPromptEditor, openKeywordEditor, quickAddKeyword,
     filterKeywords, filterProducts, switchConfigSheet,
     openProductEditor, addProductEditorRow, deleteProductEditorRow, saveProductEditor,
