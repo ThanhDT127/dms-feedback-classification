@@ -1,5 +1,8 @@
 # Technical Document: DMS Feedback Classification Service
 
+> **Cập nhật:** Tháng 7/2026 — phản ánh cấu trúc package `src/dms/` sau refactor.
+> **Xem thêm:** [API Reference](api/overview.md) · [User Guide](USER_GUIDE.md) · [Operations Guide](OPERATIONS.md)
+
 This document provides a comprehensive technical overview of the DMS Feedback Classification Service, including its architecture, code structure, data formats, API specifications, and classification pipeline details.
 
 ---

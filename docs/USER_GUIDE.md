@@ -562,3 +562,54 @@ Trong thư mục `service/scripts/` có chứa sẵn các tập lệnh Python ch
 7. **`compress_bg.py`**: Công cụ tối ưu dung lượng Web UI.
    * *Mục đích*: Nén tối ưu các file hình ảnh nền và assets tĩnh của giao diện Web UI trước khi deploy nhằm tăng tốc độ tải trang.
    * *Cách chạy*: `python scripts/compress_bg.py`
+
+---
+
+## 6. TÍNH NĂNG MỚI (Cập nhật Tháng 7/2026)
+
+### 6.1. Tự động Reset trạng thái khi đăng nhập
+
+Khi người dùng đăng nhập bằng tài khoản khác, hệ thống **tự động xóa trạng thái phân loại** của phiên trước (file đang chọn, job đang theo dõi, WebSocket đang kết nối). Điều này đảm bảo mỗi lần đăng nhập luôn bắt đầu từ trạng thái sạch, tránh hiện tượng thấy dữ liệu của người dùng khác.
+
+Lưu ý: nếu bấm **Reset** trên trang Phân loại rồi tải lại trang, job cũ sẽ không được phục hồi.
+
+### 6.2. Tab Thống kê — Giám sát Gemini API (Chỉ Admin)
+
+Tab **📈 Thống kê** trên sidebar nay bao gồm phần **🤖 Giám sát Gemini API** dành riêng cho quản trị viên:
+
+| Thẻ thống kê | Ý nghĩa |
+|---|---|
+| **Số lần gọi API** | Tổng số lần hệ thống gọi Gemini trong kỳ chọn |
+| **Token đầu vào / đầu ra** | Prompt gửi đi (input) và kết quả nhận về (output) |
+| **TB token / lần gọi** | Trung bình token mỗi lần gọi, giúp phát hiện bất thường |
+| **Chi phí ước tính** | Tính theo giá model hiện tại × số token (USD) |
+
+**Bộ lọc thời gian:** Hôm nay / 7 ngày / 30 ngày / Tuỳ chọn (chọn khoảng ngày tùy ý).
+
+**Biểu đồ:** Stacked bar chart token theo ngày (xanh = input, xanh lá = output).
+
+**Bảng Top 10 file:** Danh sách file tốn token nhiều nhất trong kỳ — hữu ích để kiểm soát chi phí.
+
+Xem hướng dẫn chi tiết: [admin/monitoring.md](admin/monitoring.md)
+
+### 6.3. Trạng thái Cấu hình trên Sidebar
+
+Sidebar nay hiển thị trạng thái đồng bộ cấu hình từ SharePoint:
+- **🟢 Bình thường** — cấu hình đang đồng bộ tốt
+- **🟠 Có lỗi** — có lỗi khi đồng bộ từ SharePoint
+- **⬜ Chưa kết nối** — chưa kết nối được SharePoint
+
+### 6.4. Định dạng Ngày Sửa đổi trong Quản lý File
+
+Cột "Ngày sửa đổi" trong tab **📁 Quản lý File** nay hiển thị theo định dạng thân thiện:
+- Cùng năm: `dd/MM HH:mm` (ví dụ: `10/07 14:30`)
+- Khác năm: `dd/MM/YYYY HH:mm` (ví dụ: `10/07/2025 08:15`)
+
+### 6.5. Thông báo Toast khi Đồng bộ SharePoint
+
+Khi bấm **Đồng bộ SharePoint** hoặc **Xóa file**, hệ thống hiển thị thông báo nhỏ ở góc màn hình:
+- ⏳ **Đang đồng bộ SharePoint...** — trong lúc đang thực hiện
+- ✅ **Đồng bộ thành công** — khi hoàn tất
+- ❌ **Lỗi đồng bộ** — khi có sự cố
+
+Nút đồng bộ sẽ bị vô hiệu hóa trong thời gian thao tác để tránh bấm trùng.

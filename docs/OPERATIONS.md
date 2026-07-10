@@ -2,6 +2,8 @@
 
 English documentation. Vietnamese version: [OPERATIONS.vi.md](OPERATIONS.vi.md).
 
+> **Related docs:** [API Reference](api/overview.md) · [SharePoint Sync](admin/sharepoint-sync.md) · [Troubleshooting](admin/troubleshooting.md)
+
 ## 1. Service Overview
 
 The DMS service is a Dockerized Python watcher. It runs from `service/` with:
@@ -12,13 +14,22 @@ python -m dms
 
 Main responsibilities:
 
-- poll SharePoint `Input/`
+**Watcher process** (`python -m dms watcher` or default `python -m dms`):
+- poll SharePoint `Input/` every `POLL_INTERVAL_SECONDS` (default 300s)
 - download new `.xlsx` files
 - classify feedback rows using local baseline model, keyword/product assets, and Gemini
 - upload output workbooks to SharePoint `Output/`
 - upload checkpoints to SharePoint `Check_Point/`
 - write local health, metrics, and state files
 - clean temporary local artifacts after confirmed success
+
+**Web API process** (`python -m dms web`):
+- serves FastAPI backend at port 8000
+- serves static SPA frontend (Vanilla JS)
+- provides REST API at `/api/*` and WebSocket streams at `/ws/*`
+- health check: `GET /api/health` → `{status, version, config_assets}`
+
+In Docker Compose, both processes run as separate containers from the same image.
 
 ## 2. Runtime Directories
 
