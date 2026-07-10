@@ -6,6 +6,7 @@ window.DashboardPage = (() => {
   let _refreshInterval = null;
   let _metricsData = null;
   let _healthData = null;
+  let _usageData = null;
 
   function render() {
     const app = document.getElementById('app');
@@ -19,6 +20,9 @@ window.DashboardPage = (() => {
       <div class="stat-grid" id="dash-stats">
         ${renderStatsSkeleton()}
       </div>
+
+      <!-- Admin Usage Stats -->
+      <div id="dash-usage-stats"></div>
 
       <!-- Charts & Activity -->
       <div class="grid-2-1">
@@ -39,6 +43,7 @@ window.DashboardPage = (() => {
               <canvas id="chart-labels"></canvas>
             </div>
           </div>
+
         </div>
 
         <div class="flex flex-col" style="gap:20px;">
@@ -118,6 +123,16 @@ window.DashboardPage = (() => {
       renderSystemStatus(_healthData, _metricsData);
       renderDailyChart(dailyData);
       renderLabelChart(_metricsData);
+
+      // Admin-only: load Gemini usage metrics
+      if (window.App?.state?.user?.role === 'admin') {
+        try {
+          _usageData = await API.getUsageMetrics('today');
+          renderUsageStats(_usageData);
+        } catch (e) {
+          console.warn('Usage metrics not available:', e);
+        }
+      }
     } catch (e) {
       console.error('Dashboard load error:', e);
     }
@@ -217,6 +232,61 @@ window.DashboardPage = (() => {
 
     Charts.createDoughnutChart('chart-labels', labels, values);
   }
+
+  function formatTokens(n) {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+    return n.toLocaleString();
+  }
+
+  function renderUsageStats(data) {
+    const el = document.getElementById('dash-usage-stats');
+    if (!el) return;
+    if (!window.App?.state?.user?.role === 'admin' || !data) {
+      el.innerHTML = '';
+      return;
+    }
+
+    const todayTokens = data.today_tokens || 0;
+    const todayCost = data.today_cost || 0;
+    const todayRequests = data.today_requests || 0;
+
+    el.innerHTML = `
+      <div style="margin-bottom:8px;margin-top:4px;">
+        <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">🤖 Gemini Usage (hôm nay)</span>
+      </div>
+      <div class="stat-grid" style="margin-bottom:20px;">
+        <div class="stat-card blue animate-in">
+          <div class="stat-card-top">
+            <div>
+              <div class="stat-card-value">${todayTokens.toLocaleString()}</div>
+              <div class="stat-card-label">Tổng Token (hôm nay)</div>
+            </div>
+            <div class="stat-card-icon">🔤</div>
+          </div>
+        </div>
+        <div class="stat-card green animate-in animate-in-delay-1">
+          <div class="stat-card-top">
+            <div>
+              <div class="stat-card-value">$${todayCost.toFixed(2)}</div>
+              <div class="stat-card-label">Chi phí ước tính</div>
+            </div>
+            <div class="stat-card-icon">💰</div>
+          </div>
+        </div>
+        <div class="stat-card amber animate-in animate-in-delay-2">
+          <div class="stat-card-top">
+            <div>
+              <div class="stat-card-value">${todayRequests.toLocaleString()}</div>
+              <div class="stat-card-label">Requests Gemini</div>
+            </div>
+            <div class="stat-card-icon">📡</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
 
   function renderActivity(data) {
     const el = document.getElementById('dash-activity');

@@ -19,6 +19,7 @@ from ..exceptions import PipelineCancelled, PipelineError
 from ..gemini_client import GeminiClient
 from ..metrics import MetricsCollector
 from ..settings import Settings
+from ..usage_tracker import UsageTracker, calculate_cost
 from .excel_formatter import write_formatted_header
 from .issue_classifier import MINOR_ORDER, IssueClassifier
 from .rag_product import RAGProductMatcher
@@ -123,6 +124,7 @@ class PipelineRunner:
         metrics: MetricsCollector,
         settings: Settings,
         issue_classifier: IssueClassifier | None = None,
+        usage_tracker: UsageTracker | None = None,
     ) -> None:
         self.gemini = gemini
         self.rag = rag
@@ -131,15 +133,34 @@ class PipelineRunner:
         self.issue_classifier = issue_classifier or IssueClassifier(
             gemini=gemini, settings=settings
         )
+        self.usage_tracker = usage_tracker
+        self._pricing_config = self._load_pricing_config()
 
-    def _run_rag_with_retry(self, batch_texts: list[str]) -> list[dict]:
+    def _load_pricing_config(self) -> dict:
+        """Parse the JSON pricing config from settings."""
+        import json as _json
+
+        try:
+            return _json.loads(self.settings.gemini_model_pricing)
+        except Exception:
+            return {}
+
+    def _run_rag_with_retry(
+        self,
+        batch_texts: list[str],
+        cancellation_check: Callable[[], bool] | None = None,
+    ) -> list[dict]:
         retries = 0
         for attempt in range(1, self.settings.max_retry + 1):
+            if cancellation_check is not None and cancellation_check():
+                raise PipelineCancelled("Classification job was cancelled.")
             try:
                 result = self.rag.retrieve_batch(batch_texts)
                 self.metrics.record_gemini_call(retries=retries)
                 return result
             except Exception as exc:
+                if cancellation_check is not None and cancellation_check():
+                    raise PipelineCancelled("Classification job was cancelled.") from exc
                 retries += 1
                 wait = self.settings.base_wait * attempt
                 logger.warning(
@@ -149,7 +170,14 @@ class PipelineRunner:
                     exc,
                     wait,
                 )
-                time.sleep(wait)
+                
+                # Check cancellation rapidly during the sleep interval
+                steps = int(wait * 10)
+                for _ in range(steps):
+                    if cancellation_check is not None and cancellation_check():
+                        raise PipelineCancelled("Classification job was cancelled.")
+                    time.sleep(0.1)
+                
         self.metrics.record_gemini_call(retries=retries)
         return [
             {
@@ -264,7 +292,32 @@ class PipelineRunner:
                     pass
             if cancellation_check is not None and cancellation_check():
                 raise PipelineCancelled("Classification job was cancelled.")
-            rag_batch = self._run_rag_with_retry(batch)
+            rag_batch = self._run_rag_with_retry(batch, cancellation_check)
+
+            # Track RAG usage
+            rag_usage = self.rag._last_usage
+            if rag_usage:
+                rag_cost = calculate_cost(
+                    self.settings.gemini_model,
+                    rag_usage.get("prompt_tokens", 0),
+                    rag_usage.get("completion_tokens", 0),
+                    self._pricing_config,
+                )
+                self.metrics.record_gemini_call(
+                    prompt_tokens=rag_usage.get("prompt_tokens", 0),
+                    completion_tokens=rag_usage.get("completion_tokens", 0),
+                    cost_usd=rag_cost,
+                )
+                if self.usage_tracker:
+                    self.usage_tracker.record(
+                        model=self.settings.gemini_model,
+                        call_type="rag_extract",
+                        prompt_tokens=rag_usage.get("prompt_tokens", 0),
+                        completion_tokens=rag_usage.get("completion_tokens", 0),
+                        total_tokens=rag_usage.get("total_tokens", 0),
+                        estimated_cost_usd=rag_cost,
+                    )
+
             if progress_callback is not None:
                 try:
                     progress_callback(step=2, step_status="running")
@@ -288,21 +341,69 @@ class PipelineRunner:
                 issue_list = self.issue_classifier.classify_batch(
                     batch,
                     matched_products=rag_batch,
+                    cancellation_check=cancellation_check,
                 )
-                self.metrics.record_gemini_call()
+                usage = self.issue_classifier._last_usage
+                cost = calculate_cost(
+                    self.settings.gemini_model,
+                    usage.get("prompt_tokens", 0),
+                    usage.get("completion_tokens", 0),
+                    self._pricing_config,
+                )
+                self.metrics.record_gemini_call(
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    cost_usd=cost,
+                )
+                if self.usage_tracker:
+                    self.usage_tracker.record(
+                        model=self.settings.gemini_model,
+                        call_type="classify_batch",
+                        prompt_tokens=usage.get("prompt_tokens", 0),
+                        completion_tokens=usage.get("completion_tokens", 0),
+                        total_tokens=usage.get("total_tokens", 0),
+                        estimated_cost_usd=cost,
+                    )
+            except PipelineCancelled:
+                raise
             except Exception as exc:
-                logger.error("Issue classifier error: %s -> using fallback Tin trung lập", exc)
-                issue_list = [
-                    {
-                        "final_minors": ["Tin trung lập"],
-                        "sentiment": "",
-                        "brand": "",
-                        "decision_log": [
-                            {"minor": "__ALL__", "action": "KEEP", "why": f"FALLBACK_ERROR: {exc}"}
-                        ],
-                    }
-                    for _ in range(len(batch))
-                ]
+                logger.error(
+                    "Issue classifier batch error: %s -> retrying %d rows individually",
+                    exc, len(batch),
+                )
+                # Sequential per-row retry with individual fallback
+                issue_list = []
+                for row_idx, (text, rag_item) in enumerate(zip(batch, rag_batch)):
+                    if cancellation_check is not None and cancellation_check():
+                        raise PipelineCancelled("Classification job was cancelled.")
+                    try:
+                        single_result = self.issue_classifier.classify_batch(
+                            [text],
+                            matched_products=[rag_item],
+                            cancellation_check=cancellation_check,
+                        )
+                        self.metrics.record_gemini_call()
+                        issue_list.append(single_result[0] if single_result else {})
+                    except PipelineCancelled:
+                        raise
+                    except Exception as row_exc:
+                        logger.warning(
+                            "Single-row retry at batch offset %d failed: %s", row_idx, row_exc
+                        )
+                        issue_list.append(
+                            {
+                                "final_minors": ["Tin trung lập"],
+                                "sentiment": "",
+                                "brand": "",
+                                "decision_log": [
+                                    {
+                                        "minor": "__ALL__",
+                                        "action": "KEEP",
+                                        "why": f"FALLBACK_INDIVIDUAL_ERROR: {row_exc}",
+                                    }
+                                ],
+                            }
+                        )
             logger.info("  Issue classify time: %.2fs", time.time() - t_issue_s)
 
             for j, (_, rag, issue) in enumerate(zip(batch, rag_batch, issue_list, strict=False)):

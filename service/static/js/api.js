@@ -14,10 +14,12 @@ window.API = (() => {
 
   function setLoading(val) {
     _loading = val;
-    _listeners.forEach(fn => fn(val));
+    _listeners.forEach(fn => {
+      if (typeof fn === 'function') fn(val);
+    });
   }
 
-  function onLoading(fn) { _listeners.add(fn); }
+  function onLoading(fn) { if (typeof fn === 'function') _listeners.add(fn); }
   function offLoading(fn) { _listeners.delete(fn); }
   function isLoading() { return _loading; }
 
@@ -210,6 +212,13 @@ window.API = (() => {
   function syncProductsToSP()    { return post('/pipeline/sync-products-to-sp', null); }
   function syncSharePoint()      { return post('/files/sync', null); }
   function uploadJobToSharePoint(jobId) { return post(`/classify/jobs/${jobId}/sharepoint`); }
+  function getUsageMetrics(period = 'week', from = '', to = '') {
+    const params = new URLSearchParams({ period });
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    return get(`/metrics/usage?${params}`);
+  }
+  function getUsagePricing() { return get('/metrics/usage/config'); }
 
   function setTokens(access, refresh) {
     _accessToken = access;
@@ -272,6 +281,7 @@ window.API = (() => {
     getSettings, putSettings, getSecret, getPrompt, getModels, testConnection,
     getLabels, getKeywords, getBrands, getLogs,
     syncKeywordsToSP, syncProductsToSP, syncSharePoint, uploadJobToSharePoint,
+    getUsageMetrics, getUsagePricing,
     logout
   };
 })();

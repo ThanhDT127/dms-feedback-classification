@@ -270,6 +270,10 @@ async def sync_sharepoint(admin: dict = Depends(get_admin_user)):
 
             for path in local_output_dir.iterdir():
                 if path.is_file() and path.suffix.lower() == ".xlsx":
+                    file_size = path.stat().st_size
+                    if file_size < 1024:
+                        logger.warning("Skipping small file %s (%dB) — likely not a valid xlsx", path.name, file_size)
+                        continue
                     if path.name not in sp_output_names:
                         logger.info("Manual Sync: Uploading completed output file %s", path.name)
                         sp_client.upload_file(path, settings.sp_output_folder)

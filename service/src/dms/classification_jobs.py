@@ -632,6 +632,79 @@ class ClassificationJobStore:
             else 0.0,
         }
 
+    def aggregate_stats(self, *, recent_limit: int = 50) -> dict:
+        """Return aggregate processing statistics for dashboard consumption.
+
+        Combines completed and failed job counts, total rows, duration,
+        daily breakdown, and a recent-files list — all from SQLite only.
+        """
+        with self._lock, self._conn() as conn:
+            # --- counts ---
+            agg = conn.execute(
+                """
+                SELECT
+                    COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS completed_count,
+                    COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS failed_count,
+                    COALESCE(SUM(CASE WHEN status = ? THEN total_rows ELSE 0 END), 0) AS total_rows,
+                    COALESCE(SUM(CASE WHEN status = ? THEN duration_seconds ELSE 0 END), 0.0) AS total_duration_seconds
+                FROM classification_jobs
+                """,
+                (JOB_STATUS_COMPLETED, JOB_STATUS_ERROR, JOB_STATUS_COMPLETED, JOB_STATUS_COMPLETED),
+            ).fetchone()
+
+            completed_count = int(agg["completed_count"])
+            failed_count = int(agg["failed_count"])
+            total_rows = int(agg["total_rows"])
+            total_duration = float(agg["total_duration_seconds"])
+
+            # --- daily counts (completed only) ---
+            daily_rows = conn.execute(
+                """
+                SELECT SUBSTR(completed_at, 1, 10) AS day, COUNT(*) AS cnt
+                FROM classification_jobs
+                WHERE status = ? AND completed_at IS NOT NULL
+                GROUP BY day
+                ORDER BY day
+                """,
+                (JOB_STATUS_COMPLETED,),
+            ).fetchall()
+            daily_counts: dict[str, int] = {}
+            for row in daily_rows:
+                day = row["day"]
+                if day and len(day) == 10:  # YYYY-MM-DD
+                    daily_counts[day] = int(row["cnt"])
+
+            # --- recent files ---
+            recent_rows = conn.execute(
+                """
+                SELECT filename, status, completed_at, total_rows, duration_seconds
+                FROM classification_jobs
+                WHERE status IN (?, ?)
+                ORDER BY COALESCE(completed_at, created_at) DESC
+                LIMIT ?
+                """,
+                (JOB_STATUS_COMPLETED, JOB_STATUS_ERROR, recent_limit),
+            ).fetchall()
+            recent_files = [
+                {
+                    "filename": row["filename"],
+                    "status": "done" if row["status"] == JOB_STATUS_COMPLETED else "failed",
+                    "timestamp": row["completed_at"] or "",
+                    "total_rows": int(row["total_rows"] or 0),
+                    "duration_seconds": float(row["duration_seconds"] or 0),
+                }
+                for row in recent_rows
+            ]
+
+        return {
+            "completed_count": completed_count,
+            "failed_count": failed_count,
+            "total_rows": total_rows,
+            "total_duration_seconds": total_duration,
+            "daily_counts": daily_counts,
+            "recent_files": recent_files,
+        }
+
     def update_sharepoint(
         self,
         job_id: str,

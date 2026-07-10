@@ -129,6 +129,7 @@ class RAGProductMatcher:
     def __init__(self, settings: Settings, gemini: GeminiClient) -> None:
         self.settings = settings
         self.gemini = gemini
+        self._last_usage: dict = {}
         products_path = settings.df_products_path
         logger.info("Loading product catalog from %s", products_path)
         self.df_products = pd.read_excel(products_path)
@@ -188,8 +189,9 @@ class RAGProductMatcher:
 
         for attempt in range(1, self.settings.max_retry + 1):
             try:
-                resp_text = self.gemini.generate(prompt)
-                return self._parse_llm_numbered(resp_text, len(texts))
+                resp = self.gemini.generate(prompt)
+                self._last_usage = resp.usage
+                return self._parse_llm_numbered(resp.text, len(texts))
             except Exception as exc:
                 wait = self.settings.base_wait * attempt
                 logger.warning(
