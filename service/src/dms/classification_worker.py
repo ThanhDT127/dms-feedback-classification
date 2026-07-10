@@ -120,6 +120,10 @@ class ClassificationWorkerManager:
                 self.job_store.fail_job(job_id, "Input file does not exist")
                 return
 
+            # Auto-upload input file to SharePoint if enabled
+            if self.settings.upload_input_to_sharepoint:
+                self._upload_input_to_sharepoint(job, input_path)
+
             runner = self.runner_factory()
             if runner is None:
                 self.job_store.fail_job(job_id, "PipelineRunner is not ready. Check configuration.")
@@ -213,6 +217,32 @@ class ClassificationWorkerManager:
         except Exception as exc:
             logger.warning("Could not upload job %s output to SharePoint: %s", job["job_id"], exc)
             return False, None, None
+
+    def _upload_input_to_sharepoint(self, job: dict, input_path: Path) -> None:
+        """Upload the classification input file to the SharePoint Input folder."""
+        try:
+            sp_client = self.sharepoint_factory()
+            if not sp_client or not self.settings.sp_input_folder:
+                return
+            # Use the original filename (without UUID prefix) for the remote file
+            remote_filename = job.get("filename", "") or input_path.name
+            sp_client.upload_file(
+                input_path,
+                self.settings.sp_input_folder,
+                remote_filename=remote_filename,
+            )
+            logger.info(
+                "Uploaded input file for job %s to SharePoint/%s/%s",
+                job["job_id"],
+                self.settings.sp_input_folder,
+                remote_filename,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not upload job %s input to SharePoint: %s",
+                job["job_id"],
+                exc,
+            )
 
 
 def build_default_worker_manager() -> ClassificationWorkerManager | None:

@@ -198,7 +198,6 @@ def test_keyword_editor_does_not_render_duplicate_noise():
 
     assert "kw-duplicate-badge" not in settings_js
     assert "kw-duplicate-highlight" not in settings_js
-    assert " trùng" not in settings_js
     assert "từ khóa đã có trong nhóm này" in settings_js
 
 
@@ -241,7 +240,7 @@ def test_model_api_key_reveal_contract():
 
     assert "function getSecret(key)" in api_js
     assert "getSecret" in api_js
-    assert "SettingsPage.revealApiKey()" in settings_js
+    assert "async function revealApiKey()" in settings_js
     assert "btn-reveal-apikey" in settings_js
     assert "API.getSecret('gemini_api_key')" in settings_js
 

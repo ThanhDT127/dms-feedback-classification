@@ -36,7 +36,15 @@ class MetricsCollector:
         self.daily_processing_seconds = 0.0
         self.daily_gemini_calls = 0
         self.daily_gemini_retries = 0
+        self.daily_prompt_tokens = 0
+        self.daily_completion_tokens = 0
+        self.daily_cost_usd = 0.0
         self._current_date = datetime.now().strftime("%Y-%m-%d")
+
+        # Token usage totals
+        self.total_prompt_tokens = 0
+        self.total_completion_tokens = 0
+        self.total_cost_usd = 0.0
 
         self.last_success = None
         self.last_error = None
@@ -67,6 +75,9 @@ class MetricsCollector:
         self.last_success = data.get("last_success")
         self.last_error = data.get("last_error")
         self.label_distribution = defaultdict(int, data.get("label_distribution", {}))
+        self.total_prompt_tokens = data.get("total_prompt_tokens", 0)
+        self.total_completion_tokens = data.get("total_completion_tokens", 0)
+        self.total_cost_usd = data.get("total_cost_usd", 0.0)
 
         self._reconstruct_from_seen()
 
@@ -198,11 +209,23 @@ class MetricsCollector:
         self.total_polls += 1
         self.daily_polls += 1
 
-    def record_gemini_call(self, retries: int = 0) -> None:
+    def record_gemini_call(
+        self,
+        retries: int = 0,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cost_usd: float = 0.0,
+    ) -> None:
         self.gemini_calls += 1
         self.gemini_retries += retries
         self.daily_gemini_calls += 1
         self.daily_gemini_retries += retries
+        self.total_prompt_tokens += prompt_tokens
+        self.total_completion_tokens += completion_tokens
+        self.total_cost_usd += cost_usd
+        self.daily_prompt_tokens += prompt_tokens
+        self.daily_completion_tokens += completion_tokens
+        self.daily_cost_usd += cost_usd
 
     @property
     def uptime_seconds(self) -> float:
@@ -252,6 +275,9 @@ class MetricsCollector:
             "label_distribution": dict(self.label_distribution),
             "gemini_calls": self.gemini_calls,
             "gemini_retries": self.gemini_retries,
+            "total_prompt_tokens": self.total_prompt_tokens,
+            "total_completion_tokens": self.total_completion_tokens,
+            "total_cost_usd": round(self.total_cost_usd, 6),
         }
         try:
             from .utils import atomic_write_json
@@ -306,6 +332,9 @@ class MetricsCollector:
             ),
             "gemini_calls": self.daily_gemini_calls,
             "gemini_retries": self.daily_gemini_retries,
+            "prompt_tokens": self.daily_prompt_tokens,
+            "completion_tokens": self.daily_completion_tokens,
+            "cost_usd": round(self.daily_cost_usd, 6),
             "polls": self.daily_polls,
             "success_rate": f"{self.success_rate_pct}%",
         }
@@ -326,6 +355,9 @@ class MetricsCollector:
         self.daily_processing_seconds = 0.0
         self.daily_gemini_calls = 0
         self.daily_gemini_retries = 0
+        self.daily_prompt_tokens = 0
+        self.daily_completion_tokens = 0
+        self.daily_cost_usd = 0.0
 
     def _scan_existing_outputs(self) -> None:
         try:

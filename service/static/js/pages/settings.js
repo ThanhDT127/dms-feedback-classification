@@ -44,6 +44,69 @@ window.SettingsPage = (() => {
     const app = document.getElementById('app');
     const isAdmin = App.state?.user?.role === 'admin';
     const tabs = isAdmin ? [...TABS, { id: 'users', icon: '👥', label: 'Người dùng' }] : TABS;
+
+    // Inject custom CSS for keywords chips if not already present
+    if (!document.getElementById('settings-chips-styles')) {
+      const style = document.createElement('style');
+      style.id = 'settings-chips-styles';
+      style.textContent = `
+        .kw-chips-container {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          padding: 8px 12px;
+          background: rgba(255, 255, 255, 0.02);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 6px;
+          min-height: 42px;
+          align-items: center;
+        }
+        .kw-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: rgba(59, 130, 246, 0.12);
+          color: #93c5fd;
+          border: 1px solid rgba(59, 130, 246, 0.25);
+          padding: 3px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          transition: all 0.2s;
+        }
+        .kw-chip.highlighted {
+          background: #eab308 !important;
+          color: #000 !important;
+          border-color: #facc15 !important;
+          font-weight: bold;
+          transform: scale(1.05);
+        }
+        .kw-chip.dimmed {
+          opacity: 0.25;
+        }
+        .kw-chip-remove {
+          cursor: pointer;
+          font-weight: bold;
+          color: rgba(239, 68, 68, 0.6);
+          transition: color 0.2s;
+          font-size: 14px;
+          line-height: 1;
+        }
+        .kw-chip-remove:hover {
+          color: #f87171;
+        }
+        .kw-rename-input {
+          font-size: 12px;
+          padding: 2px 6px;
+          background: rgba(0, 0, 0, 0.5);
+          border: 1px solid var(--accent-blue);
+          color: #fff;
+          border-radius: 4px;
+          outline: none;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
     app.innerHTML = `
       <div class="page-header">
         <h2>⚙️ Cài đặt</h2>
@@ -172,11 +235,8 @@ window.SettingsPage = (() => {
         <div id="apikey-fields" ${!isApiKey ? 'class="hidden"' : ''}>
           <div class="form-group">
             <label class="form-label">API Key</label>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <input type="password" class="form-input" id="set-apikey" value="${esc(s.gemini_api_key || s.api_key || '')}" placeholder="••••••••••••">
-              <button type="button" class="btn btn-secondary btn-sm" id="btn-reveal-apikey" onclick="SettingsPage.revealApiKey()" title="Hiện/ẩn API key" style="white-space:nowrap;">👁️ Hiện</button>
-            </div>
-            <span class="form-hint" style="font-size:11px;color:var(--text-muted);">Key được ẩn trên giao diện; file .env cần được bảo vệ quyền truy cập</span>
+            <input type="password" class="form-input" id="set-apikey" value="" placeholder="${s.gemini_api_key || s.api_key ? '•••••••••••• (Đã cấu hình)' : 'Chưa cấu hình API Key'}">
+            <span class="form-hint" style="font-size:11px;color:var(--text-muted);">Key đã được cấu hình ẩn; chỉ có thể nhập mới chứ không thể xem lại</span>
           </div>
         </div>
 
@@ -255,6 +315,8 @@ window.SettingsPage = (() => {
     }
     return data;
   }
+
+
 
   async function revealApiKey() {
     const input = document.getElementById('set-apikey');
@@ -461,7 +523,7 @@ window.SettingsPage = (() => {
 
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
           <p class="form-hint" style="color:var(--text-muted); font-size:12px; margin:0;">
-            Chỉnh sửa từ khóa gợi ý cho từng nhãn phân loại. Nhập các từ khóa cách nhau bằng dấu phẩy.
+            Chỉnh sửa từ khóa gợi ý cho từng nhãn phân loại bằng cách nhập từ khóa và nhấn Enter.
           </p>
           <div class="btn-group" style="display:flex;gap:8px;">
             ${!isEditing 
@@ -471,8 +533,8 @@ window.SettingsPage = (() => {
                         onclick="SettingsPage.syncKeywordsToSP()">☁️ Đồng bộ SharePoint</button>
               `
               : `
-                <button class="btn btn-success btn-sm" onclick="SettingsPage.focusFirstKeywordInput()">➕ Thêm từ khóa</button>
-                <button class="btn btn-secondary btn-sm" onclick="SettingsPage.addKeywordGroup()">➕ Nhóm mới</button>
+                <button class="btn btn-primary btn-sm" onclick="SettingsPage.openAddKeywordsModal()">➕ Thêm từ khóa</button>
+                <button class="btn btn-sm" style="background:rgba(16,185,129,0.15);color:var(--accent-green);border:1px solid rgba(16,185,129,0.3);" onclick="SettingsPage.addKeywordGroup()">📁 Thêm nhóm mới</button>
                 <button class="btn btn-secondary btn-sm" onclick="SettingsPage.cancelEditKeywords()">🔙 Quay lại</button>
                 <button class="btn btn-primary btn-sm" onclick="SettingsPage.saveKeywords()">💾 Lưu thay đổi</button>
                 <button class="btn btn-sm" id="btn-sync-keywords" style="background:rgba(59,130,246,0.15);color:var(--accent-blue);border:1px solid rgba(59,130,246,0.3);" 
@@ -483,12 +545,12 @@ window.SettingsPage = (() => {
         </div>
 
         <div style="margin-bottom:12px;">
-          <input type="text" class="form-input" placeholder="🔍 Lọc nhóm hoặc từ khóa..."
+          <input type="text" id="kw-search-filter" class="form-input" placeholder="🔍 Gõ từ khóa để lọc và làm nổi bật..."
                  oninput="SettingsPage.filterKeywordGroups(this.value)"
                  style="font-size:12px;padding:8px 10px;">
         </div>
 
-        <div id="kw-groups-container" style="max-height: 400px; overflow-y: auto; padding-right: 8px;">
+        <div id="kw-groups-container" style="max-height: 450px; overflow-y: auto; padding-right: 8px;">
           ${categories.map(cat => {
             const keywords = _rawKeywords[cat] || [];
             return `
@@ -496,23 +558,31 @@ window.SettingsPage = (() => {
                  ${isEditing ? 'draggable="true"' : ''}
                  style="border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px; margin-bottom:16px;"
                  ${isEditing ? `ondragstart="SettingsPage._kwDragStart(event)" ondragover="SettingsPage._kwDragOver(event)" ondrop="SettingsPage._kwDrop(event)" ondragend="SettingsPage._kwDragEnd(event)"` : ''}>
-              <label class="form-label" style="font-weight:600; display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+              <label class="form-label" style="font-weight:600; display:flex; justify-content:space-between; align-items:center; font-size:12px; margin-bottom: 8px;">
                 <span style="display:flex;align-items:center;gap:6px;">
                   ${isEditing ? '<span class="kw-drag-handle">☰</span>' : ''}
                   🏷️ <span class="kw-group-name" ${isEditing ? `ondblclick="SettingsPage.renameKeywordGroup('${esc(cat)}', this)"` : ''}>${esc(cat)}</span>
                 </span>
                 <span style="display:flex;align-items:center;gap:8px;">
-                  <span style="font-size:11px; font-weight:normal; color:var(--text-muted);">(${keywords.length} từ khóa)</span>
+                  <span class="kw-count" style="font-size:11px; font-weight:normal; color:var(--text-muted);">(${keywords.length} từ khóa)</span>
                   ${isEditing ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--accent-red);padding:2px 6px;" onclick="SettingsPage.deleteKeywordGroup('${esc(cat)}')">🗑️</button>` : ''}
                 </span>
               </label>
               <div style="position:relative;">
-                <input type="text" class="form-input keyword-input" data-cat="${esc(cat)}" 
-                       ${!isEditing ? 'disabled' : ''}
-                       value="${esc(keywords.join(', '))}" placeholder="Nhập từ khóa gợi ý..." 
-                       ${isEditing ? `oninput="SettingsPage._kwAutocomplete(event, '${esc(cat)}')"` : ''}
-                       onkeydown="${isEditing ? `SettingsPage._kwDropdownNav(event, '${esc(cat)}')` : ''}"
-                       style="font-size:12px; padding:6px 10px; ${isEditing ? 'border-color:var(--accent-blue);' : 'background:rgba(255,255,255,0.01);opacity:0.8;'}" />
+                <div class="kw-chips-container">
+                  ${keywords.map(kw => `
+                    <span class="kw-chip" data-keyword="${escAttr(kw)}">
+                      ${esc(kw)}
+                      ${isEditing ? `<span class="kw-chip-remove" onclick="SettingsPage.removeKeyword('${esc(cat)}', '${escAttr(kw)}')">&times;</span>` : ''}
+                    </span>
+                  `).join('')}
+                  ${isEditing ? `
+                    <input type="text" class="kw-chip-add-input" data-cat="${esc(cat)}" placeholder="+ Thêm từ khóa..." 
+                           onkeydown="SettingsPage.handleKeywordAddKeydown(event, '${esc(cat)}'); ${isEditing ? `SettingsPage._kwDropdownNav(event, '${esc(cat)}')` : ''}"
+                           oninput="SettingsPage._kwAutocomplete(event, '${esc(cat)}')"
+                           style="display:inline-block; width:150px; border:none; background:transparent; outline:none; font-size:12px; color:var(--text); padding:4px 8px;" />
+                  ` : ''}
+                </div>
                 <div class="kw-autocomplete-dropdown" id="kw-ac-${esc(cat)}"></div>
               </div>
             </div>
@@ -529,27 +599,85 @@ window.SettingsPage = (() => {
     renderSubTabContent();
   }
 
+  function handleKeywordAddKeydown(e, cat) {
+    const dd = document.getElementById(`kw-ac-${cat}`);
+    if (dd && dd.classList.contains('visible') && _kwAcHighlight >= 0) {
+      if (e.key === 'Enter') {
+        return;
+      }
+    }
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const val = e.target.value.trim().replace(/,$/, '').trim();
+      if (val) {
+        const words = val.split(',').map(w => w.trim()).filter(Boolean);
+        let addedCount = 0;
+        words.forEach(word => {
+          if (!_rawKeywords[cat].includes(word)) {
+            _rawKeywords[cat].push(word);
+            addedCount++;
+          }
+        });
+        if (addedCount > 0) {
+          Toast.success(`Đã thêm ${addedCount} từ khóa`);
+        }
+        e.target.value = '';
+        _kwHideDropdown(cat);
+        renderSubTabContent();
+        setTimeout(() => {
+          const input = document.querySelector(`.kw-chip-add-input[data-cat="${cat}"]`);
+          if (input) input.focus();
+        }, 50);
+      }
+    }
+  }
+
+  function removeKeyword(cat, keyword) {
+    if (!_editStates.keywords) return;
+    _rawKeywords[cat] = _rawKeywords[cat].filter(kw => kw !== keyword);
+    renderSubTabContent();
+    Toast.info(`Đã xoá từ khóa "${keyword}"`);
+  }
+
   function filterKeywordGroups(query) {
     const q = String(query || '').trim().toLowerCase();
     document.querySelectorAll('#kw-groups-container .kw-group').forEach(group => {
-      const name = (group.dataset.group || '').toLowerCase();
-      const input = group.querySelector('.keyword-input');
-      const keywords = (input?.value || '').toLowerCase();
-      group.style.display = !q || name.includes(q) || keywords.includes(q) ? '' : 'none';
+      const cat = group.dataset.group;
+      const chips = group.querySelectorAll('.kw-chip');
+      let groupHasMatch = false;
+      
+      chips.forEach(chip => {
+        const kw = (chip.dataset.keyword || '').toLowerCase();
+        if (q && kw.includes(q)) {
+          chip.classList.add('highlighted');
+          chip.classList.remove('dimmed');
+          groupHasMatch = true;
+        } else if (q) {
+          chip.classList.remove('highlighted');
+          chip.classList.add('dimmed');
+        } else {
+          chip.classList.remove('highlighted');
+          chip.classList.remove('dimmed');
+        }
+      });
+      
+      const groupNameMatches = cat.toLowerCase().includes(q);
+      if (q) {
+        group.style.display = (groupNameMatches || groupHasMatch) ? '' : 'none';
+      } else {
+        group.style.display = '';
+      }
     });
   }
 
   function focusFirstKeywordInput() {
-    const input = document.querySelector('#kw-groups-container .keyword-input:not([disabled])');
+    const input = document.querySelector('#kw-groups-container .kw-chip-add-input');
     if (!input) {
       Toast.info('Bấm Chỉnh sửa trước khi thêm từ khóa');
       return;
     }
     input.focus();
     input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    const suffix = input.value.trim() ? ', ' : '';
-    input.value = input.value + suffix;
-    input.setSelectionRange(input.value.length, input.value.length);
   }
 
   function cancelEditKeywords() {
@@ -559,13 +687,7 @@ window.SettingsPage = (() => {
   }
 
   async function saveKeywords() {
-    const inputs = document.querySelectorAll('.keyword-input');
-    const data = { ..._rawKeywords };
-    inputs.forEach(input => {
-      const cat = input.dataset.cat;
-      const val = input.value.split(',').map(v => v.trim()).filter(Boolean);
-      data[cat] = val;
-    });
+    const data = JSON.parse(JSON.stringify(_rawKeywords));
 
     // Check for duplicates before saving
     const allDupes = _checkAllDuplicates(data);
@@ -588,22 +710,175 @@ window.SettingsPage = (() => {
 
   // === Keyword Group Management (tasks 2-3) ===
 
-  function addKeywordGroup() {
-    const name = prompt('Nhập tên nhóm keyword mới:');
-    if (!name || !name.trim()) return;
-    const trimmed = name.trim();
-    if (_rawKeywords[trimmed]) {
-      Toast.error(`Nhóm "${trimmed}" đã tồn tại`);
+  function openAddKeywordsModal() {
+    const isEditing = _editStates.keywords;
+    if (!isEditing) {
+      Toast.info('Vui lòng bấm Chỉnh sửa trước khi thêm từ khóa');
       return;
     }
-    _rawKeywords[trimmed] = [];
+    const categories = Object.keys(_rawKeywords).filter(k => k !== 'manual_brand_alias');
+    const html = `
+      <div style="padding: 20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+          <h3 style="margin:0; font-size:15px; font-weight:600; color:var(--text);">➕ Thêm từ khóa gợi ý</h3>
+          <button class="btn btn-ghost btn-sm" onclick="App.closeModal()" style="font-size:16px; padding:2px 6px;">✕</button>
+        </div>
+        
+        <div class="form-group mb-3">
+          <label class="form-label" style="font-weight:600; font-size:12px; margin-bottom: 6px;">Chọn nhóm phân loại</label>
+          <select id="modal-add-cat" class="form-input" style="font-size:12px; padding:8px 10px;">
+            ${categories.map(cat => `<option value="${escAttr(cat)}">${esc(cat)}</option>`).join('')}
+          </select>
+        </div>
+
+        <div class="form-group mb-4">
+          <label class="form-label" style="font-weight:600; font-size:12px; margin-bottom: 6px;">Nhập các từ khóa (ngăn cách bằng dấu phẩy)</label>
+          <textarea id="modal-add-keywords" class="form-textarea" placeholder="Ví dụ: chập, cháy, hỏng hóc, rò rỉ điện" style="min-height: 100px; font-size:12px; line-height: 1.5; padding:8px 10px;"></textarea>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn btn-secondary btn-sm" onclick="App.closeModal()">Hủy</button>
+          <button class="btn btn-primary btn-sm" onclick="SettingsPage.submitAddKeywordsModal()">Tiếp tục</button>
+        </div>
+      </div>
+    `;
+    App.showModal(html);
+    setTimeout(() => {
+      document.getElementById('modal-add-keywords')?.focus();
+    }, 100);
+  }
+
+  function submitAddKeywordsModal() {
+    const cat = document.getElementById('modal-add-cat')?.value;
+    const rawText = document.getElementById('modal-add-keywords')?.value || '';
+    if (!cat) return;
+    
+    const inputWords = rawText.split(',').map(w => w.trim()).filter(Boolean);
+    if (inputWords.length === 0) {
+      Toast.error('Vui lòng nhập ít nhất một từ khóa');
+      return;
+    }
+
+    const duplicates = [];
+    const uniqueWordsToAdd = [];
+    
+    inputWords.forEach(word => {
+      const wordLower = word.toLowerCase();
+      let foundInGroup = null;
+      for (const g in _rawKeywords) {
+        if (_rawKeywords[g].map(w => w.toLowerCase()).includes(wordLower)) {
+          foundInGroup = g;
+          break;
+        }
+      }
+      if (foundInGroup) {
+        duplicates.push({ word, group: foundInGroup });
+      } else {
+        uniqueWordsToAdd.push(word);
+      }
+    });
+
+    if (duplicates.length === 0) {
+      if (!confirm(`Bạn có chắc chắn muốn thêm ${inputWords.length} từ khóa mới vào nhóm "${cat}"?`)) return;
+      inputWords.forEach(word => {
+        if (!_rawKeywords[cat].includes(word)) {
+          _rawKeywords[cat].push(word);
+        }
+      });
+      Toast.success(`Đã thêm ${inputWords.length} từ khóa vào nhóm ${cat}`);
+      App.closeModal();
+      renderSubTabContent();
+      return;
+    }
+
+    // Render duplicate checklist screen
+    const html = `
+      <div style="padding: 20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+          <h3 style="margin:0; font-size:15px; font-weight:600; color: var(--accent-amber);">⚠️ Trùng lặp từ khóa</h3>
+          <button class="btn btn-ghost btn-sm" onclick="App.closeModal()" style="font-size:16px; padding:2px 6px;">✕</button>
+        </div>
+        
+        <p style="font-size:12px; margin-bottom:12px; color: var(--text-secondary);">
+          Các từ khóa sau đã tồn tại trong hệ thống. Vui lòng tích chọn những từ bạn muốn <strong>tiếp tục thêm</strong> vào nhóm <strong>"${esc(cat)}"</strong> (hoặc bỏ chọn để loại bỏ từ thừa):
+        </p>
+        
+        <div style="max-height: 180px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 6px; margin-bottom: 16px; border: 1px solid var(--border);">
+          ${duplicates.map((d, i) => `
+            <label style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom: 8px; cursor: pointer; color: var(--text);">
+              <input type="checkbox" class="modal-dupe-checkbox" data-word="${escAttr(d.word)}" style="cursor: pointer;" />
+              <span><strong>${esc(d.word)}</strong> <span style="color:var(--text-muted); font-size:10px;">(Đã có trong nhóm: ${esc(d.group)})</span></span>
+            </label>
+          `).join('')}
+        </div>
+
+        ${uniqueWordsToAdd.length > 0 ? `
+          <p style="font-size:12px; color: var(--accent-green); margin-bottom: 16px; font-weight: 500;">
+            ✨ Có ${uniqueWordsToAdd.length} từ khóa mới không trùng lặp sẽ được thêm tự động.
+          </p>
+        ` : ''}
+
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn btn-secondary btn-sm" onclick="App.closeModal()">Hủy</button>
+          <button class="btn btn-primary btn-sm" id="btn-modal-confirm-dupe">Xác nhận Thêm</button>
+        </div>
+      </div>
+    `;
+    App.showModal(html);
+    
+    // Bind confirmation click
+    document.getElementById('btn-modal-confirm-dupe')?.addEventListener('click', () => {
+      const checkedDupes = [];
+      document.querySelectorAll('.modal-dupe-checkbox:checked').forEach(cb => {
+        checkedDupes.push(cb.dataset.word);
+      });
+      const finalWords = [...uniqueWordsToAdd, ...checkedDupes];
+      if (finalWords.length > 0) {
+        let added = 0;
+        finalWords.forEach(word => {
+          if (!_rawKeywords[cat].includes(word)) {
+            _rawKeywords[cat].push(word);
+            added++;
+          }
+        });
+        if (added > 0) {
+          Toast.success(`Đã thêm thành công ${added} từ khóa vào nhóm ${cat}`);
+        } else {
+          Toast.info('Không có từ khóa nào được thêm.');
+        }
+      } else {
+        Toast.info('Đã hủy thêm các từ trùng lặp.');
+      }
+      App.closeModal();
+      renderSubTabContent();
+    });
+  }
+
+  function addKeywordGroup() {
+    if (!_editStates.keywords) {
+      Toast.info('Vui lòng bấm Chỉnh sửa trước khi thêm nhóm mới');
+      return;
+    }
+    const groupName = prompt('Nhập tên nhóm keyword mới:');
+    if (groupName === null) return;
+    const name = groupName.trim();
+    if (!name) {
+      Toast.error('Tên nhóm không được để trống');
+      return;
+    }
+    if (_rawKeywords[name]) {
+      Toast.error(`Nhóm "${name}" đã tồn tại`);
+      return;
+    }
+    _rawKeywords[name] = [];
     renderSubTabContent();
+    Toast.success(`Đã thêm nhóm mới "${name}"`);
     // Scroll to new group
     setTimeout(() => {
       const container = document.getElementById('kw-groups-container');
-      if (container) container.scrollTop = container.scrollHeight;
+      const el = document.querySelector(`.kw-group[data-group="${name}"]`);
+      if (el && container) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 100);
-    Toast.success(`Đã tạo nhóm "${trimmed}"`);
   }
 
   function deleteKeywordGroup(cat) {
@@ -1164,6 +1439,22 @@ window.SettingsPage = (() => {
           </div>
         </div>
       </div>
+
+      <div class="card animate-in mt-4" style="max-width:700px;">
+        <div class="card-header" style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:16px;">
+          <span class="card-title"><span class="icon">📤</span> Tự động tải Input lên SharePoint</span>
+        </div>
+        <div class="form-group">
+          <div class="checkbox-item" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="set-upload-input-sp" ${s.upload_input_to_sharepoint !== false ? 'checked' : ''}>
+            <label for="set-upload-input-sp" style="font-size:13px; cursor:pointer;">Tự động tải file input lên thư mục Input trên SharePoint khi bắt đầu phân loại</label>
+          </div>
+          <span class="form-hint" style="margin-top:6px; display:block;">Khi bật, file Excel upload để phân loại sẽ được tự động đẩy lên thư mục Input/ trên SharePoint.</span>
+        </div>
+        <button class="btn btn-primary mt-4" onclick="SettingsPage.saveSharePointSettings()">
+          💾 Lưu cài đặt SharePoint
+        </button>
+      </div>
     `;
   }
 
@@ -1303,6 +1594,19 @@ window.SettingsPage = (() => {
     } finally {
       btn.disabled = false;
       btn.innerHTML = origText;
+    }
+  }
+
+  async function saveSharePointSettings() {
+    const data = {
+      upload_input_to_sharepoint: document.getElementById('set-upload-input-sp')?.checked ? 'true' : 'false',
+    };
+    try {
+      await API.put('/settings', data);
+      Toast.success('Đã lưu cài đặt SharePoint');
+      await loadSettings();
+    } catch (e) {
+      Toast.error('Lỗi lưu cài đặt: ' + e.message);
     }
   }
 
@@ -1704,11 +2008,11 @@ window.SettingsPage = (() => {
     render, destroy, switchTab, onBackendChange, testConnection, revealApiKey,
     toggleEditPrompt, cancelEditPrompt, copyPrompt, savePrompt, saveModelSettings, savePipelineSettings,
     switchSubTab, renderSubTabContent, toggleEditKeywords, cancelEditKeywords, saveKeywords,
-    filterKeywordGroups, focusFirstKeywordInput,
+    filterKeywordGroups, focusFirstKeywordInput, handleKeywordAddKeydown, removeKeyword,
     toggleEditProducts, cancelEditProducts, switchProductSheet, saveProducts, addProductRow, deleteProductRow,
     updateEmailCount, saveNotificationSettings,
-    syncKeywordsToSP, syncProductsToSP,
-    addKeywordGroup, deleteKeywordGroup, renameKeywordGroup,
+    syncKeywordsToSP, syncProductsToSP, saveSharePointSettings,
+    openAddKeywordsModal, submitAddKeywordsModal, addKeywordGroup, deleteKeywordGroup, renameKeywordGroup,
     _kwDragStart, _kwDragOver, _kwDrop, _kwDragEnd,
     _kwAutocomplete, _kwDropdownNav, _kwSelectAc,
     renderLabelsTab, loadLabelHistory, filterLabelHistory, loadMoreLabelHistory,

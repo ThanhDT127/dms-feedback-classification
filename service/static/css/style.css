@@ -910,6 +910,16 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
   color: var(--text-muted);
 }
 
+/* Date inputs: ensure calendar icon & text visible in dark mode */
+input[type="date"].form-input,
+input[type="date"] {
+  color-scheme: dark light;
+}
+[data-theme="dark"] input[type="date"].form-input,
+[data-theme="dark"] input[type="date"] {
+  color-scheme: dark;
+}
+
 .form-select {
   cursor: pointer;
   appearance: none;

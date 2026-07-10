@@ -11,6 +11,7 @@ from textwrap import dedent
 from unidecode import unidecode
 
 from ..gemini_client import GeminiClient
+from ..exceptions import PipelineCancelled
 from ..settings import Settings
 
 logger = logging.getLogger("dms-watcher")
@@ -303,6 +304,7 @@ class IssueClassifier:
     def __init__(self, gemini: GeminiClient, settings: Settings) -> None:
         self.gemini = gemini
         self.settings = settings
+        self._last_usage: dict = {}
 
     def _load_kw_map(self) -> dict:
         kw_map_path = self.settings.kw_map_path
@@ -315,21 +317,37 @@ class IssueClassifier:
             logger.error("Failed to load kw_map.json: %s", exc)
             return {}
 
-    def _llm_json_call(self, prompt: str) -> str:
+    def _llm_json_call(self, prompt: str, cancellation_check: Callable[[], bool] | None = None) -> str:
         last_err: Exception | None = None
         for attempt in range(1, self.settings.max_retry + 1):
+            if cancellation_check is not None and cancellation_check():
+                raise PipelineCancelled("Classification job was cancelled.")
             try:
-                return self.gemini.generate_json(prompt, temperature=0.0)
+                resp = self.gemini.generate_json(prompt, temperature=0.0)
+                self._last_usage = resp.usage
+                return resp.text
             except Exception as exc:
+                if cancellation_check is not None and cancellation_check():
+                    raise PipelineCancelled("Classification job was cancelled.") from exc
                 last_err = exc
                 try:
-                    return self.gemini.generate(prompt, temperature=0.0)
+                    resp = self.gemini.generate(prompt, temperature=0.0)
+                    self._last_usage = resp.usage
+                    return resp.text
                 except Exception as fallback_exc:
+                    if cancellation_check is not None and cancellation_check():
+                        raise PipelineCancelled("Classification job was cancelled.") from fallback_exc
                     last_err = fallback_exc
                     if attempt == self.settings.max_retry:
                         logger.error("Pure-LLM issue classifier fail: %s", last_err)
                         return ""
-                    time.sleep(self.settings.base_wait * attempt)
+                    
+                    wait = self.settings.base_wait * attempt
+                    steps = int(wait * 10)
+                    for _ in range(steps):
+                        if cancellation_check is not None and cancellation_check():
+                            raise PipelineCancelled("Classification job was cancelled.")
+                        time.sleep(0.1)
         return ""
 
     def classify_batch(
@@ -337,6 +355,8 @@ class IssueClassifier:
         texts: list[str],
         matched_products: list[dict] | None = None,
         debug: bool = False,
+        cancellation_check: Callable[[], bool] | None = None,
+        _retry_depth: int = 0,
     ) -> list[dict]:
         if not texts:
             return []
@@ -682,41 +702,101 @@ class IssueClassifier:
             """
             ).strip()
 
-        raw = self._llm_json_call(prompt)
+        raw = self._llm_json_call(prompt, cancellation_check=cancellation_check)
         if debug:
             preview = raw[:800] + ("..." if len(raw) > 800 else "")
             logger.debug("RAW pure-LLM issue classifier response: %s", preview or "∅")
 
-        arr = _extract_json_anywhere(raw, expected_n=len(texts))
-        if not isinstance(arr, list) or len(arr) == 0:
-            arr = [
-                {
-                    "labels": {},
-                    "sentiment": "",
-                    "brand": "",
-                    "decision_log": [{"reason": "FALLBACK_PARSING"}],
-                }
-                for _ in texts
-            ]
+        n = len(texts)
+        arr = _extract_json_anywhere(raw, expected_n=n)
+
+        # --- Phase 1: Map parsed results to slots by row_index ---
+        slots: list[dict | None] = [None] * n
+
+        if isinstance(arr, list) and len(arr) > 0:
+            # Build a lookup by row_index for scrambled responses
+            by_row_index: dict[int, dict] = {}
+            for item in arr:
+                if isinstance(item, dict):
+                    ri = item.get("row_index")
+                    if isinstance(ri, int) and 0 <= ri < n:
+                        by_row_index[ri] = item
+
+            for idx in range(n):
+                if idx in by_row_index:
+                    slots[idx] = by_row_index[idx]
+                elif idx < len(arr) and isinstance(arr[idx], dict):
+                    slots[idx] = arr[idx]
+
+        # Identify missing slot indices
+        missing_indices = [i for i in range(n) if slots[i] is None]
+
+        # --- Phase 2: Mini-batch retry for missing rows (only at depth 0) ---
+        if 0 < len(missing_indices) < n and _retry_depth == 0:
+            logger.info(
+                "classify_batch: %d/%d rows missing after initial parse, retrying as mini-batch",
+                len(missing_indices), n,
+            )
+            retry_texts = [texts[i] for i in missing_indices]
+            retry_products = (
+                [matched_products[i] for i in missing_indices]
+                if matched_products
+                else None
+            )
+            try:
+                retry_results = self.classify_batch(
+                    retry_texts,
+                    matched_products=retry_products,
+                    debug=debug,
+                    cancellation_check=cancellation_check,
+                    _retry_depth=_retry_depth + 1,
+                )
+                for j, orig_idx in enumerate(missing_indices):
+                    if j < len(retry_results):
+                        slots[orig_idx] = retry_results[j]
+            except PipelineCancelled:
+                raise
+            except Exception as exc:
+                logger.warning("Mini-batch retry failed: %s", exc)
+
+        # Re-check for still-missing slots
+        still_missing = [i for i in range(n) if slots[i] is None]
+
+        # --- Phase 3: Sequential single-row retry for persistent failures (only at depth 0) ---
+        if still_missing and _retry_depth == 0:
+            logger.info(
+                "classify_batch: %d rows still missing, retrying individually",
+                len(still_missing),
+            )
+            for idx in still_missing:
+                if cancellation_check is not None and cancellation_check():
+                    raise PipelineCancelled("Classification job was cancelled.")
+                try:
+                    single_result = self.classify_batch(
+                        [texts[idx]],
+                        matched_products=[matched_products[idx]] if matched_products else None,
+                        debug=debug,
+                        cancellation_check=cancellation_check,
+                        _retry_depth=_retry_depth + 1,
+                    )
+                    if single_result:
+                        slots[idx] = single_result[0]
+                except PipelineCancelled:
+                    raise
+                except Exception as exc:
+                    logger.warning("Single-row retry for index %d failed: %s", idx, exc)
+
+        # --- Phase 4: Final fallback for any remaining None slots ---
+        _fallback_item = {
+            "labels": {},
+            "sentiment": "",
+            "brand": "",
+            "decision_log": [{"reason": "FALLBACK_ALL_RETRIES_EXHAUSTED"}],
+        }
 
         out = []
-        for idx in range(len(texts)):
-            parsed = arr[idx] if idx < len(arr) and isinstance(arr[idx], dict) else {}
-            # Reconstruct index if mismatch
-            parsed_idx = parsed.get("row_index")
-            if parsed_idx is not None and parsed_idx != idx:
-                # Find matching row index if scrambled
-                matched_item = next(
-                    (
-                        item
-                        for item in arr
-                        if isinstance(item, dict) and item.get("row_index") == idx
-                    ),
-                    None,
-                )
-                if matched_item:
-                    parsed = matched_item
-
+        for idx in range(n):
+            parsed = slots[idx] if isinstance(slots[idx], dict) else _fallback_item
             out.append(
                 normalize_issue_output(
                     parsed,

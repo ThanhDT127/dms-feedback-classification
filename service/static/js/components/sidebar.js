@@ -128,10 +128,26 @@ window.Sidebar = (() => {
       version.textContent = data.version || 'v2.0';
 
       if (configRow && configText && data.config_assets) {
-        const status = data.config_assets.status || data.config_assets.state || 'không rõ';
-        const lastSync = data.config_assets.last_sync || data.config_assets.last_checked || '';
+        const ca = data.config_assets;
+        let status, color;
+        if (ca.status) {
+          status = ca.status === 'ok' ? 'Bình thường' : ca.status === 'error' ? 'Có lỗi' : ca.status;
+          color = ca.status === 'ok' ? 'var(--accent-green)' : 'var(--accent-orange, orange)';
+        } else if (ca.errors && ca.errors.length > 0) {
+          status = 'Có lỗi';
+          color = 'var(--accent-orange, orange)';
+        } else {
+          status = 'Bình thường';
+          color = 'var(--accent-green)';
+        }
+        const lastSync = ca.last_sync || ca.checked_at || '';
         configRow.style.display = '';
-        configText.textContent = lastSync ? `${status} · ${lastSync}` : status;
+        configText.textContent = lastSync ? `${status}` : status;
+        configText.style.color = color;
+      } else if (configRow && configText) {
+        configRow.style.display = '';
+        configText.textContent = 'Chưa kết nối';
+        configText.style.color = 'var(--text-muted)';
       }
     } catch (e) {
       dot.className = 'status-dot offline';

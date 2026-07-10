@@ -67,6 +67,35 @@ async def classify_text(body: TextClassifyRequest, user: dict = CURRENT_USER_DEP
 
         issue_result = classifier.classify_one(body.text)
 
+        # Record usage for single-text classification
+        usage = getattr(classifier, "_last_usage", {})
+        if usage:
+            from ...usage_tracker import calculate_cost
+
+            settings = deps.get_settings()
+            usage_tracker = deps.get_usage_tracker()
+            if settings and usage_tracker:
+                import json as _json
+
+                try:
+                    pricing = _json.loads(settings.gemini_model_pricing)
+                except Exception:
+                    pricing = {}
+                cost = calculate_cost(
+                    settings.gemini_model,
+                    usage.get("prompt_tokens", 0),
+                    usage.get("completion_tokens", 0),
+                    pricing,
+                )
+                usage_tracker.record(
+                    model=settings.gemini_model,
+                    call_type="classify_text",
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    total_tokens=usage.get("total_tokens", 0),
+                    estimated_cost_usd=cost,
+                )
+
         from ...pipeline.issue_classifier import MINOR_ORDER
 
         labels = {minor: minor in issue_result.get("final_minors", []) for minor in MINOR_ORDER}
@@ -207,6 +236,37 @@ async def classify_file(
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Could not save file. Please try again.") from exc
+
+    # --- Pre-queue validation: check that the Excel has a recognizable text column ---
+    try:
+        import pandas as pd
+
+        from ...pipeline.runner import TEXT_ALIASES, _canon_lower, detect_header_and_textcol
+
+        raw = pd.read_excel(input_path, header=None, nrows=10, dtype=str)
+        _, text_col = detect_header_and_textcol(raw, scan_rows=10)
+        if text_col is None:
+            # Secondary check: try reading with header row
+            df_hdr = pd.read_excel(input_path, nrows=2)
+            text_col = next(
+                (c for c in df_hdr.columns if any(alias in _canon_lower(c) for alias in TEXT_ALIASES)),
+                None,
+            )
+        if text_col is None:
+            input_path.unlink(missing_ok=True)
+            expected = ", ".join(f'"{a}"' for a in TEXT_ALIASES)
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"File Excel thiếu cột nội dung phản hồi. "
+                    f"Hệ thống cần ít nhất một cột có tên chứa: {expected}. "
+                    f"Vui lòng kiểm tra lại file và thử lại."
+                ),
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Excel pre-validation failed (non-blocking): %s", exc)
 
     output_dir = WORK_DIR / "output"
     output_dir.mkdir(parents=True, exist_ok=True)

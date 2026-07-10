@@ -59,7 +59,7 @@ window.LoginPage = (() => {
   function loginErrorMessage(err) {
     const raw = String(err?.message || '').toLowerCase();
     if (raw.includes('invalid credentials') || raw.includes('không đúng')) {
-      return 'Tên đăng nhập hoặc mật khẩu không đúng. Tài khoản mặc định: admin / admin123';
+      return 'Tên đăng nhập hoặc mật khẩu không đúng.';
     }
     if (raw.includes('username and password required')) {
       return 'Vui lòng nhập tên đăng nhập và mật khẩu.';
@@ -109,6 +109,10 @@ window.LoginPage = (() => {
 
       API.setTokens(data.access_token, data.refresh_token);
       App.setUser(data.user);
+
+      if (typeof ClassifyPage !== 'undefined' && ClassifyPage.reset) {
+        ClassifyPage.reset();
+      }
 
       const sidebar = document.getElementById('sidebar');
       const topbar = document.querySelector('.topbar');

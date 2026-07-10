@@ -12,7 +12,7 @@ from dms.gemini_client import GeminiClient
 def test_gemini_vertex_initialization(settings, monkeypatch):
     class FakeModelService:
         def generate_content(self, **kwargs):
-            return types.SimpleNamespace(text="vertex-ok")
+            return types.SimpleNamespace(text="vertex-ok", usage_metadata=None)
 
     class FakeClient:
         def __init__(self):
@@ -27,7 +27,7 @@ def test_gemini_vertex_initialization(settings, monkeypatch):
     monkeypatch.setitem(sys.modules, "google.genai", fake_genai)
 
     client = GeminiClient(settings)
-    assert client.generate("hello") == "vertex-ok"
+    assert client.generate("hello").text == "vertex-ok"
 
 
 def test_gemini_apikey_initialization(settings, monkeypatch):
@@ -41,7 +41,7 @@ def test_gemini_apikey_initialization(settings, monkeypatch):
             self.name = name
 
         def generate_content(self, prompt, generation_config=None):
-            return types.SimpleNamespace(text="apikey-ok")
+            return types.SimpleNamespace(text="apikey-ok", usage_metadata=None)
 
     fake_google = sys.modules.get("google") or types.ModuleType("google")
     fake_module = types.ModuleType("google.generativeai")
@@ -52,7 +52,7 @@ def test_gemini_apikey_initialization(settings, monkeypatch):
     monkeypatch.setitem(sys.modules, "google.generativeai", fake_module)
 
     client = GeminiClient(settings)
-    assert client.generate("hello") == "apikey-ok"
+    assert client.generate("hello").text == "apikey-ok"
     assert configured["api_key"] == "key"
 
 

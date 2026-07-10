@@ -187,6 +187,7 @@ class Watcher:
         except Exception as exc:
             logger.warning("Config asset sync failed; keeping current snapshot: %s", exc)
             self._last_sync_health = {
+                "status": "error",
                 "checked_at": datetime.now().isoformat(timespec="seconds"),
                 "reload_required": False,
                 "changed_assets": [],
@@ -196,6 +197,7 @@ class Watcher:
             return
 
         self._last_sync_health = result.as_health_dict()
+        self._last_sync_health["status"] = "ok"
         if result.downloaded_assets:
             logger.info(
                 "Config asset sync downloaded %d asset(s): %s",

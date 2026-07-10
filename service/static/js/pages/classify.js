@@ -35,8 +35,23 @@ window.ClassifyPage = (() => {
     return job?.status === 'queued' && Number(job?.retry_count || 0) > 0;
   }
 
+  /**
+   * Strip UUID prefix from output filenames for user-friendly display.
+   * e.g. "a1b2c3d4-e5f6-7890-abcd-ef1234567890_output_file.xlsx" → "output_file.xlsx"
+   */
+  function getFriendlyFileName(path) {
+    if (!path) return '';
+    // Get just the filename from a full path
+    const name = path.split('/').pop() || path.split('\\').pop() || path;
+    // Strip leading UUID prefix (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx_)
+    return name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '');
+  }
+
   function jobStatusMeta(job) {
     const status = job?.status || 'unknown';
+    if (status === 'running' && job?.cancellation_requested) {
+      return { label: 'Đang hủy...', badge: 'badge-purple', message: 'Yêu cầu hủy đã được ghi nhận. Đang dừng tác vụ một cách an toàn...' };
+    }
     if (isRetryingJob(job)) {
       return { label: 'Đang chờ chạy lại', badge: 'badge-purple', message: 'Job đang chờ chạy lại sau lỗi hoặc hủy trước đó.' };
     }
@@ -248,7 +263,7 @@ window.ClassifyPage = (() => {
       infoBar.innerHTML = `
         <div>
           <div style="font-weight:600;font-size:13px;">Phân loại hoàn tất</div>
-          <div class="text-muted" style="font-size:11px;margin-top:2px;">${esc(job.output_path || '')}</div>
+          <div class="text-muted" style="font-size:11px;margin-top:2px;">${esc(job.filename || getFriendlyFileName(job.output_path))}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;">
           <button class="btn btn-success btn-sm" onclick="ClassifyPage.downloadJob('${jobId}')">📥 Tải file kết quả</button>
@@ -373,7 +388,7 @@ window.ClassifyPage = (() => {
             <span style="color:var(--accent-green);font-size:18px;">✅</span>
             <div>
               <div style="font-weight:600;font-size:13px;">Phân loại hoàn tất</div>
-              ${outputPath ? `<div class="text-muted" style="font-size:11px;margin-top:2px;">📁 ${esc(outputPath.split('/').pop() || outputPath.split('\\\\').pop())}</div>` : ''}
+              ${outputPath ? `<div class="text-muted" style="font-size:11px;margin-top:2px;">📁 ${esc(job.filename || getFriendlyFileName(outputPath))}</div>` : ''}
             </div>
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
@@ -762,7 +777,7 @@ window.ClassifyPage = (() => {
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Batch Size</label>
-              <input type="number" class="form-input" id="cfg-batch-size" value="10" min="1" max="100">
+              <input type="number" class="form-input" id="cfg-batch-size" value="15" min="1" max="100">
               <span class="form-hint">Số dòng xử lý mỗi lô</span>
             </div>
             <div class="form-group">
@@ -893,7 +908,7 @@ window.ClassifyPage = (() => {
       return;
     }
 
-    const batchSize = parseInt(document.getElementById('cfg-batch-size')?.value) || 10;
+    const batchSize = parseInt(document.getElementById('cfg-batch-size')?.value) || 15;
     const checkpoint = parseInt(document.getElementById('cfg-checkpoint')?.value) || 50;
 
     const fd = new FormData();
@@ -1027,10 +1042,18 @@ window.ClassifyPage = (() => {
       const jobs = await API.getJobs();
       if (!Array.isArray(jobs) || jobs.length === 0) return;
 
-      // Find the most recent durable file job, including terminal jobs after reload.
+      // After reset, only restore jobs that are still actively running
+      const wasReset = sessionStorage.getItem('classify_reset') === '1';
+      const allowedStatuses = wasReset
+        ? ['queued', 'running']
+        : ['queued', 'running', 'completed', 'error', 'cancelled'];
+
       const activeJob = jobs
-        .filter(j => ['queued', 'running', 'completed', 'error', 'cancelled'].includes(j.status) && j.mode !== 'batch')
+        .filter(j => allowedStatuses.includes(j.status) && j.mode !== 'batch')
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+      // Clear reset flag once we've checked
+      if (wasReset) sessionStorage.removeItem('classify_reset');
 
       if (activeJob) {
         _currentJob = activeJob;
@@ -1203,7 +1226,7 @@ window.ClassifyPage = (() => {
           <span style="color:var(--accent-green);font-size:18px;">✅</span>
           <div>
             <div style="font-weight:600;font-size:13px;">Phân loại hoàn tất${duration ? ' — ' + duration : ''}</div>
-            ${outputPath ? `<div class="text-muted" style="font-size:11px;margin-top:2px;">📁 ${esc(outputPath.split('/').pop() || outputPath.split('\\\\').pop())}</div>` : ''}
+            ${outputPath ? `<div class="text-muted" style="font-size:11px;margin-top:2px;">📁 ${esc(_currentJob?.filename || getFriendlyFileName(outputPath))}</div>` : ''}
           </div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;">
@@ -1262,6 +1285,8 @@ window.ClassifyPage = (() => {
     _currentJob = null;
     _selectedFile = null;
     _isPaused = false;
+    // Mark reset so page refresh won't auto-restore terminal jobs
+    sessionStorage.setItem('classify_reset', '1');
     // Re-render file mode fresh
     renderMode();
     Toast.info('Đã reset. Chọn file mới để phân loại.');
@@ -1481,69 +1506,75 @@ window.ClassifyPage = (() => {
     renderBatchTable(); // disable remove buttons
 
     try {
+      _batchDone = _batchState.filter(s => s.status === 'completed').length;
+      updateBatchOverall();
+
+      const promises = [];
       for (let i = 0; i < _batchFiles.length; i++) {
         if (_batchState[i].status === 'completed') {
-          _batchDone = i + 1;
-          updateBatchOverall();
           continue;
         }
 
-        _batchState[i].status = 'running';
-        _batchState[i].percent = 0;
-        updateBatchRowUI(i);
+        promises.push((async (index) => {
+          _batchState[index].status = 'running';
+          _batchState[index].percent = 0;
+          updateBatchRowUI(index);
 
-        const fd = new FormData();
-        fd.append('file', _batchFiles[i]);
-        fd.append('batch_size', 10);
-        fd.append('mode', 'batch');
+          const fd = new FormData();
+          fd.append('file', _batchFiles[index]);
+          fd.append('batch_size', 10);
+          fd.append('mode', 'batch');
 
-        try {
-          const job = await API.classifyFile(fd);
-          const jobId = job.job_id || job.id;
-          _batchState[i].jobId = jobId;
-          
-          let completed = false;
-          while (!completed) {
-            await sleep(2000);
-            const statusJob = await API.get(`/classify/jobs/${jobId}`);
-            const status = statusJob.status;
+          try {
+            const job = await API.classifyFile(fd);
+            const jobId = job.job_id || job.id;
+            _batchState[index].jobId = jobId;
             
-            if (status === 'completed') {
-              completed = true;
-              _batchState[i].status = 'completed';
-              _batchState[i].percent = 100;
-              _batchState[i].spWebUrl = statusJob.sp_web_url || null;
-            } else if (status === 'error') {
-              completed = true;
-              _batchState[i].status = 'failed';
-              _batchState[i].error = statusJob.error || 'Lỗi không xác định';
-            } else if (status === 'cancelled') {
-              completed = true;
-              _batchState[i].status = 'cancelled';
-              _batchState[i].error = 'Tác vụ bị hủy';
-            } else {
-              const done = statusJob.rows_done || 0;
-              const total = statusJob.total_rows || 0;
-              const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-              _batchState[i].status = statusJob.status || 'running';
-              _batchState[i].percent = pct;
-              _batchState[i].rowsDone = done;
-              _batchState[i].totalRows = total;
-              _batchState[i].step = statusJob.step || null;
-              _batchState[i].stepStatus = statusJob.step_status || null;
+            let completed = false;
+            while (!completed) {
+              await sleep(2000);
+              const statusJob = await API.get(`/classify/jobs/${jobId}`);
+              const status = statusJob.status;
+              
+              if (status === 'completed') {
+                completed = true;
+                _batchState[index].status = 'completed';
+                _batchState[index].percent = 100;
+                _batchState[index].spWebUrl = statusJob.sp_web_url || null;
+              } else if (status === 'error') {
+                completed = true;
+                _batchState[index].status = 'failed';
+                _batchState[index].error = statusJob.error || 'Lỗi không xác định';
+              } else if (status === 'cancelled') {
+                completed = true;
+                _batchState[index].status = 'cancelled';
+                _batchState[index].error = 'Tác vụ bị hủy';
+              } else {
+                 const done = statusJob.rows_done || 0;
+                 const total = statusJob.total_rows || 0;
+                 const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                 _batchState[index].status = statusJob.status || 'running';
+                 _batchState[index].percent = pct;
+                 _batchState[index].rowsDone = done;
+                 _batchState[index].totalRows = total;
+                 _batchState[index].step = statusJob.step || null;
+                 _batchState[index].stepStatus = statusJob.step_status || null;
+              }
+              
+              updateBatchRowUI(index);
             }
-            
-            updateBatchRowUI(i);
+          } catch (e) {
+            _batchState[index].status = 'failed';
+            _batchState[index].error = e.message || 'Lỗi kết nối';
+            updateBatchRowUI(index);
           }
-        } catch (e) {
-          _batchState[i].status = 'failed';
-          _batchState[i].error = e.message || 'Lỗi kết nối';
-          updateBatchRowUI(i);
-        }
 
-        _batchDone = i + 1;
-        updateBatchOverall();
+          _batchDone++;
+          updateBatchOverall();
+        })(i));
       }
+
+      await Promise.all(promises);
     } finally {
       _isBatchRunning = false;
       const activeBtn = document.getElementById('btn-batch-start');
@@ -2268,8 +2299,18 @@ window.ClassifyPage = (() => {
     });
   }
 
+  function reset() {
+    _currentJob = null;
+    _selectedFile = null;
+    _batchFiles = [];
+    _isPaused = false;
+    if (_wsClient) { _wsClient.close(); _wsClient = null; }
+    // Mark reset so page refresh won't auto-restore terminal jobs
+    sessionStorage.setItem('classify_reset', '1');
+  }
+
   return {
-    render, destroy, setMode,
+    render, destroy, setMode, reset,
     updateCharCount, clearInput, classifyText,
     fileDragOver, fileDragLeave, fileDrop, handleFile, clearFile,
     startFileClassify, togglePause, stopClassify, downloadResult, resetJob,

@@ -257,6 +257,25 @@ def get_metrics():
     return _get_or_create("metrics", _factory)
 
 
+def get_usage_tracker():
+    """Return a UsageTracker, or None if settings are unavailable."""
+
+    def _factory():
+        settings = get_settings()
+        if settings is None:
+            return None
+        try:
+            from ..usage_tracker import UsageTracker
+
+            db_path = settings.work_dir / "classification_jobs.db"
+            return UsageTracker(db_path)
+        except Exception as exc:
+            logger.warning("Không thể khởi tạo UsageTracker: %s", exc)
+            return None
+
+    return _get_or_create("usage_tracker", _factory)
+
+
 def get_pipeline_runner():
     """Return a PipelineRunner, or None if dependencies are unavailable."""
 
@@ -265,6 +284,7 @@ def get_pipeline_runner():
         gemini = get_gemini()
         rag = get_rag()
         metrics = get_metrics()
+        usage_tracker = get_usage_tracker()
         if any(dep is None for dep in (settings, gemini, rag, metrics)):
             return None
         try:
@@ -275,6 +295,7 @@ def get_pipeline_runner():
                 rag=rag,
                 metrics=metrics,
                 settings=settings,
+                usage_tracker=usage_tracker,
             )
         except Exception as exc:
             logger.warning("Không thể khởi tạo PipelineRunner: %s", exc)

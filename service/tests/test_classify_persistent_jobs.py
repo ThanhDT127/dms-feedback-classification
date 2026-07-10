@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from dms.jwt_utils import create_token
 from dms.settings import Settings
 from dms.web import deps
+from dms.web.api import classify as classify_module
 from dms.web.app import create_app
 from dms.web.deps import get_current_user
 
@@ -73,6 +74,8 @@ def _client(tmp_path: Path, monkeypatch, user: dict = ALICE, **settings_override
     monkeypatch.setattr(deps, "get_pipeline_runner", lambda: FakeRunner())
     monkeypatch.setattr(deps, "get_sharepoint_client", lambda: None)
     monkeypatch.setattr(deps, "get_user_store", lambda: FakeUserStore())
+    # Redirect WORK_DIR to tmp_path so output files don't pollute the real work/output/
+    monkeypatch.setattr(classify_module, "WORK_DIR", tmp_path / "work")
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: user
     return TestClient(app)

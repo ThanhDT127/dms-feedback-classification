@@ -5,12 +5,21 @@ from __future__ import annotations
 import concurrent.futures
 import logging
 import os
+from dataclasses import dataclass, field
 from typing import Any, cast
 
 from .exceptions import GeminiError
 from .settings import Settings
 
 logger = logging.getLogger("dms-watcher")
+
+
+@dataclass
+class GeminiResponse:
+    """Wrapper for Gemini API responses with token usage metadata."""
+
+    text: str
+    usage: dict = field(default_factory=dict)
 
 
 class GeminiClient:
@@ -51,7 +60,8 @@ class GeminiClient:
         self._apikey_model = genai_legacy.GenerativeModel(self.settings.gemini_model)
         logger.info("Gemini API Key client ready (model=%s)", self.settings.gemini_model)
 
-    def generate(self, prompt: str, temperature: float | None = None) -> str:
+    def generate(self, prompt: str, temperature: float | None = None) -> GeminiResponse:
+        """Generate text from a prompt, returning a GeminiResponse with usage metadata."""
         import time
 
         last_err = None
@@ -73,7 +83,8 @@ class GeminiClient:
                 time.sleep(wait)
         raise GeminiError(str(last_err)) from last_err
 
-    def generate_json(self, prompt: str, temperature: float = 0.0) -> str:
+    def generate_json(self, prompt: str, temperature: float = 0.0) -> GeminiResponse:
+        """Generate JSON from a prompt, returning a GeminiResponse with usage metadata."""
         import time
 
         last_err = None
@@ -118,7 +129,7 @@ class GeminiClient:
         prompt: str,
         response_mime_type: str | None = None,
         temperature: float | None = None,
-    ) -> str:
+    ) -> GeminiResponse:
         self._init_vertex()
         from google.genai import types
 
@@ -138,9 +149,10 @@ class GeminiClient:
         if self._vertex_client is None:
             raise GeminiError("Vertex AI client is not initialized")
         response = self._call_with_timeout(self._vertex_client.models.generate_content, **kwargs)
-        return (getattr(response, "text", None) or "").strip()
+        usage = _extract_usage(response)
+        return GeminiResponse(text=(getattr(response, "text", None) or "").strip(), usage=usage)
 
-    def _generate_apikey(self, prompt: str, temperature: float | None = None) -> str:
+    def _generate_apikey(self, prompt: str, temperature: float | None = None) -> GeminiResponse:
         self._init_apikey()
         if self._apikey_model is None:
             raise GeminiError("Gemini API key client is not initialized")
@@ -152,9 +164,10 @@ class GeminiClient:
             prompt,
             generation_config=gen_config or None,
         )
-        return (getattr(response, "text", None) or "").strip()
+        usage = _extract_usage(response)
+        return GeminiResponse(text=(getattr(response, "text", None) or "").strip(), usage=usage)
 
-    def _generate_apikey_json(self, prompt: str, temperature: float = 0.0) -> str:
+    def _generate_apikey_json(self, prompt: str, temperature: float = 0.0) -> GeminiResponse:
         self._init_apikey()
         if self._apikey_model is None:
             raise GeminiError("Gemini API key client is not initialized")
@@ -167,11 +180,26 @@ class GeminiClient:
                     "temperature": temperature,
                 },
             )
-            return (getattr(response, "text", None) or "").strip()
+            usage = _extract_usage(response)
+            return GeminiResponse(text=(getattr(response, "text", None) or "").strip(), usage=usage)
         except Exception:
             response = self._call_with_timeout(
                 self._apikey_model.generate_content,
                 prompt,
                 generation_config={"temperature": temperature},
             )
-            return (getattr(response, "text", None) or "").strip()
+            usage = _extract_usage(response)
+            return GeminiResponse(text=(getattr(response, "text", None) or "").strip(), usage=usage)
+
+
+def _extract_usage(response: Any) -> dict:
+    """Extract token usage metadata from a Gemini API response."""
+    usage: dict[str, int] = {}
+    if hasattr(response, "usage_metadata") and response.usage_metadata:
+        um = response.usage_metadata
+        usage = {
+            "prompt_tokens": getattr(um, "prompt_token_count", 0) or 0,
+            "completion_tokens": getattr(um, "candidates_token_count", 0) or 0,
+            "total_tokens": getattr(um, "total_token_count", 0) or 0,
+        }
+    return usage

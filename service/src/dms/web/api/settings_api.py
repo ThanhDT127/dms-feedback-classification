@@ -19,12 +19,10 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 
 def _mask_secret(value: str, visible_chars: int = 4) -> str:
-    """Mask a secret string, showing only the last N characters."""
+    """Mask a secret string completely with bullet points for security."""
     if not value:
         return ""
-    if len(value) <= visible_chars:
-        return "****"
-    return "*" * (len(value) - visible_chars) + value[-visible_chars:]
+    return "••••••••••••"
 
 
 # ---------- Settings ----------
@@ -52,9 +50,14 @@ async def get_settings(admin: dict = Depends(get_admin_user)):
 @router.get("/secret/{key}")
 async def get_secret_setting(key: str, admin: dict = Depends(get_admin_user)):
     """Return an unmasked secret value for an authenticated admin."""
+    if key in ("gemini_api_key", "api_key"):
+        raise HTTPException(
+            status_code=403,
+            detail="Vì lý do bảo mật, không thể hiển thị lại Gemini API Key. Bạn chỉ có thể cấu hình key mới.",
+        )
+
     allowed = {
-        "gemini_api_key": ("gemini_api_key", "GEMINI_API_KEY"),
-        "api_key": ("gemini_api_key", "GEMINI_API_KEY"),
+        "azure_client_secret": ("azure_client_secret", "AZURE_CLIENT_SECRET"),
     }
     if key not in allowed:
         raise HTTPException(status_code=404, detail="Secret not found")
@@ -93,7 +96,7 @@ async def get_issue_prompt(admin: dict = Depends(get_admin_user)):
 
             # Extract the prompt section between known markers
             start_marker = "Bạn là hệ thống phân loại phản hồi"
-            end_marker = "ĐẦU RA BẮT BUỘC"
+            end_marker = "Hãy trả về kết quả dưới dạng JSON array duy nhất."
             start_idx = source.find(start_marker)
             end_idx = source.find(end_marker)
 
@@ -211,7 +214,7 @@ async def test_connection(admin: dict = Depends(get_admin_user)):
 
         return {
             "success": True,
-            "message": f"Kết nối thành công. Phản hồi: {response[:100]}",
+            "message": f"Kết nối thành công. Phản hồi: {response.text[:100]}",
             "response_time_ms": elapsed_ms,
         }
     except Exception as exc:
@@ -232,6 +235,7 @@ MAP = {
     "gemini_model": "GEMINI_MODEL",
     "api_key": "GEMINI_API_KEY",
     "gemini_api_key": "GEMINI_API_KEY",
+    "gemini_model_pricing": "GEMINI_MODEL_PRICING",
     "project_id": "GCP_PROJECT_ID",
     "gcp_project_id": "GCP_PROJECT_ID",
     "location": "GCP_LOCATION",
@@ -253,6 +257,7 @@ MAP = {
     "tenant_id": "AZURE_TENANT_ID",
     "drive_id": "SHAREPOINT_DRIVE_ID",
     "root_folder_id": "SHAREPOINT_ROOT_FOLDER_ID",
+    "upload_input_to_sharepoint": "UPLOAD_INPUT_TO_SHAREPOINT",
     # notify tab
     "email": "NOTIFICATION_RECIPIENTS",
     "notification_recipients": "NOTIFICATION_RECIPIENTS",
@@ -283,8 +288,8 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
             if key in MAP:
                 env_key = MAP[key]
 
-                # Check for masked secret values and skip them
-                if isinstance(value, str) and (value.startswith("****") or "••" in value):
+                # Check for masked secret values or empty string (to keep existing value)
+                if isinstance(value, str) and (value.startswith("****") or "••" in value or value == "••••••••••••" or not value.strip()):
                     # Keep existing value if it was already set
                     continue
 
@@ -308,9 +313,29 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
 
         # 3. Validate by trying to load Settings
         deps.reset()
-        Settings()
+        settings = Settings()
 
-        return {"success": True, "message": "Đã lưu cấu hình thành công."}
+        # Test connection to Gemini if credentials exist
+        has_creds = False
+        if settings.gemini_backend == "apikey" and settings.gemini_api_key:
+            has_creds = True
+        elif settings.gemini_backend == "vertex" and settings.gcp_service_account_json:
+            sa_path = Path(settings.gcp_service_account_json)
+            if sa_path.is_file():
+                has_creds = True
+
+        if has_creds:
+            try:
+                from ...gemini_client import GeminiClient
+                gemini = GeminiClient(settings)
+                gemini.generate("Trả lời đúng 1 từ: xin chào", temperature=0.0)
+            except Exception as exc:
+                logger.error("Test connection failed during settings update: %s", exc)
+                raise ValueError(
+                    f"Xác thực kết nối Gemini thất bại. Khóa API hoặc tài khoản dịch vụ không hoạt động. Chi tiết lỗi: {exc}"
+                ) from exc
+
+        return {"success": True, "message": "Đã lưu cấu hình và xác thực kết nối Gemini thành công."}
 
     except Exception as exc:
         # 4. Rollback to original .env content and os.environ

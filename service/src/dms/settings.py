@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     gemini_backend: str = Field("vertex", alias="GEMINI_BACKEND")
     gemini_api_key: str = Field("", alias="GEMINI_API_KEY")
     gemini_model: str = Field("gemini-2.5-flash-lite", alias="GEMINI_MODEL")
+    gemini_model_pricing: str = Field(
+        '{"gemini-2.5-flash": {"input": 0.30, "output": 2.50}, "gemini-2.0-flash": {"input": 0.10, "output": 0.40}, "gemini-2.5-flash-lite": {"input": 0.025, "output": 0.30}, "gemini-3.5-flash": {"input": 1.50, "output": 9.00}, "gemini-3.1-flash-lite": {"input": 0.025, "output": 0.10}}',
+        alias="GEMINI_MODEL_PRICING",
+    )
 
     gcp_project_id: str = Field("", alias="GCP_PROJECT_ID")
     gcp_location: str = Field("global", alias="GCP_LOCATION")
@@ -62,6 +66,7 @@ class Settings(BaseSettings):
     gemini_timeout_seconds: float = Field(120.0, alias="GEMINI_TIMEOUT_SECONDS")
     cors_allowed_origins: str = Field("*", alias="CORS_ALLOWED_ORIGINS")
     enable_sharepoint_config_sync: bool = Field(True, alias="ENABLE_SHAREPOINT_CONFIG_SYNC")
+    upload_input_to_sharepoint: bool = Field(True, alias="UPLOAD_INPUT_TO_SHAREPOINT")
     enable_runtime_cleanup: bool = Field(False, alias="ENABLE_RUNTIME_CLEANUP")
     cleanup_output_ttl_days: int = Field(7, alias="CLEANUP_OUTPUT_TTL_DAYS")
     cleanup_log_ttl_days: int = Field(7, alias="CLEANUP_LOG_TTL_DAYS")

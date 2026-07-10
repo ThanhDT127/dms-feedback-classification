@@ -351,7 +351,7 @@ window.FilesPage = (() => {
   function buildRowHTML(file, index, isInput, silent) {
     const name = file.name || file.filename || 'unknown';
     const size = formatSize(file.size || 0);
-    const date = file.modified || file.date || '—';
+    const date = formatDate(file.modified || file.date);
     const status = getStatusBadge(file.status);
     const webUrl = file.web_url || '';
     const source = file.source || (webUrl ? 'sharepoint' : 'local_cache');
@@ -871,15 +871,18 @@ window.FilesPage = (() => {
   }
 
   async function syncSharePoint() {
-    API.onLoading();
+    const btn = document.getElementById('btn-sync-sharepoint');
+    const origText = btn ? btn.innerHTML : '';
     try {
+      if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Đang đồng bộ...'; }
+      Toast.info('☁️ Đang đồng bộ SharePoint...');
       const res = await API.syncSharePoint();
       Toast.success(res.message || 'Đồng bộ SharePoint thành công');
       refresh();
     } catch (e) {
       Toast.error('Lỗi đồng bộ: ' + e.message);
     } finally {
-      API.offLoading();
+      if (btn) { btn.disabled = false; btn.innerHTML = origText; }
     }
   }
 
@@ -1112,6 +1115,7 @@ window.FilesPage = (() => {
 
     document.getElementById('btn-confirm-bulk-delete')?.addEventListener('click', async () => {
       overlay.remove();
+      Toast.info('🗑️ Đang xóa...');
       try {
         const res = await API.post('/files/bulk-delete', { folder: _activeFolder, filenames });
         const deleted = res.deleted || [];
@@ -1164,6 +1168,7 @@ window.FilesPage = (() => {
 
     document.getElementById('btn-confirm-sp-delete')?.addEventListener('click', async () => {
       overlay.remove();
+      Toast.info('🗑️ Đang xóa...');
       try {
         const res = await API.post('/files/sharepoint-delete', { folder: _activeFolder, items: cloudItems });
         const deleted = res.remote_deleted || [];
@@ -1198,6 +1203,24 @@ window.FilesPage = (() => {
     let size = bytes;
     while (size >= 1024 && idx < units.length - 1) { size /= 1024; idx++; }
     return `${size.toFixed(idx > 0 ? 1 : 0)} ${units[idx]}`;
+  }
+
+  function formatDate(isoString) {
+    if (!isoString || isoString === '—') return '—';
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return '—';
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const day = pad(d.getDate());
+      const month = pad(d.getMonth() + 1);
+      const hours = pad(d.getHours());
+      const mins = pad(d.getMinutes());
+      if (d.getFullYear() !== now.getFullYear()) {
+        return `${day}/${month}/${d.getFullYear()} ${hours}:${mins}`;
+      }
+      return `${day}/${month} ${hours}:${mins}`;
+    } catch { return '—'; }
   }
 
   function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }

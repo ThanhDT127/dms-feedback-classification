@@ -101,7 +101,9 @@ def test_get_settings(client):
 def test_put_settings_success(client, tmp_path):
     # Change backend to apikey and provide gemini_api_key
     payload = {"backend": "api_key", "gemini_api_key": "new-secret-key-12345"}
-    response = client.put("/api/settings", json=payload)
+    from unittest.mock import patch
+    with patch("dms.gemini_client.GeminiClient.generate", return_value="xin chào"):
+        response = client.put("/api/settings", json=payload)
     assert response.status_code == 200
 
     # Verify .env has been modified
@@ -109,9 +111,11 @@ def test_put_settings_success(client, tmp_path):
     assert "GEMINI_BACKEND=apikey" in env_content
     assert "GEMINI_API_KEY=new-secret-key-12345" in env_content
 
+    # PUT /api/settings calls deps.reset() internally which clears auth overrides
+    apply_auth_overrides(client.app)
+    # GET /secret/gemini_api_key is intentionally blocked (403) for security
     secret = client.get("/api/settings/secret/gemini_api_key")
-    assert secret.status_code == 200
-    assert secret.json()["value"] == "new-secret-key-12345"
+    assert secret.status_code == 403
 
 
 def test_put_settings_validation_and_rollback(client, tmp_path):
