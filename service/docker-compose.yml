@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: dms-feedback-watcher
+    user: "root"
     restart: unless-stopped
     stop_grace_period: 30s
     command: python -m dms
@@ -47,6 +48,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: dms-feedback-web
+    user: "root"
     restart: unless-stopped
     command: bash /app/entrypoint_web.sh
     expose:
