@@ -10,6 +10,8 @@ service/*-key.json
 service/*-sa.json
 **/*.json.key
 **/sa-key.json
+service/ssl/
+
 
 # ===========================
 # DATA — thông tin nội bộ công ty
