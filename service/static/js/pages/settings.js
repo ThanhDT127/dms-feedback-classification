@@ -39,6 +39,7 @@ window.SettingsPage = (() => {
   let _labelHistory = [];
   let _labelHistoryOffset = 0;
   let _labelHistoryHasMore = false;
+  let _cameFromClassify = false;
 
   function render() {
     const app = document.getElementById('app');
@@ -468,9 +469,15 @@ window.SettingsPage = (() => {
   }
 
   function cancelEditPrompt() {
-    _prompt = _backups.prompt;
+    _prompt = _backups.prompt || '';
     _editStates.prompt = false;
-    renderSubTabContent();
+    if (_cameFromClassify) {
+      _cameFromClassify = false;
+      window.location.hash = '#classify';
+      if (window.App) App.renderPage('classify');
+    } else {
+      renderSubTabContent();
+    }
   }
 
   function copyPrompt() {
@@ -491,7 +498,13 @@ window.SettingsPage = (() => {
       _prompt = textarea.value;
       _editStates.prompt = false;
       Toast.success('Đã lưu System Prompt thành công');
-      renderSubTabContent();
+      if (_cameFromClassify) {
+        _cameFromClassify = false;
+        window.location.hash = '#classify';
+        if (window.App) App.renderPage('classify');
+      } else {
+        renderSubTabContent();
+      }
     } catch (e) {
       Toast.error('Lỗi lưu prompt: ' + e.message);
     }
@@ -534,7 +547,6 @@ window.SettingsPage = (() => {
               `
               : `
                 <button class="btn btn-primary btn-sm" onclick="SettingsPage.openAddKeywordsModal()">➕ Thêm từ khóa</button>
-                <button class="btn btn-sm" style="background:rgba(16,185,129,0.15);color:var(--accent-green);border:1px solid rgba(16,185,129,0.3);" onclick="SettingsPage.addKeywordGroup()">📁 Thêm nhóm mới</button>
                 <button class="btn btn-secondary btn-sm" onclick="SettingsPage.cancelEditKeywords()">🔙 Quay lại</button>
                 <button class="btn btn-primary btn-sm" onclick="SettingsPage.saveKeywords()">💾 Lưu thay đổi</button>
                 <button class="btn btn-sm" id="btn-sync-keywords" style="background:rgba(59,130,246,0.15);color:var(--accent-blue);border:1px solid rgba(59,130,246,0.3);" 
@@ -561,11 +573,10 @@ window.SettingsPage = (() => {
               <label class="form-label" style="font-weight:600; display:flex; justify-content:space-between; align-items:center; font-size:12px; margin-bottom: 8px;">
                 <span style="display:flex;align-items:center;gap:6px;">
                   ${isEditing ? '<span class="kw-drag-handle">☰</span>' : ''}
-                  🏷️ <span class="kw-group-name" ${isEditing ? `ondblclick="SettingsPage.renameKeywordGroup('${esc(cat)}', this)"` : ''}>${esc(cat)}</span>
+                  🏷️ <span class="kw-group-name">${esc(cat)}</span>
                 </span>
                 <span style="display:flex;align-items:center;gap:8px;">
                   <span class="kw-count" style="font-size:11px; font-weight:normal; color:var(--text-muted);">(${keywords.length} từ khóa)</span>
-                  ${isEditing ? `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--accent-red);padding:2px 6px;" onclick="SettingsPage.deleteKeywordGroup('${esc(cat)}')">🗑️</button>` : ''}
                 </span>
               </label>
               <div style="position:relative;">
@@ -681,9 +692,17 @@ window.SettingsPage = (() => {
   }
 
   function cancelEditKeywords() {
-    _rawKeywords = JSON.parse(JSON.stringify(_backups.keywords));
+    if (_backups.keywords) {
+      _rawKeywords = JSON.parse(JSON.stringify(_backups.keywords));
+    }
     _editStates.keywords = false;
-    renderSubTabContent();
+    if (_cameFromClassify) {
+      _cameFromClassify = false;
+      window.location.hash = '#classify';
+      if (window.App) App.renderPage('classify');
+    } else {
+      renderSubTabContent();
+    }
   }
 
   async function saveKeywords() {
@@ -702,7 +721,13 @@ window.SettingsPage = (() => {
       _rawKeywords = data;
       _editStates.keywords = false;
       Toast.success('Đã lưu từ khóa gợi ý thành công');
-      renderSubTabContent();
+      if (_cameFromClassify) {
+        _cameFromClassify = false;
+        window.location.hash = '#classify';
+        if (window.App) App.renderPage('classify');
+      } else {
+        renderSubTabContent();
+      }
     } catch (e) {
       Toast.error('Lỗi lưu từ khóa: ' + e.message);
     }
@@ -1280,9 +1305,17 @@ window.SettingsPage = (() => {
   }
 
   function cancelEditProducts() {
-    _productsData = JSON.parse(JSON.stringify(_backups.products));
+    if (_backups.products) {
+      _productsData = JSON.parse(JSON.stringify(_backups.products));
+    }
     _editStates.products = false;
-    renderSubTabContent();
+    if (_cameFromClassify) {
+      _cameFromClassify = false;
+      window.location.hash = '#classify';
+      if (window.App) App.renderPage('classify');
+    } else {
+      renderSubTabContent();
+    }
   }
 
   function addProductRow() {
@@ -1314,7 +1347,13 @@ window.SettingsPage = (() => {
       await API.put('/pipeline/products', payload);
       _editStates.products = false;
       Toast.success(`Đã lưu danh mục sản phẩm của sheet '${_activeProductSheet}' thành công`);
-      renderSubTabContent();
+      if (_cameFromClassify) {
+        _cameFromClassify = false;
+        window.location.hash = '#classify';
+        if (window.App) App.renderPage('classify');
+      } else {
+        renderSubTabContent();
+      }
     } catch (e) {
       Toast.error('Lỗi lưu danh mục Excel: ' + e.message);
     }
@@ -1931,7 +1970,8 @@ window.SettingsPage = (() => {
     _activeTab = 'prompt';
     _activeSubTab = 'prompt_text';
     _editStates.prompt = true;
-    _backups.prompt = _prompt;
+    _backups.prompt = _prompt || '';
+    _cameFromClassify = true;
     window.location.hash = '#settings';
     if (window.App) App.renderPage('settings');
     setTimeout(() => {
@@ -1958,7 +1998,8 @@ window.SettingsPage = (() => {
       }
     }
     _editStates.keywords = true;
-    _backups.keywords = JSON.parse(JSON.stringify(_rawKeywords));
+    _backups.keywords = _rawKeywords ? JSON.parse(JSON.stringify(_rawKeywords)) : {};
+    _cameFromClassify = true;
     window.location.hash = '#settings';
     if (window.App) App.renderPage('settings');
     setTimeout(() => {
