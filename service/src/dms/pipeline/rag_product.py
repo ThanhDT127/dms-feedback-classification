@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-import time
 from textwrap import dedent
 
 import numpy as np
@@ -187,21 +186,12 @@ class RAGProductMatcher:
             """
         ).strip()
 
-        for attempt in range(1, self.settings.max_retry + 1):
-            try:
-                resp = self.gemini.generate(prompt)
-                self._last_usage = resp.usage
-                return self._parse_llm_numbered(resp.text, len(texts))
-            except Exception as exc:
-                wait = self.settings.base_wait * attempt
-                logger.warning(
-                    "LLM extract error (%d/%d): %s -> sleep %.1fs",
-                    attempt,
-                    self.settings.max_retry,
-                    exc,
-                    wait,
-                )
-                time.sleep(wait)
+        try:
+            resp = self.gemini.generate(prompt)
+            self._last_usage = resp.usage
+            return self._parse_llm_numbered(resp.text, len(texts))
+        except Exception as exc:
+            logger.warning("LLM extract error after provider retries: %s", exc)
         return ["NONE"] * len(texts)
 
     def bm25_search_dual(self, query: str, topk: int = 3) -> list[dict]:

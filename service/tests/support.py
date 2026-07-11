@@ -11,6 +11,44 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.multiclass import OneVsRestClassifier
 
 
+class FakeGeminiResponse:
+    def __init__(self, text: str, usage: dict | None = None) -> None:
+        self.text = text
+        self.usage = usage or {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+
+
+class SequenceGemini:
+    def __init__(self, responses: list[str]) -> None:
+        self.responses = list(responses)
+        self.calls: list[tuple[str, str]] = []
+
+    def generate_json(self, prompt: str, temperature: float = 0.0) -> FakeGeminiResponse:
+        self.calls.append(("generate_json", prompt))
+        if self.responses:
+            return FakeGeminiResponse(self.responses.pop(0))
+        return FakeGeminiResponse("not json")
+
+    def generate(self, prompt: str, temperature: float = 0.0) -> FakeGeminiResponse:
+        self.calls.append(("generate", prompt))
+        if self.responses:
+            return FakeGeminiResponse(self.responses.pop(0))
+        return FakeGeminiResponse("not json")
+
+
+class RecordingSharePoint:
+    def __init__(self) -> None:
+        self.uploads: list[tuple[str, str, str | None]] = []
+
+    def upload_file(
+        self,
+        local_path: str | Path,
+        remote_folder: str,
+        remote_filename: str | None = None,
+    ) -> dict:
+        self.uploads.append((str(local_path), remote_folder, remote_filename))
+        return {"id": f"sp-{len(self.uploads)}", "webUrl": f"https://sharepoint/{len(self.uploads)}"}
+
+
 def write_keyword_map(keyword_dir: Path) -> None:
     keyword_dir.mkdir(parents=True, exist_ok=True)
     kw_map = {

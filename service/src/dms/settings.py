@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from functools import lru_cache
+import threading
 from pathlib import Path
 
 from pydantic import Field, ValidationError, model_validator
@@ -64,7 +64,10 @@ class Settings(BaseSettings):
     bm25_min_score: float = 5.0
     http_timeout_seconds: float = 30.0
     gemini_timeout_seconds: float = Field(120.0, alias="GEMINI_TIMEOUT_SECONDS")
-    cors_allowed_origins: str = Field("*", alias="CORS_ALLOWED_ORIGINS")
+    cors_allowed_origins: str = Field(
+        "http://localhost:8501,http://localhost:3000",
+        alias="CORS_ALLOWED_ORIGINS",
+    )
     enable_sharepoint_config_sync: bool = Field(True, alias="ENABLE_SHAREPOINT_CONFIG_SYNC")
     upload_input_to_sharepoint: bool = Field(True, alias="UPLOAD_INPUT_TO_SHAREPOINT")
     enable_runtime_cleanup: bool = Field(False, alias="ENABLE_RUNTIME_CLEANUP")
@@ -92,8 +95,9 @@ class Settings(BaseSettings):
     )
 
     # Auth
-    jwt_secret_key: str = Field(default="dev-secret-key-change-me", alias="JWT_SECRET_KEY")
-    default_admin_password: str = Field(default="admin123", alias="DEFAULT_ADMIN_PASSWORD")
+    jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
+    default_admin_password: str = Field(default="", alias="DEFAULT_ADMIN_PASSWORD")
+    environment: str = Field(default="development", alias="ENVIRONMENT")
 
     data_dir: Path = Field(default_factory=lambda: SERVICE_DIR / "data", alias="DATA_DIR")
     keyword_dir_override: Path | None = Field(default=None, alias="KEYWORD_DIR")
@@ -139,11 +143,14 @@ class Settings(BaseSettings):
         if backend == "apikey" and not self.gemini_api_key:
             raise ValueError("GEMINI_API_KEY is required when GEMINI_BACKEND=apikey")
 
-        if os.environ.get("ENVIRONMENT", "").lower() == "production":
-            if self.jwt_secret_key == "dev-secret-key-change-me" or len(self.jwt_secret_key) < 32:
-                raise ValueError("JWT_SECRET_KEY must be set to a strong value in production")
-            if self.default_admin_password == "admin123":
-                raise ValueError("DEFAULT_ADMIN_PASSWORD must be changed in production")
+        self.environment = (self.environment or "development").strip().lower()
+
+        # JWT secret is now required (no default) and must be strong
+        if len(self.jwt_secret_key) < 32:
+            raise ValueError(
+                "JWT_SECRET_KEY must be at least 32 characters long. "
+                "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+            )
 
         positive_int_fields = (
             "classification_worker_concurrency",
@@ -300,13 +307,54 @@ class Settings(BaseSettings):
         (self.work_dir / "checkpoint").mkdir(parents=True, exist_ok=True)
 
 
-@lru_cache
+class SettingsProvider:
+    """Thread-safe authoritative settings cache."""
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._settings: Settings | None = None
+
+    def get(self) -> Settings:
+        with self._lock:
+            if self._settings is not None:
+                return self._settings
+            try:
+                self._settings = Settings()  # type: ignore[call-arg]
+            except ValidationError as exc:
+                raise ConfigurationError(str(exc)) from exc
+            return self._settings
+
+    def reload(self) -> Settings:
+        with self._lock:
+            self._settings = None
+            return self.get()
+
+    def invalidate(self) -> None:
+        with self._lock:
+            self._settings = None
+
+    def set_for_tests(self, settings: Settings) -> None:
+        with self._lock:
+            self._settings = settings
+
+
+_SETTINGS_PROVIDER = SettingsProvider()
+
+
+def get_settings_provider() -> SettingsProvider:
+    return _SETTINGS_PROVIDER
+
+
 def get_settings() -> Settings:
     """Return a cached Settings instance."""
-    try:
-        return Settings()  # type: ignore[call-arg]
-    except ValidationError as exc:
-        raise ConfigurationError(str(exc)) from exc
+    return _SETTINGS_PROVIDER.get()
+
+
+def invalidate_settings_cache() -> None:
+    _SETTINGS_PROVIDER.invalidate()
+
+
+get_settings.cache_clear = invalidate_settings_cache  # type: ignore[attr-defined]
 
 
 def update_env_file(updates: dict[str, str]) -> None:
@@ -331,7 +379,7 @@ def update_env_file(updates: dict[str, str]) -> None:
             key, sep, val = line.partition("=")
             key_stripped = key.strip()
             if key_stripped in updates:
-                new_lines.append(f"{key_stripped}={updates[key_stripped]}")
+                new_lines.append(f"{key_stripped}={_format_env_value(updates[key_stripped])}")
                 updated_keys.add(key_stripped)
             else:
                 new_lines.append(line)
@@ -341,6 +389,24 @@ def update_env_file(updates: dict[str, str]) -> None:
     # Append any keys that weren't found in the existing .env file
     for key, val in updates.items():
         if key not in updated_keys:
-            new_lines.append(f"{key}={val}")
+            new_lines.append(f"{key}={_format_env_value(val)}")
 
     atomic_write_text(env_path, "\n".join(new_lines) + "\n")
+
+
+def _format_env_value(value: str) -> str:
+    text = "" if value is None else str(value)
+    needs_quotes = (
+        text == ""
+        or text != text.strip()
+        or any(char in text for char in ('#', '=', '"', "'", "\n", "\r"))
+    )
+    if not needs_quotes:
+        return text
+    escaped = (
+        text.replace("\\", "\\\\")
+        .replace("\r", "\\r")
+        .replace("\n", "\\n")
+        .replace('"', '\\"')
+    )
+    return f'"{escaped}"'

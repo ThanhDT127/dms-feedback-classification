@@ -32,6 +32,7 @@ dependencies = [
   "PyJWT>=2.8.0,<3",
   "bcrypt>=4.1.0,<5",
   "gunicorn>=21.2.0,<24",
+  "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]
@@ -57,7 +58,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
-ignore = ["E501"]
+ignore = ["E501", "B008"]
 
 [tool.mypy]
 python_version = "3.11"

@@ -6,7 +6,6 @@ import json
 import logging
 import threading
 import traceback
-from datetime import datetime
 from pathlib import Path
 
 from .cleanup import RuntimeCleanup
@@ -16,6 +15,7 @@ from .notification import NotificationService
 from .pipeline.runner import PipelineRunner
 from .settings import Settings
 from .sharepoint import SharePointClient
+from .time_utils import utc_now_iso
 from .utils import atomic_write_json
 
 logger = logging.getLogger("dms-watcher")
@@ -100,6 +100,8 @@ class Watcher:
             for item in ckpt_items:
                 name = item.get("name")
                 file_id = item.get("id")
+                if not isinstance(file_id, str):
+                    continue
                 if name == "seen_files.json" and seen_missing:
                     logger.info("Restoring seen_files.json from SharePoint...")
                     self.settings.seen_files_path.parent.mkdir(parents=True, exist_ok=True)
@@ -151,7 +153,7 @@ class Watcher:
                     seen[file_id] = {
                         "name": file_name,
                         "status": "done",
-                        "processed_at": datetime.now().isoformat(),
+                        "processed_at": utc_now_iso(),
                         "lastModifiedDateTime": inp_f.get("lastModifiedDateTime", ""),
                         "total_rows": 0,
                         "duration_seconds": 0.0,
@@ -188,7 +190,7 @@ class Watcher:
             logger.warning("Config asset sync failed; keeping current snapshot: %s", exc)
             self._last_sync_health = {
                 "status": "error",
-                "checked_at": datetime.now().isoformat(timespec="seconds"),
+                "checked_at": utc_now_iso(),
                 "reload_required": False,
                 "changed_assets": [],
                 "downloaded_assets": [],
@@ -266,7 +268,7 @@ class Watcher:
             seen[file_id] = {
                 "name": file_name,
                 "status": "done",
-                "processed_at": datetime.now().isoformat(),
+                "processed_at": utc_now_iso(),
                 "lastModifiedDateTime": file_info.get("lastModifiedDateTime", ""),
                 "total_rows": result.get("total_rows", 0),
                 "duration_seconds": result.get("duration_seconds", 0),
@@ -280,8 +282,11 @@ class Watcher:
             self.metrics.record_success(file_name, rows, duration, label_dist)
             try:
                 self.sharepoint_client.upload_checkpoint(self.settings.metrics_path)
-            except Exception as exc:
-                logger.warning("Failed to upload metrics.json to SharePoint Check_Point/: %s", exc)
+            except Exception as metrics_upload_exc:
+                logger.warning(
+                    "Failed to upload metrics.json to SharePoint Check_Point/: %s",
+                    metrics_upload_exc,
+                )
             if getattr(self.settings, "notify_on_success", True):
                 self.notification_service.send_success(file_name, result)
             self.cleanup.cleanup_success_artifacts(
@@ -299,13 +304,16 @@ class Watcher:
             self.metrics.record_failure(file_name, error_type, str(exc))
             try:
                 self.sharepoint_client.upload_checkpoint(self.settings.metrics_path)
-            except Exception as exc:
-                logger.warning("Failed to upload metrics.json to SharePoint Check_Point/: %s", exc)
+            except Exception as upload_exc:
+                logger.warning(
+                    "Failed to upload metrics.json to SharePoint Check_Point/: %s",
+                    upload_exc,
+                )
 
             entry = seen.get(file_id, {"name": file_name, "failures": 0})
             entry["failures"] = entry.get("failures", 0) + 1
             entry["last_error"] = error_msg
-            entry["last_attempt"] = datetime.now().isoformat()
+            entry["last_attempt"] = utc_now_iso()
 
             if entry["failures"] >= MAX_FILE_RETRIES:
                 entry["status"] = "failed"

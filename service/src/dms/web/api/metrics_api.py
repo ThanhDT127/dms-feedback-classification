@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
 
 from ...settings import get_settings
-from ..deps import get_current_user, get_admin_user
+from ...time_utils import utc_now_iso
+from ..deps import get_admin_user, get_current_user
 
 logger = logging.getLogger("dms-web")
 
@@ -65,7 +65,7 @@ async def get_health(user: dict = Depends(get_current_user)):
         },
         "model": get_settings().gemini_model,
         "web_api": True,
-        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "timestamp": utc_now_iso(),
     }
 
 

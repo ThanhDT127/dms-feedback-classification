@@ -7,6 +7,8 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from .connection_limiter import WS_LIMIT_CLOSE_CODE, ws_connection_limiter
+
 logger = logging.getLogger("dms-web")
 
 router = APIRouter(tags=["ws"])
@@ -17,7 +19,7 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
     """Stream classification progress for a specific durable job."""
     token = websocket.query_params.get("token")
     if not token:
-        await websocket.close(code=4001, reason="Missing authentication token")
+        await websocket.close(code=4001, reason="Authentication required")
         return
 
     from .. import deps
@@ -37,6 +39,12 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
+    from ...token_blacklist import is_revoked
+
+    if payload.get("jti") and is_revoked(payload["jti"]):
+        await websocket.close(code=4001, reason="Token has been revoked")
+        return
+
     username = payload.get("sub")
     if not username:
         await websocket.close(code=4001, reason="Invalid token payload")
@@ -53,6 +61,11 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
         await websocket.close(code=4001, reason="User unavailable")
         return
 
+    identity = ws_connection_limiter.identity_for(websocket, user.get("username") or username)
+    if not ws_connection_limiter.acquire("classify", identity):
+        await websocket.close(code=WS_LIMIT_CLOSE_CODE, reason="WebSocket connection limit exceeded")
+        return
+
     job = job_store.get_job(job_id, include_results=False)
     if job is None or not (
         user.get("role") == "admin" or job.get("owner_username") == user.get("username")
@@ -65,6 +78,7 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
             }
         )
         await websocket.close(code=4004)
+        ws_connection_limiter.release("classify", identity)
         return
 
     await websocket.accept()
@@ -193,3 +207,4 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
             await websocket.close()
         except Exception:
             pass
+        ws_connection_limiter.release("classify", identity)

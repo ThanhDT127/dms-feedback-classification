@@ -41,6 +41,9 @@ class FakeSession:
     def put(self, url, **kwargs):
         return self._next("put", url, **kwargs)
 
+    def post(self, url, **kwargs):
+        return self._next("post", url, **kwargs)
+
     def delete(self, url, **kwargs):
         return self._next("delete", url, **kwargs)
 
@@ -102,6 +105,55 @@ def test_sharepoint_error_raised_on_upload_failure(settings, mock_auth_provider,
         client.upload_file(path, settings.sp_output_folder)
 
 
+def test_upload_file_uses_upload_session_for_large_file(
+    settings, mock_auth_provider, tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr("dms.sharepoint.SIMPLE_UPLOAD_MAX_BYTES", 4)
+    monkeypatch.setattr("dms.sharepoint.UPLOAD_CHUNK_SIZE", 5)
+    session = FakeSession(
+        [
+            FakeResponse(
+                payload={"value": [{"name": "Output", "folder": {}, "id": "output-folder"}]}
+            ),
+            FakeResponse(payload={"uploadUrl": "https://upload-session"}),
+            FakeResponse(status_code=202, payload={"nextExpectedRanges": ["5-9"]}),
+            FakeResponse(status_code=201, payload={"id": "uploaded-large"}),
+        ]
+    )
+    client = SharePointClient(mock_auth_provider, settings, session)
+    path = tmp_path / "large.bin"
+    path.write_bytes(b"0123456789")
+
+    result = client.upload_file(path, settings.sp_output_folder)
+
+    assert result["id"] == "uploaded-large"
+    assert [call[0] for call in session.calls] == ["get", "post", "put", "put"]
+    assert session.calls[2][2]["headers"]["Content-Range"] == "bytes 0-4/10"
+    assert session.calls[3][2]["headers"]["Content-Range"] == "bytes 5-9/10"
+
+
+def test_upload_file_raises_when_upload_session_chunk_fails(
+    settings, mock_auth_provider, tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr("dms.sharepoint.SIMPLE_UPLOAD_MAX_BYTES", 4)
+    monkeypatch.setattr("dms.sharepoint.UPLOAD_CHUNK_SIZE", 5)
+    session = FakeSession(
+        [
+            FakeResponse(
+                payload={"value": [{"name": "Output", "folder": {}, "id": "output-folder"}]}
+            ),
+            FakeResponse(payload={"uploadUrl": "https://upload-session"}),
+            FakeResponse(status_code=500, text="chunk boom"),
+        ]
+    )
+    client = SharePointClient(mock_auth_provider, settings, session)
+    path = tmp_path / "large.bin"
+    path.write_bytes(b"0123456789")
+
+    with pytest.raises(SharePointError):
+        client.upload_file(path, settings.sp_output_folder)
+
+
 def test_delete_item_calls_graph_delete(settings, mock_auth_provider):
     session = FakeSession([FakeResponse(status_code=204)])
     client = SharePointClient(mock_auth_provider, settings, session)
@@ -120,3 +172,47 @@ def test_delete_item_raises_on_graph_failure(settings, mock_auth_provider):
 
     with pytest.raises(SharePointError):
         client.delete_item("item-123")
+
+
+def test_list_folder_items_follows_graph_pagination(settings, mock_auth_provider):
+    session = FakeSession(
+        [
+            FakeResponse(
+                payload={"value": [{"name": "Input", "folder": {}, "id": "input-folder"}]}
+            ),
+            FakeResponse(
+                payload={
+                    "value": [{"id": "1", "name": "a.xlsx"}],
+                    "@odata.nextLink": "https://graph.example/next-page",
+                }
+            ),
+            FakeResponse(payload={"value": [{"id": "2", "name": "b.xlsx"}]}),
+        ]
+    )
+    client = SharePointClient(mock_auth_provider, settings, session)
+
+    items = client.list_folder_items(settings.sp_input_folder)
+
+    assert [item["id"] for item in items] == ["1", "2"]
+    assert session.calls[2][1] == "https://graph.example/next-page"
+
+
+def test_list_folder_items_raises_when_later_page_fails(settings, mock_auth_provider):
+    session = FakeSession(
+        [
+            FakeResponse(
+                payload={"value": [{"name": "Input", "folder": {}, "id": "input-folder"}]}
+            ),
+            FakeResponse(
+                payload={
+                    "value": [{"id": "1", "name": "a.xlsx"}],
+                    "@odata.nextLink": "https://graph.example/next-page",
+                }
+            ),
+            FakeResponse(status_code=500, text="page exploded"),
+        ]
+    )
+    client = SharePointClient(mock_auth_provider, settings, session)
+
+    with pytest.raises(SharePointError):
+        client.list_folder_items(settings.sp_input_folder)

@@ -7,7 +7,7 @@ import logging
 import re
 import time
 from collections.abc import Callable
-from datetime import datetime
+from typing import Any
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +19,7 @@ from ..exceptions import PipelineCancelled, PipelineError
 from ..gemini_client import GeminiClient
 from ..metrics import MetricsCollector
 from ..settings import Settings
+from ..time_utils import utc_now_iso
 from ..usage_tracker import UsageTracker, calculate_cost
 from .excel_formatter import write_formatted_header
 from .issue_classifier import MINOR_ORDER, IssueClassifier
@@ -150,35 +151,14 @@ class PipelineRunner:
         batch_texts: list[str],
         cancellation_check: Callable[[], bool] | None = None,
     ) -> list[dict]:
-        retries = 0
-        for attempt in range(1, self.settings.max_retry + 1):
+        if cancellation_check is not None and cancellation_check():
+            raise PipelineCancelled("Classification job was cancelled.")
+        try:
+            return self.rag.retrieve_batch(batch_texts)
+        except Exception as exc:
             if cancellation_check is not None and cancellation_check():
-                raise PipelineCancelled("Classification job was cancelled.")
-            try:
-                result = self.rag.retrieve_batch(batch_texts)
-                self.metrics.record_gemini_call(retries=retries)
-                return result
-            except Exception as exc:
-                if cancellation_check is not None and cancellation_check():
-                    raise PipelineCancelled("Classification job was cancelled.") from exc
-                retries += 1
-                wait = self.settings.base_wait * attempt
-                logger.warning(
-                    "RAG error (%d/%d): %s -> sleep %.1fs",
-                    attempt,
-                    self.settings.max_retry,
-                    exc,
-                    wait,
-                )
-                
-                # Check cancellation rapidly during the sleep interval
-                steps = int(wait * 10)
-                for _ in range(steps):
-                    if cancellation_check is not None and cancellation_check():
-                        raise PipelineCancelled("Classification job was cancelled.")
-                    time.sleep(0.1)
-                
-        self.metrics.record_gemini_call(retries=retries)
+                raise PipelineCancelled("Classification job was cancelled.") from exc
+            logger.warning("RAG error after provider retries: %s", exc)
         return [
             {
                 "LLM_Extracted": "",
@@ -197,7 +177,7 @@ class PipelineRunner:
         input_path: str | Path,
         output_path: str | Path,
         ckpt_path: str | Path,
-        progress_callback: callable | None = None,
+        progress_callback: Callable[..., Any] | None = None,
         cancellation_check: Callable[[], bool] | None = None,
     ) -> dict:
         try:
@@ -218,7 +198,7 @@ class PipelineRunner:
         input_path: str | Path,
         output_path: str | Path,
         ckpt_path: str | Path,
-        progress_callback: callable | None = None,
+        progress_callback: Callable[..., Any] | None = None,
         cancellation_check: Callable[[], bool] | None = None,
     ) -> dict:
         input_path = Path(input_path)
@@ -373,16 +353,15 @@ class PipelineRunner:
                 )
                 # Sequential per-row retry with individual fallback
                 issue_list = []
-                for row_idx, (text, rag_item) in enumerate(zip(batch, rag_batch)):
+                for row_idx, (text, rag_item) in enumerate(zip(batch, rag_batch, strict=False)):
                     if cancellation_check is not None and cancellation_check():
-                        raise PipelineCancelled("Classification job was cancelled.")
+                        raise PipelineCancelled("Classification job was cancelled.") from exc
                     try:
                         single_result = self.issue_classifier.classify_batch(
                             [text],
                             matched_products=[rag_item],
                             cancellation_check=cancellation_check,
                         )
-                        self.metrics.record_gemini_call()
                         issue_list.append(single_result[0] if single_result else {})
                     except PipelineCancelled:
                         raise
@@ -527,7 +506,7 @@ class PipelineRunner:
         ckpt_path.parent.mkdir(parents=True, exist_ok=True)
         ckpt_path.write_text(
             json.dumps(
-                {"last_index": last_index, "timestamp": datetime.now().isoformat()},
+                {"last_index": last_index, "timestamp": utc_now_iso()},
                 ensure_ascii=False,
                 indent=2,
             ),

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from dms.metrics import MetricsCollector
 from dms.watcher import Watcher
 
@@ -23,6 +25,17 @@ class FakeSharePoint:
 
     def upload_checkpoint(self, path):
         self.uploaded.append(("checkpoint", path))
+
+
+class FakeSharePointMetricsUploadFails(FakeSharePoint):
+    def __init__(self, files, metrics_path):
+        super().__init__(files)
+        self.metrics_path = metrics_path
+
+    def upload_checkpoint(self, path):
+        if path == self.metrics_path:
+            raise RuntimeError("metrics upload failed")
+        super().upload_checkpoint(path)
 
 
 class FakePipeline:
@@ -194,3 +207,28 @@ def test_watcher_settings_hot_reloads(settings, monkeypatch, tmp_path):
     assert watcher.settings.gemini_backend == "apikey"
     assert watcher.settings.gemini_model == "gemini-2.5-pro"
     assert watcher.settings.notify_on_success is False
+
+
+def test_watcher_error_logging_keeps_original_failure_when_metrics_upload_fails(
+    settings, caplog
+):
+    settings.ensure_runtime_dirs()
+    watcher = Watcher(
+        sharepoint_client=FakeSharePointMetricsUploadFails(
+            [{"id": "1", "name": "a.xlsx"}],
+            settings.metrics_path,
+        ),
+        pipeline_runner=FakePipeline(should_fail=True),
+        notification_service=FakeNotifications(),
+        metrics=MetricsCollector(settings.metrics_path),
+        settings=settings,
+    )
+    seen = {}
+
+    with caplog.at_level(logging.WARNING):
+        processed = watcher.poll_once(seen)
+
+    assert processed == 0
+    assert seen["1"]["last_error"] == "RuntimeError: boom"
+    assert watcher.metrics.last_error["error"] == "boom"
+    assert "metrics upload failed" in caplog.text

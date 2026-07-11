@@ -1,12 +1,15 @@
 """JSON-file-based user storage with bcrypt password hashing."""
 from __future__ import annotations
 
-import json
 import logging
-from datetime import datetime, timezone
+import secrets
+from datetime import UTC, datetime
 from pathlib import Path
 
 import bcrypt
+
+from .state_migrations import validate_users_state
+from .state_repository import JsonStateRepository
 
 logger = logging.getLogger("dms-auth")
 
@@ -22,24 +25,35 @@ class UserStore:
         ]}
     """
 
-    def __init__(self, db_path: Path, default_admin_password: str = "admin123") -> None:
+    def __init__(self, db_path: Path, default_admin_password: str = "") -> None:
         self.db_path = db_path
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        if not self.db_path.exists():
-            self._write({"users": []})
+        self.repository = JsonStateRepository(
+            self.db_path,
+            default_factory=lambda: {"users": []},
+            validator=validate_users_state,
+        )
 
         # Ensure a default admin user exists when the store is empty.
         users = self._read()["users"]
         if not users:
-            hashed = self._hash_password(default_admin_password)
+            admin_password = default_admin_password
+            must_change = False
+            if not admin_password or admin_password == "admin123":
+                admin_password = secrets.token_urlsafe(12)
+                must_change = True
+                logger.warning(
+                    "⚠️ Generated admin password: %s — CHANGE IMMEDIATELY",
+                    admin_password,
+                )
+            hashed = self._hash_password(admin_password)
             users.append({
                 "username": "admin",
                 "display_name": "Admin",
                 "password_hash": hashed,
                 "role": "admin",
                 "is_active": True,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "must_change_password": must_change,
+                "created_at": datetime.now(UTC).isoformat(),
             })
             self._write({"users": users})
             logger.warning(
@@ -53,15 +67,11 @@ class UserStore:
 
     def _read(self) -> dict:
         """Read the JSON store from disk."""
-        text = self.db_path.read_text(encoding="utf-8")
-        return json.loads(text)
+        return self.repository.read()
 
     def _write(self, data: dict) -> None:
         """Write the JSON store to disk atomically."""
-        self.db_path.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        self.repository.write(data)
 
     @staticmethod
     def _hash_password(password: str) -> str:
@@ -85,6 +95,7 @@ class UserStore:
         safe = {k: v for k, v in user.items() if k != "password_hash"}
         safe.setdefault("display_name", safe.get("username", ""))
         safe.setdefault("is_active", True)
+        safe.setdefault("must_change_password", False)
         return safe
 
     # Dummy bcrypt hash for constant-time comparison when user not found
@@ -153,7 +164,7 @@ class UserStore:
             "password_hash": self._hash_password(password),
             "role": role,
             "is_active": bool(is_active),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         data["users"].append(new_user)
         self._write(data)
@@ -165,6 +176,7 @@ class UserStore:
         for user in data["users"]:
             if user["username"] == username:
                 user["password_hash"] = self._hash_password(new_password)
+                user["must_change_password"] = False
                 self._write(data)
                 return True
         return False
@@ -185,6 +197,7 @@ class UserStore:
                     user["is_active"] = bool(fields["is_active"])
                 if "password" in fields and fields["password"]:
                     user["password_hash"] = self._hash_password(fields["password"])
+                    user["must_change_password"] = False
                 self._write(data)
                 return self._safe_user(user)
         return None

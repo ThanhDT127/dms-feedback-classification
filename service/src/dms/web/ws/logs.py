@@ -10,12 +10,15 @@ from pathlib import Path
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from ...settings import SERVICE_DIR
+from .connection_limiter import WS_LIMIT_CLOSE_CODE, ws_connection_limiter
 
 logger = logging.getLogger("dms-web")
 
 router = APIRouter(tags=["ws"])
 
 LOG_DIR = SERVICE_DIR / "logs"
+DEFAULT_INITIAL_TAIL_LINES = 50
+DEFAULT_INITIAL_TAIL_BYTES = 64 * 1024
 
 
 def _find_latest_log() -> Path | None:
@@ -51,6 +54,19 @@ def _parse_line(line: str) -> dict | None:
         }
 
 
+def _tail_lines(path: Path, max_lines: int, max_bytes: int) -> list[str]:
+    """Read a bounded tail from a log file."""
+    if max_lines <= 0 or max_bytes <= 0:
+        return []
+    size = path.stat().st_size
+    with path.open("rb") as handle:
+        handle.seek(max(0, size - max_bytes))
+        data = handle.read(max_bytes)
+    text = data.decode("utf-8", errors="replace")
+    lines = text.splitlines()
+    return lines[-max_lines:]
+
+
 @router.websocket("/ws/logs")
 async def ws_live_logs(websocket: WebSocket):
     """Stream log file changes in real-time.
@@ -65,23 +81,44 @@ async def ws_live_logs(websocket: WebSocket):
     # Validate authentication token
     token = websocket.query_params.get("token")
     if not token:
-        await websocket.close(code=4001, reason="Missing authentication token")
+        await websocket.close(code=4001, reason="Authentication required")
         return
     from .. import deps
     settings = deps.get_settings()
-    if settings:
-        from ...jwt_utils import decode_token
-        import jwt as pyjwt
-        try:
-            decode_token(token, settings.jwt_secret_key, expected_type="access")
-        except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError, ValueError):
-            await websocket.close(code=4001, reason="Invalid or expired token")
-            return
+    if not settings:
+        await websocket.close(code=4001, reason="Server configuration unavailable")
+        return
+
+    import jwt as pyjwt
+
+    from ...jwt_utils import decode_token
+    from ...token_blacklist import is_revoked
+
+    try:
+        payload = decode_token(token, settings.jwt_secret_key, expected_type="access")
+    except (pyjwt.ExpiredSignatureError, pyjwt.InvalidTokenError, ValueError):
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        return
+
+    if payload.get("jti") and is_revoked(payload["jti"]):
+        await websocket.close(code=4001, reason="Token has been revoked")
+        return
+
+    identity = ws_connection_limiter.identity_for(websocket, payload.get("sub"))
+    if not ws_connection_limiter.acquire("logs", identity):
+        await websocket.close(code=WS_LIMIT_CLOSE_CODE, reason="WebSocket connection limit exceeded")
+        return
 
     await websocket.accept()
 
     # Parse level filter from query params
     level_filter = websocket.query_params.get("level", "").upper() or None
+    initial_tail_lines = int(
+        getattr(settings, "log_ws_initial_tail_lines", DEFAULT_INITIAL_TAIL_LINES)
+    )
+    initial_tail_bytes = int(
+        getattr(settings, "log_ws_initial_tail_bytes", DEFAULT_INITIAL_TAIL_BYTES)
+    )
 
     log_file = _find_latest_log()
     if log_file is None:
@@ -100,10 +137,7 @@ async def ws_live_logs(websocket: WebSocket):
 
             # Send last 50 lines as initial context
             try:
-                text = log_file.read_text(encoding="utf-8")
-                lines = text.splitlines()
-                initial_lines = lines[-50:] if len(lines) > 50 else lines
-                for line in initial_lines:
+                for line in _tail_lines(log_file, initial_tail_lines, initial_tail_bytes):
                     parsed = _parse_line(line)
                     if parsed is None:
                         continue
@@ -162,3 +196,4 @@ async def ws_live_logs(websocket: WebSocket):
             await websocket.close()
         except Exception:
             pass
+        ws_connection_limiter.release("logs", identity)

@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 
 import pytest
+from conftest import apply_auth_overrides
+from dotenv import dotenv_values
 from fastapi.testclient import TestClient
 
-from dms.settings import Settings, get_settings
+from dms.settings import Settings, get_settings, update_env_file
 from dms.web import deps
 from dms.web.app import create_app
-from conftest import apply_auth_overrides
 
 
 @pytest.fixture
@@ -113,9 +114,31 @@ def test_put_settings_success(client, tmp_path):
 
     # PUT /api/settings calls deps.reset() internally which clears auth overrides
     apply_auth_overrides(client.app)
-    # GET /secret/gemini_api_key is intentionally blocked (403) for security
+    # Secret readback endpoint is removed for security.
     secret = client.get("/api/settings/secret/gemini_api_key")
-    assert secret.status_code == 403
+    assert secret.status_code == 404
+
+
+def test_update_env_file_quotes_special_values(tmp_path, monkeypatch):
+    monkeypatch.setattr("dms.settings.SERVICE_DIR", tmp_path)
+    (tmp_path / ".env").write_text(
+        "GEMINI_API_KEY=old\n"
+        "PLAIN=value\n",
+        encoding="utf-8",
+    )
+
+    update_env_file(
+        {
+            "GEMINI_API_KEY": 'abc#def=ghi"jkl',
+            "MULTILINE_SECRET": "line1\nline2",
+            "SPACEY": " value ",
+        }
+    )
+
+    parsed = dotenv_values(tmp_path / ".env")
+    assert parsed["GEMINI_API_KEY"] == 'abc#def=ghi"jkl'
+    assert parsed["MULTILINE_SECRET"] == "line1\nline2"
+    assert parsed["SPACEY"] == " value "
 
 
 def test_put_settings_validation_and_rollback(client, tmp_path):

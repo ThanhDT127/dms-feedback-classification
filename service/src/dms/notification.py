@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import html
 import logging
-from datetime import datetime
 
 import requests
 
 from .auth import AuthProvider
 from .settings import Settings
+from .time_utils import utc_now
 
 logger = logging.getLogger("dms-watcher")
 
@@ -92,16 +93,17 @@ class NotificationService:
 
     @staticmethod
     def _build_success_html(file_name: str, result: dict) -> str:
+        safe_file_name = html.escape(str(file_name), quote=True)
         total_rows = result.get("total_rows", 0)
         duration = result.get("duration_seconds", 0)
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = utc_now().strftime("%Y-%m-%d %H:%M:%S UTC")
         return f"""
         <div style="font-family: Segoe UI, Arial, sans-serif; max-width: 600px;">
             <div style="background: #d4edda; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px;">
                 <strong style="color: #155724; font-size: 16px;">Hoan tat phan loai phan hoi</strong>
             </div>
             <table style="width: 100%; border-collapse: collapse;">
-                <tr><td style="padding: 6px 0; color: #666;">File:</td><td style="padding: 6px 0;"><strong>{file_name}</strong></td></tr>
+                <tr><td style="padding: 6px 0; color: #666;">File:</td><td style="padding: 6px 0;"><strong>{safe_file_name}</strong></td></tr>
                 <tr><td style="padding: 6px 0; color: #666;">So dong:</td><td style="padding: 6px 0;">{total_rows}</td></tr>
                 <tr><td style="padding: 6px 0; color: #666;">Thoi gian xu ly:</td><td style="padding: 6px 0;">{duration:.0f}s</td></tr>
                 <tr><td style="padding: 6px 0; color: #666;">Thoi diem:</td><td style="padding: 6px 0;">{timestamp}</td></tr>
@@ -119,15 +121,17 @@ class NotificationService:
         retry_count: int = 0,
         max_retries: int = 3,
     ) -> str:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        error_display = error_msg[:500] + ("..." if len(error_msg) > 500 else "")
+        timestamp = utc_now().strftime("%Y-%m-%d %H:%M:%S UTC")
+        safe_file_name = html.escape(str(file_name), quote=True)
+        error_display_raw = error_msg[:500] + ("..." if len(error_msg) > 500 else "")
+        error_display = html.escape(str(error_display_raw), quote=True)
         return f"""
         <div style="font-family: Segoe UI, Arial, sans-serif; max-width: 600px;">
             <div style="background: #f8d7da; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px;">
                 <strong style="color: #721c24; font-size: 16px;">Phan loai phan hoi that bai</strong>
             </div>
             <table style="width: 100%; border-collapse: collapse;">
-                <tr><td style="padding: 6px 0; color: #666;">File:</td><td style="padding: 6px 0;"><strong>{file_name}</strong></td></tr>
+                <tr><td style="padding: 6px 0; color: #666;">File:</td><td style="padding: 6px 0;"><strong>{safe_file_name}</strong></td></tr>
                 <tr><td style="padding: 6px 0; color: #666;">Loi:</td><td style="padding: 6px 0; color: #dc3545;">{error_display}</td></tr>
                 <tr><td style="padding: 6px 0; color: #666;">So lan thu:</td><td style="padding: 6px 0;">{retry_count}/{max_retries}</td></tr>
                 <tr><td style="padding: 6px 0; color: #666;">Thoi diem:</td><td style="padding: 6px 0;">{timestamp}</td></tr>

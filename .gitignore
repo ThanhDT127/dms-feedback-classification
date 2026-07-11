@@ -50,6 +50,8 @@ build/
 venv/
 env/
 .Python
+.mypy_cache/
+**/.mypy_cache/
 
 # ===========================
 # OS & Editor
