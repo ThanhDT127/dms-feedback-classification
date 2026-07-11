@@ -925,6 +925,8 @@ window.ClassifyPage = (() => {
       const job = await API.classifyFile(fd);
       _currentJob = job;
       const jobId = job.job_id || job.id;
+      sessionStorage.setItem('classify_active_job_id', jobId);
+      sessionStorage.removeItem('classify_reset');
 
       document.getElementById('file-progress')?.classList.remove('hidden');
       document.getElementById('file-results')?.classList.remove('hidden');
@@ -1042,14 +1044,22 @@ window.ClassifyPage = (() => {
       const jobs = await API.getJobs();
       if (!Array.isArray(jobs) || jobs.length === 0) return;
 
-      // After reset, only restore jobs that are still actively running
+      // Restoring active job logic based on sessionStorage and status
+      const activeJobId = sessionStorage.getItem('classify_active_job_id');
       const wasReset = sessionStorage.getItem('classify_reset') === '1';
-      const allowedStatuses = wasReset
-        ? ['queued', 'running']
-        : ['queued', 'running', 'completed', 'error', 'cancelled'];
 
       const activeJob = jobs
-        .filter(j => allowedStatuses.includes(j.status) && j.mode !== 'batch')
+        .filter(j => {
+          if (j.mode === 'batch') return false;
+          if (wasReset) {
+            return j.status === 'queued' || j.status === 'running';
+          }
+          // Always restore active or queued jobs
+          if (j.status === 'queued' || j.status === 'running') return true;
+          // Restore completed/error/cancelled ONLY if they match the active job started in this session
+          if (activeJobId && (j.job_id === activeJobId || j.id === activeJobId)) return true;
+          return false;
+        })
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
 
       // Clear reset flag once we've checked
@@ -1287,6 +1297,7 @@ window.ClassifyPage = (() => {
     _isPaused = false;
     // Mark reset so page refresh won't auto-restore terminal jobs
     sessionStorage.setItem('classify_reset', '1');
+    sessionStorage.removeItem('classify_active_job_id');
     // Re-render file mode fresh
     renderMode();
     Toast.info('Đã reset. Chọn file mới để phân loại.');
@@ -2307,6 +2318,7 @@ window.ClassifyPage = (() => {
     if (_wsClient) { _wsClient.close(); _wsClient = null; }
     // Mark reset so page refresh won't auto-restore terminal jobs
     sessionStorage.setItem('classify_reset', '1');
+    sessionStorage.removeItem('classify_active_job_id');
   }
 
   return {
