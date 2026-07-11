@@ -12,8 +12,8 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
     && python -m pip install --no-cache-dir -e . \
     && python -c "import dms"
 
-# Create non-root user and pre-create data directories
-RUN groupadd -r dms && useradd -r -g dms dms \
+# Create non-root user and pre-create data directories (UID/GID 1000 matches default VM users)
+RUN groupadd -g 1000 dms && useradd -r -u 1000 -g dms dms \
     && mkdir -p /app/data/work /app/data/logs \
     && chown -R dms:dms /app
 
