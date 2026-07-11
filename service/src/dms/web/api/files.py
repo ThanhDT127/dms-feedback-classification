@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import json
 import logging
-from datetime import datetime
+import uuid
 from pathlib import Path
 
 import pandas as pd
@@ -15,14 +15,21 @@ from pydantic import BaseModel
 
 from ...exceptions import SharePointError
 from ...settings import get_settings
+from ...time_utils import utc_from_timestamp
 from ..deps import get_admin_user, get_current_user, get_sharepoint_client
 
 logger = logging.getLogger("dms-web")
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
-WORK_DIR = get_settings().work_dir
+WORK_DIR: Path | None = None
 FOLDER_MAP: dict[str, list[Path]] = {}
+
+
+def _work_dir() -> Path:
+    if WORK_DIR is not None:
+        return WORK_DIR
+    return get_settings().work_dir
 
 
 def _get_folder_map() -> dict[str, list[Path]]:
@@ -39,13 +46,22 @@ def _get_folder_map() -> dict[str, list[Path]]:
     }
 
 
+def _staging_download_path(filename: str) -> Path:
+    staging_dir = _work_dir() / "staging"
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = Path(filename).name
+    if not safe_name:
+        raise HTTPException(status_code=400, detail="TÃªn file khÃ´ng há»£p lá»‡")
+    return staging_dir / f"{uuid.uuid4().hex}_{safe_name}"
+
+
 def _file_info(path: Path) -> dict:
     """Build a file info dict from a path."""
     stat = path.stat()
     return {
         "name": path.name,
         "size": stat.st_size,
-        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+        "modified": utc_from_timestamp(stat.st_mtime).isoformat(timespec="seconds"),
         "extension": path.suffix.lstrip("."),
     }
 
@@ -93,7 +109,7 @@ async def get_folder_tree(user: dict = Depends(get_current_user)):
 @router.get("/seen", name="seen_files")
 async def get_seen_files(user: dict = Depends(get_current_user)):
     """Trả về nội dung seen_files.json."""
-    seen_path = WORK_DIR / "seen_files.json"
+    seen_path = _work_dir() / "seen_files.json"
     if not seen_path.is_file():
         return {}
     try:
@@ -115,7 +131,7 @@ async def upload_file(file: UploadFile, admin: dict = Depends(get_admin_user)):
             detail="Chỉ chấp nhận file .xlsx",
         )
 
-    input_dir = WORK_DIR / "input"
+    input_dir = _work_dir() / "input"
     input_dir.mkdir(parents=True, exist_ok=True)
 
     # Validate safe path (strip directory traversal)
@@ -300,6 +316,7 @@ async def sync_sharepoint(admin: dict = Depends(get_admin_user)):
 async def list_files(folder: str, user: dict = Depends(get_current_user)):
     """Liệt kê các file trong thư mục chỉ định (Duyệt SharePoint Cloud hoặc Local Fallback)."""
     folder_lower = folder.lower()
+    files: list[dict] = []
 
     # Quyết định xem có nên duyệt SharePoint không
     sp_folder_map = {
@@ -315,7 +332,7 @@ async def list_files(folder: str, user: dict = Depends(get_current_user)):
 
     # ─── Đọc seen_files.json để map trạng thái ───
     seen_data = {}
-    seen_path = WORK_DIR / "seen_files.json"
+    seen_path = _work_dir() / "seen_files.json"
     if seen_path.is_file():
         try:
             seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
@@ -373,7 +390,7 @@ async def list_files(folder: str, user: dict = Depends(get_current_user)):
     if dirs is None:
         raise HTTPException(status_code=400, detail=f"Thư mục không hợp lệ: {folder}")
 
-    files: list[dict] = []
+    files = []
     seen_names: set[str] = set()
     for dir_path in dirs:
         if not dir_path.is_dir():
@@ -460,7 +477,7 @@ async def get_file_metadata(
         raise HTTPException(status_code=404, detail=f"Không tìm thấy file: {filename}")
 
     # Check if SharePoint file based on seen_files or webUrl
-    seen_path = WORK_DIR / "seen_files.json"
+    seen_path = _work_dir() / "seen_files.json"
     if seen_path.is_file():
         try:
             seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
@@ -654,13 +671,7 @@ async def preview_file(folder: str, filename: str, max_rows: int = 20, user: dic
 
             if target_item:
                 # Tải file về thư mục staging tạm thời
-                staging_dir = WORK_DIR / "staging"
-                staging_dir.mkdir(parents=True, exist_ok=True)
-
-                # Sanitize filename to avoid path traversal in staging
-                safe_name = Path(filename).name
-                temp_path = staging_dir / safe_name
-
+                temp_path = _staging_download_path(filename)
                 sp_client.download_file(target_item["id"], temp_path)
                 file_path = temp_path
                 temp_downloaded_path = temp_path
@@ -838,12 +849,7 @@ async def download_file(folder: str, filename: str, background_tasks: Background
                     break
 
             if target_item:
-                staging_dir = WORK_DIR / "staging"
-                staging_dir.mkdir(parents=True, exist_ok=True)
-
-                safe_name = Path(filename).name
-                temp_path = staging_dir / safe_name
-
+                temp_path = _staging_download_path(filename)
                 sp_client.download_file(target_item["id"], temp_path)
                 file_path = temp_path
                 temp_downloaded_path = temp_path
@@ -864,7 +870,7 @@ async def download_file(folder: str, filename: str, background_tasks: Background
             try:
                 candidate.relative_to(dir_path.resolve())
             except ValueError:
-                raise HTTPException(status_code=400, detail="Tên file không hợp lệ")
+                raise HTTPException(status_code=400, detail="Tên file không hợp lệ") from None
             if candidate.is_file():
                 file_path = candidate
                 break
@@ -889,6 +895,6 @@ async def download_file(folder: str, filename: str, background_tasks: Background
 
     return FileResponse(
         path=file_path,
-        filename=file_path.name,
+        filename=Path(filename).name,
         media_type=media_type,
     )

@@ -6,7 +6,7 @@ import types
 import pytest
 
 from dms.exceptions import GeminiError
-from dms.gemini_client import GeminiClient
+from dms.gemini_client import GeminiClient, GeminiResponse
 
 
 def test_gemini_vertex_initialization(settings, monkeypatch):
@@ -65,3 +65,23 @@ def test_gemini_wraps_errors(settings, monkeypatch):
     )
     with pytest.raises(GeminiError):
         client.generate("hello")
+
+
+def test_gemini_retries_once_at_provider_boundary(settings, monkeypatch):
+    settings.max_retry = 3
+    settings.base_wait = 0
+    client = GeminiClient(settings)
+    calls = []
+
+    def flaky_generate(*args, **kwargs):
+        calls.append((args, kwargs))
+        if len(calls) < 3:
+            raise RuntimeError("transient")
+        return GeminiResponse(text="ok", usage={"prompt_tokens": 1, "completion_tokens": 1})
+
+    monkeypatch.setattr(client, "_generate_vertex", flaky_generate)
+
+    response = client.generate_json("hello")
+
+    assert response.text == "ok"
+    assert len(calls) == settings.max_retry

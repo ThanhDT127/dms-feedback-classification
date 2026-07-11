@@ -105,6 +105,12 @@ Model/
 
 `Keyword/` and `Model/` are used for SharePoint config sync when enabled.
 
+Issue classifier prompt behavior:
+
+- default template: `service/config/prompts/issue_classifier_v1.txt`
+- runtime override: `Keyword/system_prompt.txt`
+- rollback custom prompt: delete `Keyword/system_prompt.txt`; the next render uses the versioned default template again
+
 ### Gemini backend: Vertex AI
 
 Recommended for production.
@@ -194,6 +200,7 @@ The service creates these automatically.
 | `work/config_assets/active/` | first successful config sync | last known good runtime asset snapshot |
 
 You do not create these JSON files manually for a fresh runtime. Start the service and it will create them.
+Runtime timestamps written to these files are UTC-aware ISO-8601 values with a timezone suffix, such as `2026-06-29T15:00:23+00:00`. Legacy timestamp values without an offset are treated as UTC when reconstructed.
 
 Important distinction:
 
@@ -562,6 +569,10 @@ Manual uploads are executed by the classification worker queue. The web upload r
 | `CLASSIFICATION_WORKER_HEARTBEAT_SECONDS` | `15.0` | Minimum heartbeat update cadence while a job is running. |
 
 Recommended first deployment: keep concurrency at `1` until Gemini quota and server memory are observed under real workbook sizes. Increase to `2` only if queue wait time is consistently too high and provider quota headroom is clear.
+
+WebSocket streams are limited in-process per route and user identity to prevent one browser session from exhausting worker connections. Extra connections are closed with code `4008`.
+
+SharePoint uploads automatically use a Microsoft Graph upload session for files larger than the simple upload threshold. Operators do not need a separate env setting for large workbook uploads.
 
 ### 13.4. Troubleshooting
 

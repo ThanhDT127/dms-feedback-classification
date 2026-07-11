@@ -17,18 +17,9 @@ router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
 
 
 def _apply_label_payload(payload: dict) -> None:
-    from ...pipeline.issue_classifier import (
-        LABEL_DEFINITIONS,
-        MINOR_ORDER,
-        MINOR_TO_MAJOR,
-    )
+    from ...pipeline.issue_classifier import publish_label_config
 
-    LABEL_DEFINITIONS.clear()
-    LABEL_DEFINITIONS.update(payload["label_definitions"])
-    MINOR_ORDER.clear()
-    MINOR_ORDER.extend(payload["minor_order"])
-    MINOR_TO_MAJOR.clear()
-    MINOR_TO_MAJOR.update(payload["minor_to_major"])
+    publish_label_config(payload)
 
 
 def _load_persisted_labels() -> None:
@@ -60,46 +51,26 @@ def _save_persisted_labels(payload: dict) -> None:
 async def get_labels(user: dict = Depends(get_current_user)):
     """Trả về MINOR_ORDER, MINOR_TO_MAJOR và LABEL_DEFINITIONS."""
     _load_persisted_labels()
-    from ...pipeline.issue_classifier import (
-        LABEL_DEFINITIONS,
-        MINOR_ORDER,
-        MINOR_TO_MAJOR,
-    )
+    from ...pipeline.issue_classifier import get_label_config_snapshot
 
-    return {
-        "minor_order": MINOR_ORDER,
-        "minor_to_major": MINOR_TO_MAJOR,
-        "label_definitions": LABEL_DEFINITIONS,
-    }
+    return get_label_config_snapshot()
 
 
 @router.put("/labels")
 async def update_labels(payload: dict, admin: dict = Depends(get_admin_user)):
     """Update labels and record history."""
     from ...pipeline.issue_classifier import (
-        LABEL_DEFINITIONS,
-        MINOR_ORDER,
-        MINOR_TO_MAJOR,
+        get_label_config_snapshot,
+        validate_label_payload,
     )
 
-    # Validate
-    new_defs = payload.get("label_definitions")
-    new_order = payload.get("minor_order")
-    new_mapping = payload.get("minor_to_major")
-    if new_defs is None or new_order is None or new_mapping is None:
-        raise HTTPException(status_code=400, detail="Missing required fields: label_definitions, minor_order, minor_to_major")
+    try:
+        new_labels = validate_label_payload(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Record diff
-    old_labels = {
-        "label_definitions": dict(LABEL_DEFINITIONS),
-        "minor_order": list(MINOR_ORDER),
-        "minor_to_major": dict(MINOR_TO_MAJOR),
-    }
-    new_labels = {
-        "label_definitions": new_defs,
-        "minor_order": new_order,
-        "minor_to_major": new_mapping,
-    }
+    old_labels = get_label_config_snapshot()
 
     store = deps.get_label_history_store()
     changes = 0
@@ -390,7 +361,7 @@ async def save_products(payload: dict, admin: dict = Depends(get_admin_user)):
         raise HTTPException(
             status_code=400,
             detail="Không thể lưu. File Excel đang mở hoặc bị khóa bởi một tiến trình khác (vui lòng đóng file Excel trên máy chủ và thử lại).",
-        )
+        ) from None
     except Exception as exc:
         raise HTTPException(
             status_code=500,

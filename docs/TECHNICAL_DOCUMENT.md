@@ -71,6 +71,7 @@ graph TB
 ### 1.1 The Background Watcher (Daemon)
 The Watcher is the core scheduling pipeline, executing in a continuous loop using an `Event`-based polling mechanism (`Watcher.run_forever`).
 * **SharePoint Polling**: Periodically queries SharePoint via the Microsoft Graph API at a user-defined interval (`POLL_INTERVAL_SECONDS`, default 300s/5 min).
+* **SharePoint Pagination**: Folder listing follows Microsoft Graph `@odata.nextLink` pages. If any later page fails, the listing fails visibly instead of returning a partial folder view.
 * **Sequential Queue Processing**: Discovers new input workbooks, downloads them to a local work directory (`work/input/`), and processes them one-by-one.
 * **Checkpoint & State Recovery**: Restores progress at startup. If the service restarts, it reads `seen_files.json` and `metrics.json` locally or downloads them from SharePoint's `Check_Point/` directory.
 * **Self-Healing Reconciliation**: If files are missing from the local registry but matching processed outputs exist in SharePoint `Output/`, it automatically registers those inputs as `"done"` in `seen_files.json`.
@@ -82,7 +83,7 @@ The Watcher is the core scheduling pipeline, executing in a continuous loop usin
 ### 1.2 FastAPI Web UI & API Server
 Serves a clean HTML/JS Dashboard interface for manual processing, operational monitoring, and configuration tuning.
 * **Logical Folder Routing**: Lists, previews, and deletes files in local directories or SharePoint folders (Inputs, Outputs, Checkpoints, Keywords, and Models).
-* **Real-time Log Streaming**: Uses WebSockets to read the active JSONLines logging file (`logs/dms-service.jsonl`) and stream filtered outputs directly to the UI console.
+* **Real-time Log Streaming**: Uses WebSockets to tail the active JSONLines logging file (`logs/dms-service.jsonl`) and stream filtered outputs directly to the UI console. Initial history is bounded to the most recent log tail instead of reading the full file.
 * **Durable Queued Processing**: Allows users to upload custom feedback spreadsheets as persisted queue jobs. A classification worker loop claims queued jobs, enforces configured concurrency and per-user limits, records heartbeat/retry/cancel state, and streams progress via WebSockets. Job metadata, ownership, progress, live result summaries, output paths, and terminal states are persisted in a SQLite WAL job store under `WORK_DIR` instead of process-local RAM.
 * **Hot Config Updates**: Exposes endpoints to inspect and modify `kw_map.json` or update prompt templates directly.
 
@@ -156,7 +157,7 @@ service/src/dms/
 | `src/dms/metrics.py` | Stores operational metrics like process durations, poll counts, and error distributions. Saves outputs to `metrics.json`. Can reconstruct state on startup by parsing `seen_files.json`. |
 | `src/dms/notification.py` | Packages HTML emails and MS Teams JSON adaptive cards to report pipeline results or system failures. |
 | `src/dms/settings.py` | Parses and validates environment variables and `.env` properties using Pydantic Settings. Normalizes model parameters and paths. |
-| `src/dms/sharepoint.py` | Implements SharePoint integrations (folder item lists, file downloads, output uploads, checkpoint tracking) using Graph REST requests. |
+| `src/dms/sharepoint.py` | Implements SharePoint integrations (folder item lists, file downloads, output uploads, checkpoint tracking) using Graph REST requests. Large files automatically use Microsoft Graph upload sessions instead of simple upload. |
 | `src/dms/utils.py` | Implements atomic text/JSON writing (`atomic_write_text`, `atomic_write_json`) by writing to a temporary file and performing an OS replacement (`os.replace`) to prevent corruption. |
 | `src/dms/watcher.py` | Manages the watcher daemon. Handles folder polling, SharePoint synchronization, state healing, hot-reloading configurations, and daily summaries. |
 | `src/dms/pipeline/excel_formatter.py` | Applies styling to the output workbook, creating a grouped double-header design (Row 1: Major Category, Row 2: Minor Category) with custom background fills. |
@@ -239,7 +240,7 @@ Acts as the central registry tracking files detected during SharePoint poll cycl
   "remote_file_graph_id_101": {
     "name": "Feedback_Thang6_2026.xlsx",
     "status": "done",
-    "processed_at": "2026-06-29T15:00:23.123456",
+    "processed_at": "2026-06-29T15:00:23+00:00",
     "lastModifiedDateTime": "2026-06-29T08:00:00Z",
     "total_rows": 150,
     "duration_seconds": 45.2,
@@ -254,6 +255,7 @@ Acts as the central registry tracking files detected during SharePoint poll cycl
 
 #### 3.3.2 `metrics.json`
 Maintains operational telemetry counters. Reconstructed automatically from `seen_files.json` if deleted.
+Persisted service timestamps are normalized to timezone-aware UTC ISO-8601 strings, for example `2026-06-29T15:00:23+00:00`. Older local files without an offset are still read as UTC during reconstruction.
 ```json
 {
   "total_polls": 1204,
@@ -269,13 +271,13 @@ Maintains operational telemetry counters. Reconstructed automatically from `seen
   },
   "last_success": {
     "file": "Feedback_Thang6_2026.xlsx",
-    "at": "2026-06-29T15:00:23",
+    "at": "2026-06-29T15:00:23+00:00",
     "rows": 150,
     "duration": 45.2
   },
   "last_error": {
     "file": "Failed_Book.xlsx",
-    "at": "2026-06-28T10:12:00",
+    "at": "2026-06-28T10:12:00+00:00",
     "error_type": "PipelineError",
     "error": "Cannot find text column in Failed_Book.xlsx"
   },
@@ -299,7 +301,7 @@ Maintains synchronization statuses of SharePoint configuration assets.
       "size": "154320"
     }
   },
-  "last_success_at": "2026-06-29T15:40:00.992120"
+  "last_success_at": "2026-06-29T15:40:00+00:00"
 }
 ```
 
@@ -308,12 +310,12 @@ Exposes system health status for monitoring checks.
 ```json
 {
   "status": "healthy",
-  "last_poll": "2026-06-29T15:50:00.123000",
+  "last_poll": "2026-06-29T15:50:00+00:00",
   "uptime": "5 days, 4 hours",
   "current_cycle": 1204,
   "poll_interval": 300,
   "files_in_queue": 0,
-  "last_success": "2026-06-29T15:00:23",
+  "last_success": "2026-06-29T15:00:23+00:00",
   "last_error": null,
   "metrics_summary": {
     "processed_24h": 3,
@@ -322,7 +324,7 @@ Exposes system health status for monitoring checks.
   },
   "model": "gemini-2.5-flash-lite",
   "config_assets": {
-    "checked_at": "2026-06-29T15:50:02",
+    "checked_at": "2026-06-29T15:50:02+00:00",
     "reload_required": false,
     "changed_assets": [],
     "downloaded_assets": [],
@@ -581,7 +583,7 @@ Job list/detail payloads include `owner_username`, `queued_at`, `started_at`, `c
   * **Errors**: `400 Bad Request` containing validation errors (e.g. missing project ID for Vertex).
 
 * **GET `/api/settings/prompt`**
-  * **Description**: Retrieves the active System Prompt template. Checks first for `Keyword/system_prompt.txt` overrides; otherwise extracts the default prompt embedded in `issue_classifier.py`.
+  * **Description**: Retrieves the active System Prompt template. Checks first for `Keyword/system_prompt.txt` overrides; otherwise reads the versioned default template from `service/config/prompts/issue_classifier_v1.txt`.
   * **Response** (`200 OK`):
     ```json
     {
@@ -589,13 +591,13 @@ Job list/detail payloads include `owner_username`, `queued_at`, `started_at`, `c
       "raw_template": "Bạn là hệ thống phân loại phản hồi... {minor_order_json}...",
       "word_count": 1205,
       "estimated_tokens": 1566,
-      "source_file": "issue_classifier.py",
+      "source_file": "service/config/prompts/issue_classifier_v1.txt",
       "is_custom": false
     }
     ```
 
 * **PUT `/api/settings/prompt`**
-  * **Description**: Saves a customized system prompt template override to `Keyword/system_prompt.txt`. Validates that all required f-string placeholders are preserved.
+  * **Description**: Saves a customized system prompt template override to `Keyword/system_prompt.txt`. Validates that all required placeholders are preserved. To roll back, delete `Keyword/system_prompt.txt` and the renderer will return to `service/config/prompts/issue_classifier_v1.txt`.
   * **Request Body**:
     ```json
     {
@@ -838,7 +840,7 @@ Job list/detail payloads include `owner_username`, `queued_at`, `started_at`, `c
     ```
 
 * **WS `/ws/logs`**
-  * **Description**: WebSocket connection to tail log records in real-time. Sends the last 50 log lines initially, then streams updates.
+  * **Description**: WebSocket connection to tail log records in real-time. Sends the last 50 log lines initially, then streams updates. Connections are limited per route/user identity; excess connections close with code `4008`.
   * **Query Parameter**: `level` (optional level filter).
   * **Message Format**:
     ```json
@@ -932,7 +934,16 @@ The RAG Product Matcher resolves unstructured text mentions into structured cata
    * **Lọc lần 3 (L3 Rules)**: Matches remaining unmatched terms to return a high-level "Sản phẩm" group.
 
 ### 5.3 Gemini Issue Classifier Prompt Design
-The classifier uses a structured prompt template containing key resources:
+The classifier uses `service/config/prompts/issue_classifier_v1.txt` as the versioned default template and renders it through `src/dms/prompt_renderer.py`. Runtime overrides remain supported through `Keyword/system_prompt.txt`. Each render records the template source, version stem, and SHA-256 hash on the classifier for debugging and future cache invalidation.
+
+The template receives explicit variables:
+* `{minor_order_json}`: ordered label names.
+* `{label_defs}`: label definitions.
+* `{hints_json}`: keyword hints from `kw_map.json`.
+* `{brand_json}`: competitor brand hints from `kw_map.json`.
+* `{input_json}`: rows and matched product context for the current batch.
+
+The prompt contains key resources:
 * **The 21 Target Labels**: The ordered list of categories.
 * **Label Definitions**: Detailed descriptions of category boundaries.
 * **Keyword Hints**: Pre-mapped keywords from `kw_map.json` to help identify candidate categories.
@@ -1434,8 +1445,9 @@ The service is designed to handle common failures automatically to prevent data 
 | Failure Scenario | Impacted Component | Detection Mechanism | Automated Fallback Action |
 | :--- | :--- | :--- | :--- |
 | **SharePoint API Outage** | Background Watcher | `HTTPError` or connection timeout during poll cycle. | Logs the error, skips the current cycle, and retries in the next scheduled poll. |
-| **Gemini API Rate Limit (429)**| Pipeline / LLM | HTTP status code 429 returned from Vertex AI. | Retries the call using exponential backoff: $t_{\text{wait}} = \text{base\_wait} \times \text{attempt}$ (configured up to `max_retry` attempts). |
+| **Gemini API Rate Limit (429)**| Gemini provider client | HTTP status code 429 returned from Vertex AI or Gemini API. | Retries are centralized in `GeminiClient.generate()` / `generate_json()` using $t_{\text{wait}} = \text{base\_wait} \times \text{attempt}$ up to `max_retry`. Pipeline layers do not add nested Gemini retries. |
 | **LLM Output Parsing Error** | Issue Classifier | JSON parser failure on LLM response string. | Uses regex fallback to extract JSON block from markdown fences. If both fail, falls back to the `Tin trung lập` label for all rows in the batch. |
 | **SharePoint Checkpoint Upload Fail** | Polling Watcher | API error during checkpoint file upload. | Logs a warning but continues processing. System state remains safe locally, and is synced during the next cycle. |
+| **Large Active Log File** | WebSocket log stream | Browser opens `/ws/logs` while the active log is large. | Sends only a bounded initial tail (default 50 lines / 64 KiB) and then streams new appended lines. |
 | **Teams Webhook Outage** | Notification Service | Webhook returns a non-200 status code. | Automatically falls back to sending notifications via Microsoft Graph Mail API to target recipients. |
 | **Docker Volume Busy Lock (Errno 16)** | atomic_write_json | `OSError` during atomic `os.replace` operation. | Automatically falls back to a direct, in-place write to the target file. |

@@ -20,4 +20,5 @@ uvicorn[standard]>=0.29.0,<1
 python-multipart>=0.0.9,<1
 aiofiles>=23.2.0,<25
 gunicorn>=21.2.0,<24
+slowapi>=0.1.9
 

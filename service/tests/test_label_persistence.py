@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
+from conftest import TEST_ADMIN, apply_auth_overrides
 from fastapi.testclient import TestClient
 
-from conftest import TEST_ADMIN, apply_auth_overrides
+from dms.pipeline.issue_classifier import (
+    get_label_config_snapshot,
+    publish_label_config,
+)
 from dms.settings import Settings
 from dms.web import deps
 from dms.web.app import create_app
@@ -50,3 +55,55 @@ def test_label_update_persists_and_records_admin_user(tmp_path: Path, monkeypatc
     history = client.get("/api/pipeline/labels/history").json()
     assert history["items"]
     assert history["items"][0]["user"] == TEST_ADMIN["username"]
+
+
+def test_label_publish_never_exposes_empty_config():
+    base = get_label_config_snapshot()
+    seen_empty: list[dict] = []
+    stop = threading.Event()
+
+    def reader():
+        while not stop.is_set():
+            snapshot = get_label_config_snapshot()
+            if (
+                not snapshot["minor_order"]
+                or not snapshot["label_definitions"]
+                or not snapshot["minor_to_major"]
+            ):
+                seen_empty.append(snapshot)
+
+    thread = threading.Thread(target=reader)
+    thread.start()
+    try:
+        for idx in range(100):
+            payload = {
+                "minor_order": list(base["minor_order"]),
+                "minor_to_major": dict(base["minor_to_major"]),
+                "label_definitions": {
+                    **base["label_definitions"],
+                    base["minor_order"][0]: f"definition {idx}",
+                },
+            }
+            publish_label_config(payload)
+    finally:
+        stop.set()
+        thread.join(timeout=5)
+        publish_label_config(base)
+
+    assert seen_empty == []
+
+
+def test_invalid_label_payload_does_not_modify_active_config():
+    before = get_label_config_snapshot()
+    invalid = {
+        "minor_order": [],
+        "minor_to_major": {},
+        "label_definitions": {},
+    }
+
+    try:
+        publish_label_config(invalid)
+    except ValueError:
+        pass
+
+    assert get_label_config_snapshot() == before

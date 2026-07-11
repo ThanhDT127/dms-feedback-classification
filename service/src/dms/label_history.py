@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from .time_utils import utc_day_bounds_iso, utc_now_iso
 
 
 class LabelHistoryStore:
@@ -47,7 +48,7 @@ class LabelHistoryStore:
         user: str = "Admin",
     ) -> None:
         """Record a single label change."""
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = utc_now_iso()
         with self._conn() as conn:
             conn.execute(
                 "INSERT INTO label_history (action, label_name, field, old_value, new_value, user, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -75,11 +76,13 @@ class LabelHistoryStore:
         params: list[Any] = []
 
         if date_from:
+            start = utc_day_bounds_iso(date_from=date_from, date_to=date_from)[0]
             where_clauses.append("timestamp >= ?")
-            params.append(date_from)
+            params.append(start)
         if date_to:
+            end = utc_day_bounds_iso(date_from=date_to, date_to=date_to)[1]
             where_clauses.append("timestamp <= ?")
-            params.append(date_to + "T23:59:59")
+            params.append(end)
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
@@ -124,7 +127,7 @@ class LabelHistoryStore:
     ) -> int:
         """Compare old and new label data and record all changes. Returns count of changes."""
         changes = 0
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = utc_now_iso()
 
         old_defs = old_labels.get("label_definitions", {})
         new_defs = new_labels.get("label_definitions", {})

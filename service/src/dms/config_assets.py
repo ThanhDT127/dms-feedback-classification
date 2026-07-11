@@ -7,13 +7,13 @@ import logging
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from .exceptions import ConfigAssetSyncError
 from .settings import Settings
 from .sharepoint import SharePointClient
+from .time_utils import utc_now_iso
 
 logger = logging.getLogger("dms-watcher")
 
@@ -239,7 +239,7 @@ class ConfigAssetSyncService:
             )
 
     def sync(self) -> ConfigSyncResult:
-        checked_at = datetime.now().isoformat(timespec="seconds")
+        checked_at = utc_now_iso()
         result = ConfigSyncResult(
             checked_at=checked_at,
         )

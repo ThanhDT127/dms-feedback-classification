@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -7,9 +8,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+os.environ.setdefault(
+    "JWT_SECRET_KEY",
+    "test-secret-key-that-is-at-least-32-bytes-long",
+)
+
 from dms.settings import Settings
 from dms.web.deps import get_admin_user, get_current_user
-
 
 TEST_ADMIN = {
     "username": "adminuser",
@@ -23,6 +28,14 @@ TEST_USER = {
     "role": "user",
     "is_active": True,
 }
+
+
+@pytest.fixture(autouse=True)
+def default_jwt_secret(monkeypatch):
+    monkeypatch.setenv(
+        "JWT_SECRET_KEY",
+        "test-secret-key-that-is-at-least-32-bytes-long",
+    )
 
 
 def apply_auth_overrides(app, *, user: dict | None = None, admin: dict | None = None):
@@ -71,6 +84,7 @@ def settings(tmp_path: Path, monkeypatch) -> Settings:
         log_dir=tmp_path / "logs",
         notification_recipients_raw="alpha@example.com,beta@example.com",
         notification_sender_email="sender@example.com",
+        jwt_secret_key="test-secret-key-that-is-at-least-32-bytes-long",
     )
     monkeypatch.setattr("dms.settings.get_settings", lambda: s)
     return s

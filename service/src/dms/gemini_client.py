@@ -122,7 +122,7 @@ class GeminiClient:
             try:
                 return future.result(timeout=timeout)
             except concurrent.futures.TimeoutError:
-                raise TimeoutError(f"Gemini API call timed out after {timeout}s")
+                raise TimeoutError(f"Gemini API call timed out after {timeout}s") from None
 
     def _generate_vertex(
         self,

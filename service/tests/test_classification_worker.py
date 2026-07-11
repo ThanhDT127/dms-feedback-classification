@@ -162,6 +162,33 @@ def test_worker_retries_recoverable_failure_and_preserves_checkpoint(tmp_path: P
     assert (settings.work_dir / "checkpoint" / "retry.json").is_file()
 
 
+def test_worker_start_recovers_stale_running_job(tmp_path: Path):
+    settings = _settings(
+        tmp_path,
+        classification_retry_count=1,
+        classification_stale_running_timeout_seconds=1,
+    )
+    store = ClassificationJobStore(tmp_path / "jobs.db")
+    _create_job(store, tmp_path, "stale")
+    store.mark_running("stale")
+    with store._conn() as conn:
+        conn.execute(
+            "UPDATE classification_jobs SET updated_at = ?, heartbeat_at = ? WHERE job_id = ?",
+            ("2000-01-01T00:00:00+00:00", "2000-01-01T00:00:00+00:00", "stale"),
+        )
+        conn.commit()
+    manager = _manager(settings, store, SuccessfulRunner())
+
+    manager.start()
+    try:
+        job = _wait_for_status(store, "stale", JOB_STATUS_COMPLETED)
+    finally:
+        manager.stop()
+
+    assert job["retry_count"] == 1
+    assert job["rows_done"] == 1
+
+
 def test_worker_marks_error_after_retry_exhaustion(tmp_path: Path):
     settings = _settings(tmp_path, classification_retry_count=1)
     store = ClassificationJobStore(tmp_path / "jobs.db")

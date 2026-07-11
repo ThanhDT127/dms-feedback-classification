@@ -10,7 +10,7 @@ import jwt as pyjwt
 from fastapi import Depends, Header, HTTPException
 
 from ..jwt_utils import decode_token
-from ..settings import SERVICE_DIR, Settings
+from ..settings import SERVICE_DIR, Settings, get_settings_provider
 
 logger = logging.getLogger("dms-web")
 
@@ -40,19 +40,16 @@ def reset() -> None:
             except Exception as exc:
                 logger.warning("Could not stop cached classification worker manager: %s", exc)
         _cache.clear()
+        get_settings_provider().invalidate()
 
 
 def get_settings() -> Settings | None:
     """Return Settings, or None if configuration is incomplete."""
-
-    def _factory():
-        try:
-            return Settings()  # type: ignore[call-arg]
-        except Exception as exc:
-            logger.warning("Không thể tải cấu hình đầy đủ: %s", exc)
-            return None
-
-    return _get_or_create("settings", _factory)
+    try:
+        return get_settings_provider().get()
+    except Exception as exc:
+        logger.warning("Không thể tải cấu hình đầy đủ: %s", exc)
+        return None
 
 
 def get_label_history_store():
@@ -195,7 +192,7 @@ def get_gemini():
 
             return GeminiClient(settings)
         except Exception as exc:
-            logger.warning("Không thể khởi tạo GeminiClient: %s", exc)
+            logger.warning("KhÃ´ng thá»ƒ khá»Ÿi táº¡o GeminiClient: %s", exc)
             return None
 
     return _get_or_create("gemini", _factory)
@@ -214,7 +211,7 @@ def get_rag():
 
             return RAGProductMatcher(settings=settings, gemini=gemini)
         except Exception as exc:
-            logger.warning("Không thể khởi tạo RAGProductMatcher: %s", exc)
+            logger.warning("KhÃ´ng thá»ƒ khá»Ÿi táº¡o RAGProductMatcher: %s", exc)
             return None
 
     return _get_or_create("rag", _factory)
@@ -233,7 +230,7 @@ def get_issue_classifier():
 
             return IssueClassifier(gemini=gemini, settings=settings)
         except Exception as exc:
-            logger.warning("Không thể khởi tạo IssueClassifier: %s", exc)
+            logger.warning("KhÃ´ng thá»ƒ khá»Ÿi táº¡o IssueClassifier: %s", exc)
             return None
 
     return _get_or_create("issue_classifier", _factory)
@@ -251,7 +248,7 @@ def get_metrics():
 
             return MetricsCollector(settings.metrics_path)
         except Exception as exc:
-            logger.warning("Không thể khởi tạo MetricsCollector: %s", exc)
+            logger.warning("KhÃ´ng thá»ƒ khá»Ÿi táº¡o MetricsCollector: %s", exc)
             return None
 
     return _get_or_create("metrics", _factory)
@@ -270,7 +267,7 @@ def get_usage_tracker():
             db_path = settings.work_dir / "classification_jobs.db"
             return UsageTracker(db_path)
         except Exception as exc:
-            logger.warning("Không thể khởi tạo UsageTracker: %s", exc)
+            logger.warning("KhÃ´ng thá»ƒ khá»Ÿi táº¡o UsageTracker: %s", exc)
             return None
 
     return _get_or_create("usage_tracker", _factory)
@@ -285,7 +282,7 @@ def get_pipeline_runner():
         rag = get_rag()
         metrics = get_metrics()
         usage_tracker = get_usage_tracker()
-        if any(dep is None for dep in (settings, gemini, rag, metrics)):
+        if settings is None or gemini is None or rag is None or metrics is None:
             return None
         try:
             from ..pipeline.runner import PipelineRunner
@@ -298,7 +295,7 @@ def get_pipeline_runner():
                 usage_tracker=usage_tracker,
             )
         except Exception as exc:
-            logger.warning("Không thể khởi tạo PipelineRunner: %s", exc)
+            logger.warning("KhÃ´ng thá»ƒ khá»Ÿi táº¡o PipelineRunner: %s", exc)
             return None
 
     return _get_or_create("pipeline_runner", _factory)
@@ -320,7 +317,8 @@ def get_sharepoint_client():
             auth = AuthProvider(settings)
             return SharePointClient(auth=auth, settings=settings, session=session)
         except Exception as exc:
-            logger.warning("Không thể khởi tạo SharePointClient: %s", exc)
+            logger.warning("KhÃ´ng thá»ƒ khá»Ÿi táº¡o SharePointClient: %s", exc)
             return None
 
     return _get_or_create("sharepoint_client", _factory)
+

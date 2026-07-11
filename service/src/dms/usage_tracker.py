@@ -5,8 +5,10 @@ from __future__ import annotations
 import logging
 import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
+
+from .time_utils import utc_day_bounds_iso, utc_now, utc_now_iso
 
 logger = logging.getLogger("dms-watcher")
 
@@ -60,7 +62,7 @@ def calculate_cost(
 class UsageTracker:
     """Persistent Gemini API usage tracker backed by SQLite.
 
-    Thread-safe via an RLock — follows the same pattern used by
+    Thread-safe via an RLock â€” follows the same pattern used by
     ``ClassificationJobStore``.
     """
 
@@ -108,7 +110,7 @@ class UsageTracker:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    datetime.now().isoformat(timespec="seconds"),
+                    utc_now_iso(),
                     model,
                     call_type,
                     job_id,
@@ -292,7 +294,7 @@ class UsageTracker:
 
     def cleanup(self, retention_days: int = 90) -> int:
         """Delete usage records older than *retention_days*. Returns rows deleted."""
-        cutoff = (datetime.now() - timedelta(days=retention_days)).isoformat(timespec="seconds")
+        cutoff = (utc_now() - timedelta(days=retention_days)).isoformat(timespec="seconds")
         with self._lock:
             cur = self._conn.execute(
                 "DELETE FROM gemini_usage_log WHERE timestamp < ?",
@@ -304,6 +306,19 @@ class UsageTracker:
             logger.info("Cleaned up %d usage records older than %d days", deleted, retention_days)
         return deleted
 
+    def close(self) -> None:
+        """Close the SQLite connection."""
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None  # type: ignore[assignment]
+
+    def __enter__(self) -> UsageTracker:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001
+        self.close()
+
     # ------------------------------------------------------------------
     # helpers
     # ------------------------------------------------------------------
@@ -314,20 +329,28 @@ class UsageTracker:
         from_date: str | None,
         to_date: str | None,
     ) -> tuple[str, str]:
-        """Return ``(start_iso, end_iso)`` strings for the requested period."""
-        now = datetime.now()
-        end = to_date + "T23:59:59" if to_date else now.isoformat(timespec="seconds")
-
+        """Return UTC-aware ``(start_iso, end_iso)`` strings for the requested period."""
+        now = utc_now()
         if from_date:
-            start = from_date + "T00:00:00"
+            fallback_start = None
         elif period == "day":
-            start = now.strftime("%Y-%m-%dT00:00:00")
+            fallback_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         elif period == "week":
-            start = (now - timedelta(days=7)).strftime("%Y-%m-%dT00:00:00")
+            fallback_start = (now - timedelta(days=7)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
         elif period == "month":
-            start = (now - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
+            fallback_start = (now - timedelta(days=30)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
         else:
-            # custom with no explicit from → fall back to 30 days
-            start = (now - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
+            fallback_start = (now - timedelta(days=30)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
 
-        return start, end
+        return utc_day_bounds_iso(
+            date_from=from_date,
+            date_to=to_date,
+            fallback_start=fallback_start,
+            fallback_end=now,
+        )

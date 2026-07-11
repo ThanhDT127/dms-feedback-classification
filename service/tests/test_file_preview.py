@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import pandas as pd
 import pytest
+from conftest import apply_auth_overrides
 from fastapi.testclient import TestClient
 
 from dms.web.app import create_app
-from conftest import apply_auth_overrides
 
 
 @pytest.fixture
@@ -28,7 +29,7 @@ def client(tmp_path, monkeypatch):
     # Point SERVICE_DIR to tmp_path so FOLDER_MAP resolves there
     monkeypatch.setattr("dms.settings.SERVICE_DIR", tmp_path)
     monkeypatch.setattr("dms.web.api.files.SERVICE_DIR", tmp_path, raising=False)
-    monkeypatch.setattr("dms.web.api.files.WORK_DIR", tmp_path / "work")
+    monkeypatch.setattr("dms.web.api.files._work_dir", lambda: tmp_path / "work")
     monkeypatch.setattr(
         "dms.web.api.files.FOLDER_MAP",
         {
@@ -224,3 +225,48 @@ class TestFileDownload:
         """Should return 404 for missing file."""
         response = client.get("/api/files/input/nonexistent.txt/download")
         assert response.status_code == 404
+
+
+class FakeSharePointFilesClient:
+    def __init__(self):
+        self.download_paths = []
+
+    def list_folder_items(self, folder_name):
+        return [{"id": "remote-1", "name": "remote.txt"}]
+
+    def download_file(self, file_id, local_path):
+        self.download_paths.append(local_path)
+        local_path.write_text(f"remote content {len(self.download_paths)}", encoding="utf-8")
+        return local_path
+
+
+def test_sharepoint_preview_uses_unique_staging_paths(client, monkeypatch):
+    sp_client = FakeSharePointFilesClient()
+    monkeypatch.setattr("dms.web.api.files.get_sharepoint_client", lambda: sp_client)
+
+    def request_preview():
+        response = client.get("/api/files/input/remote.txt/preview")
+        assert response.status_code == 200
+        return response.json()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: request_preview(), range(2)))
+
+    assert [result["type"] for result in results] == ["text", "text"]
+    assert len(sp_client.download_paths) == 2
+    assert sp_client.download_paths[0] != sp_client.download_paths[1]
+    assert all(not path.exists() for path in sp_client.download_paths)
+
+
+def test_sharepoint_download_uses_unique_staging_paths(client, monkeypatch):
+    sp_client = FakeSharePointFilesClient()
+    monkeypatch.setattr("dms.web.api.files.get_sharepoint_client", lambda: sp_client)
+
+    response_1 = client.get("/api/files/input/remote.txt/download")
+    response_2 = client.get("/api/files/input/remote.txt/download")
+
+    assert response_1.status_code == 200
+    assert response_2.status_code == 200
+    assert len(sp_client.download_paths) == 2
+    assert sp_client.download_paths[0] != sp_client.download_paths[1]
+    assert all(not path.exists() for path in sp_client.download_paths)

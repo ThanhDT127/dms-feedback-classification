@@ -7,6 +7,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
+from typing import Any
 from pathlib import Path
 
 from .classification_jobs import JOB_STATUS_CANCELLED, ClassificationJobStore
@@ -15,8 +16,8 @@ from .settings import Settings
 
 logger = logging.getLogger("dms-web")
 
-RunnerFactory = Callable[[], object | None]
-SharePointFactory = Callable[[], object | None]
+RunnerFactory = Callable[[], Any]
+SharePointFactory = Callable[[], Any]
 
 
 def is_retryable_classification_error(exc: BaseException) -> bool:

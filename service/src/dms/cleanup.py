@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 from .settings import Settings
+from .time_utils import utc_from_timestamp, utc_now
 
 logger = logging.getLogger("dms-watcher")
 
@@ -46,13 +47,13 @@ class RuntimeCleanup:
         cache_dir = self.settings.config_assets_cache_dir
         if not cache_dir.exists():
             return
-        cutoff = datetime.now() - timedelta(hours=self.settings.cleanup_staging_ttl_hours)
+        cutoff = utc_now() - timedelta(hours=self.settings.cleanup_staging_ttl_hours)
         for path in cache_dir.iterdir():
             if not path.is_dir():
                 continue
             if path.name == "active" or not path.name.startswith("cfgsync-"):
                 continue
-            modified = datetime.fromtimestamp(path.stat().st_mtime)
+            modified = utc_from_timestamp(path.stat().st_mtime)
             if modified >= cutoff:
                 continue
             self._delete_path(path, reason="stale sync staging")
@@ -60,11 +61,11 @@ class RuntimeCleanup:
     def _cleanup_old_files(self, directory: Path, *, ttl: timedelta) -> None:
         if ttl.total_seconds() <= 0 or not directory.exists():
             return
-        cutoff = datetime.now() - ttl
+        cutoff = utc_now() - ttl
         for path in directory.iterdir():
             if not path.is_file():
                 continue
-            modified = datetime.fromtimestamp(path.stat().st_mtime)
+            modified = utc_from_timestamp(path.stat().st_mtime)
             if modified >= cutoff:
                 continue
             self._delete_path(path, reason=f"retention>{ttl}")

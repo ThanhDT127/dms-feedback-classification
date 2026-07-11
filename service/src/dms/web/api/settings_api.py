@@ -9,7 +9,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ...settings import SERVICE_DIR, Settings, update_env_file
+from ...prompt_renderer import DEFAULT_ISSUE_PROMPT_PATH, LEGACY_ISSUE_PROMPT_NAME
+from ...settings import SERVICE_DIR, get_settings_provider, update_env_file
 from .. import deps
 from ..deps import get_admin_user
 
@@ -34,7 +35,10 @@ async def get_settings(admin: dict = Depends(get_admin_user)):
     raw = deps.get_settings_partial()
 
     # Mask sensitive values regardless of source type
-    secret_keys = {"azure_client_secret", "gemini_api_key", "AZURE_CLIENT_SECRET", "GEMINI_API_KEY"}
+    secret_keys = {
+        "azure_client_secret", "gemini_api_key", "jwt_secret_key", "default_admin_password",
+        "AZURE_CLIENT_SECRET", "GEMINI_API_KEY", "JWT_SECRET_KEY", "DEFAULT_ADMIN_PASSWORD",
+    }
     masked = {}
     for key, value in raw.items():
         if key in secret_keys and isinstance(value, str):
@@ -47,27 +51,6 @@ async def get_settings(admin: dict = Depends(get_admin_user)):
     return masked
 
 
-@router.get("/secret/{key}")
-async def get_secret_setting(key: str, admin: dict = Depends(get_admin_user)):
-    """Return an unmasked secret value for an authenticated admin."""
-    if key in ("gemini_api_key", "api_key"):
-        raise HTTPException(
-            status_code=403,
-            detail="Vì lý do bảo mật, không thể hiển thị lại Gemini API Key. Bạn chỉ có thể cấu hình key mới.",
-        )
-
-    allowed = {
-        "azure_client_secret": ("azure_client_secret", "AZURE_CLIENT_SECRET"),
-    }
-    if key not in allowed:
-        raise HTTPException(status_code=404, detail="Secret not found")
-
-    raw = deps.get_settings_partial()
-    for candidate in allowed[key]:
-        value = raw.get(candidate)
-        if isinstance(value, str) and value:
-            return {"key": key, "value": value}
-    return {"key": key, "value": ""}
 
 
 # ---------- Prompt templates ----------
@@ -77,35 +60,18 @@ async def get_secret_setting(key: str, admin: dict = Depends(get_admin_user)):
 async def get_issue_prompt(admin: dict = Depends(get_admin_user)):
     """Trả về template prompt của Issue Classifier."""
     try:
-        from ...pipeline.issue_classifier import IssueClassifier
-
         settings = deps.get_settings()
         raw_template = ""
         prompt_override = None
+        source_file_name = str(DEFAULT_ISSUE_PROMPT_PATH)
         if settings is not None:
-            prompt_override = settings.keyword_dir / "system_prompt.txt"
+            prompt_override = settings.keyword_dir / LEGACY_ISSUE_PROMPT_NAME
             if prompt_override.is_file():
                 raw_template = prompt_override.read_text(encoding="utf-8")
+                source_file_name = str(prompt_override)
 
-        source_file_name = "pipeline/issue_classifier.py"
         if not raw_template:
-            # Read the source file directly — more reliable than inspect
-            source_file = Path(inspect.getfile(IssueClassifier))
-            source = source_file.read_text(encoding="utf-8")
-            source_file_name = str(source_file.name)
-
-            # Extract the prompt section between known markers
-            start_marker = "Bạn là hệ thống phân loại phản hồi"
-            end_marker = "Hãy trả về kết quả dưới dạng JSON array duy nhất."
-            start_idx = source.find(start_marker)
-            end_idx = source.find(end_marker)
-
-            if start_idx >= 0 and end_idx >= 0:
-                raw_template = source[start_idx : end_idx + len(end_marker)]
-            elif start_idx >= 0:
-                raw_template = source[start_idx : start_idx + 5000]
-            else:
-                raw_template = "Không thể trích xuất prompt template từ source code."
+            raw_template = DEFAULT_ISSUE_PROMPT_PATH.read_text(encoding="utf-8")
 
         # Clean f-string artifacts for preview
         prompt_template = raw_template
@@ -313,7 +279,7 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
 
         # 3. Validate by trying to load Settings
         deps.reset()
-        settings = Settings()
+        settings = get_settings_provider().reload()
 
         # Test connection to Gemini if credentials exist
         has_creds = False
@@ -352,7 +318,7 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
         raise HTTPException(
             status_code=400,
             detail=f"Cấu hình không hợp lệ. Đã khôi phục cài đặt cũ. Chi tiết lỗi: {exc}",
-        )
+        ) from exc
 
 
 @router.put("/prompt")
