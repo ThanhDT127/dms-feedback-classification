@@ -476,19 +476,28 @@ class ClassificationJobStore:
             )
             conn.commit()
 
+    def _finalize_cancelled_locked(
+        self,
+        conn: sqlite3.Connection,
+        job_id: str,
+        now: str,
+        message: str | None = None,
+    ) -> None:
+        conn.execute(
+            """
+            UPDATE classification_jobs
+            SET status = ?, error = COALESCE(?, error),
+                completed_at = COALESCE(completed_at, ?),
+                cancellation_requested = 0, updated_at = ?
+            WHERE job_id = ?
+            """,
+            (JOB_STATUS_CANCELLED, message, now, now, job_id),
+        )
+
     def mark_cancelled(self, job_id: str, message: str | None = None) -> dict | None:
         now = utc_now_iso()
         with self._lock, self._conn() as conn:
-            conn.execute(
-                """
-                UPDATE classification_jobs
-                SET status = ?, error = COALESCE(?, error),
-                    completed_at = COALESCE(completed_at, ?),
-                    cancellation_requested = 0, updated_at = ?
-                WHERE job_id = ?
-                """,
-                (JOB_STATUS_CANCELLED, message, now, now, job_id),
-            )
+            self._finalize_cancelled_locked(conn, job_id, now, message)
             conn.commit()
             return self.get_job(job_id)
 
@@ -504,15 +513,7 @@ class ClassificationJobStore:
             if row["status"] in TERMINAL_STATUSES:
                 return self.get_job(job_id)
             if row["status"] == JOB_STATUS_QUEUED:
-                conn.execute(
-                    """
-                    UPDATE classification_jobs
-                    SET status = ?, completed_at = COALESCE(completed_at, ?),
-                        cancellation_requested = 0, updated_at = ?
-                    WHERE job_id = ?
-                    """,
-                    (JOB_STATUS_CANCELLED, now, now, job_id),
-                )
+                self._finalize_cancelled_locked(conn, job_id, now)
             else:
                 conn.execute(
                     """
@@ -560,9 +561,18 @@ class ClassificationJobStore:
     def maybe_retry_after_failure(self, job_id: str, *, error: str, max_retries: int) -> dict | None:
         with self._lock, self._conn() as conn:
             row = conn.execute(
-                "SELECT retry_count FROM classification_jobs WHERE job_id = ?",
+                "SELECT retry_count, cancellation_requested FROM classification_jobs WHERE job_id = ?",
                 (job_id,),
             ).fetchone()
+            if row is not None and int(row["cancellation_requested"] or 0):
+                self._finalize_cancelled_locked(
+                    conn,
+                    job_id,
+                    utc_now_iso(),
+                    "Job đã được hủy; không retry sau lỗi.",
+                )
+                conn.commit()
+                return self.get_job(job_id, include_results=False)
         if row is None:
             return None
         if int(row["retry_count"] or 0) >= max_retries:
@@ -576,13 +586,17 @@ class ClassificationJobStore:
         with self._lock, self._conn() as conn:
             rows = conn.execute(
                 """
-                SELECT job_id, retry_count, heartbeat_at, updated_at
+                SELECT job_id, retry_count, cancellation_requested, heartbeat_at, updated_at
                 FROM classification_jobs
                 WHERE status = ?
                 """,
                 (JOB_STATUS_RUNNING,),
             ).fetchall()
         for row in rows:
+            if int(row["cancellation_requested"] or 0):
+                self.mark_cancelled(row["job_id"], "Job đã được hủy trước khi khôi phục stale.")
+                recovered += 1
+                continue
             heartbeat = _parse_iso(row["heartbeat_at"] or row["updated_at"])
             if heartbeat is not None and heartbeat > cutoff:
                 continue

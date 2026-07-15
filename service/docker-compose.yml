@@ -27,8 +27,8 @@ services:
       - ./Keyword:/app/data/Keyword
       - ./Model:/app/data/Model:ro
       - ./testvertex.json:/app/data/sa-key.json:ro
-      - ./work:/app/data/work
-      - ./logs:/app/data/logs
+      - dms_work:/app/data/work
+      - dms_logs:/app/data/logs
     mem_limit: 4g
     cpus: 2.0
     healthcheck:
@@ -75,8 +75,8 @@ services:
       - ./Keyword:/app/data/Keyword
       - ./Model:/app/data/Model:ro
       - ./testvertex.json:/app/data/sa-key.json:ro
-      - ./work:/app/data/work
-      - ./logs:/app/data/logs
+      - dms_work:/app/data/work
+      - dms_logs:/app/data/logs
     mem_limit: 2g
     cpus: 1.0
     healthcheck:
@@ -114,3 +114,7 @@ services:
       options:
         max-size: "5m"
         max-file: "2"
+
+volumes:
+  dms_work:
+  dms_logs:
