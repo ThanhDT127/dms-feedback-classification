@@ -117,6 +117,10 @@ class ClassificationWorkerManager:
             return self._stop_event.is_set() or self.job_store.is_cancellation_requested(job_id)
 
         try:
+            if cancellation_check():
+                self.job_store.mark_cancelled(job_id, "Job đã được yêu cầu hủy trước khi xử lý.")
+                return
+
             if not input_path.is_file():
                 self.job_store.fail_job(job_id, "Input file does not exist")
                 return
@@ -124,6 +128,10 @@ class ClassificationWorkerManager:
             # Auto-upload input file to SharePoint if enabled
             if self.settings.upload_input_to_sharepoint:
                 self._upload_input_to_sharepoint(job, input_path)
+
+            if cancellation_check():
+                self.job_store.mark_cancelled(job_id, "Job đã được yêu cầu hủy trước khi chạy pipeline.")
+                return
 
             runner = self.runner_factory()
             if runner is None:
@@ -140,6 +148,8 @@ class ClassificationWorkerManager:
                 step_status: str | None = None,
             ) -> None:
                 heartbeat_if_due(force=True)
+                if cancellation_check():
+                    return
                 self.job_store.update_progress(
                     job_id,
                     done=done,
@@ -147,7 +157,7 @@ class ClassificationWorkerManager:
                     step=step,
                     step_status=step_status,
                 )
-                if new_results:
+                if new_results and not cancellation_check():
                     self.job_store.append_results(job_id, new_results)
 
             result = runner.run_pipeline(
@@ -184,6 +194,9 @@ class ClassificationWorkerManager:
             self.job_store.mark_cancelled(job_id, "Job đã được hủy ở ranh giới batch an toàn.")
         except Exception as exc:
             logger.error("Classification job %s failed: %s", job_id, exc, exc_info=True)
+            if cancellation_check():
+                self.job_store.mark_cancelled(job_id, "Job đã được hủy sau khi worker nhận lỗi.")
+                return
             if is_retryable_classification_error(exc):
                 retried = self.job_store.maybe_retry_after_failure(
                     job_id,

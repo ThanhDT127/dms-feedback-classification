@@ -240,6 +240,15 @@ def test_classification_job_store_cancellation_and_stale_recovery(tmp_path: Path
     assert cancelled["status"] == JOB_STATUS_RUNNING
     assert cancelled["cancellation_requested"] is True
     assert store.is_cancellation_requested("running") is True
+    retried = store.maybe_retry_after_failure("running", error="provider timeout", max_retries=3)
+    assert retried["status"] == JOB_STATUS_CANCELLED
+    assert retried["cancellation_requested"] is False
+    assert store.claim_next_job(
+        worker_id="worker",
+        global_running_limit=4,
+        per_user_running_limit=4,
+    ) is None
+
     assert store.mark_cancelled("running")["status"] == JOB_STATUS_CANCELLED
 
     store.create_job(
@@ -256,3 +265,19 @@ def test_classification_job_store_cancellation_and_stale_recovery(tmp_path: Path
     recovered = store.get_job("stale", include_results=False)
     assert recovered["status"] == JOB_STATUS_QUEUED
     assert recovered["retry_count"] == 1
+
+    store.create_job(
+        job_id="stale-cancelled",
+        owner_username="bob",
+        owner_role="user",
+        filename="stale-cancelled.xlsx",
+        mode="single",
+        input_path=tmp_path / "stale-cancelled.xlsx",
+        output_path=tmp_path / "stale-cancelled_out.xlsx",
+    )
+    store.mark_running("stale-cancelled")
+    store.cancel_job("stale-cancelled")
+    assert store.recover_stale_running_jobs(stale_after_seconds=0, max_retries=1) == 1
+    recovered_cancelled = store.get_job("stale-cancelled", include_results=False)
+    assert recovered_cancelled["status"] == JOB_STATUS_CANCELLED
+    assert recovered_cancelled["retry_count"] == 0
