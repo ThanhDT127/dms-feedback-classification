@@ -5,12 +5,18 @@
 .env
 service/.env
 service/testvertex.json
-sanitize_notebooks.py
+**/sanitize_notebooks.py
 service/*-key.json
 service/*-sa.json
 **/*.json.key
 **/sa-key.json
 service/ssl/
+
+# Cache directories
+.pytest_cache/
+**/.pytest_cache/
+.ruff_cache/
+**/.ruff_cache/
 
 
 # ===========================

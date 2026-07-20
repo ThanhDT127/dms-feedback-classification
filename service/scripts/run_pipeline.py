@@ -5,7 +5,7 @@ from pathlib import Path
 
 # Add service/src to python path
 script_dir = Path(__file__).resolve().parent
-sys.path.insert(0, str(script_dir / "service" / "src"))
+sys.path.insert(0, str(script_dir.parent / "src"))
 
 import pandas as pd
 from dms.settings import get_settings
