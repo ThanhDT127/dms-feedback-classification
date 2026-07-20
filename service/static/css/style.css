@@ -1701,7 +1701,8 @@ input[type="date"] {
 .preview-body {
   padding: 16px;
   max-height: 400px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   font-family: var(--font-mono);
   font-size: 12px;
 }
@@ -2081,6 +2082,24 @@ input[type="date"] {
   border: 1px solid var(--border);
   background: var(--bg-tertiary);
   margin-top: 10px;
+  padding-bottom: 4px;
+  scrollbar-width: auto;
+  scrollbar-color: var(--accent-blue) rgba(0, 0, 0, 0.15);
+}
+.table-preview-wrapper::-webkit-scrollbar {
+  height: 10px !important;
+}
+.table-preview-wrapper::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.15) !important;
+  border-radius: 5px;
+}
+.table-preview-wrapper::-webkit-scrollbar-thumb {
+  background: var(--accent-blue) !important;
+  border-radius: 5px;
+  border: 1px solid var(--bg-tertiary);
+}
+.table-preview-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-cyan) !important;
 }
 .table-preview {
   font-size: 13.5px !important;
