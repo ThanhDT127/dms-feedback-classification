@@ -15,7 +15,7 @@ from dms.web.app import create_app
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def client(tmp_path, monkeypatch, settings):
     """TestClient with isolated file directories."""
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_BACKEND", raising=False)
@@ -29,6 +29,7 @@ def client(tmp_path, monkeypatch):
     # Point SERVICE_DIR to tmp_path so FOLDER_MAP resolves there
     monkeypatch.setattr("dms.settings.SERVICE_DIR", tmp_path)
     monkeypatch.setattr("dms.web.api.files.SERVICE_DIR", tmp_path, raising=False)
+    monkeypatch.setattr("dms.web.api.files.get_settings", lambda: settings)
     monkeypatch.setattr("dms.web.api.files._work_dir", lambda: tmp_path / "work")
     monkeypatch.setattr(
         "dms.web.api.files.FOLDER_MAP",

@@ -12,11 +12,12 @@ from dms.web.deps import get_admin_user, get_current_user
 
 
 @pytest.fixture
-def client(tmp_path: Path, monkeypatch) -> TestClient:
+def client(tmp_path: Path, monkeypatch, settings) -> TestClient:
     """TestClient with isolated file directories and mocked authentication."""
     # Isolated paths
     monkeypatch.setattr("dms.settings.SERVICE_DIR", tmp_path)
     monkeypatch.setattr("dms.web.api.files.SERVICE_DIR", tmp_path, raising=False)
+    monkeypatch.setattr("dms.web.api.files.get_settings", lambda: settings)
     monkeypatch.setattr("dms.web.api.files.WORK_DIR", tmp_path / "work")
 
     # Configure folders
