@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import logging
+from typing import Any
 
 import requests
 
@@ -27,7 +28,7 @@ class NotificationService:
         self.settings = settings
         self.session = session
 
-    def _send_teams_webhook(self, payload: dict) -> bool:
+    def _send_teams_webhook(self, payload: dict[str, Any]) -> bool:
         if not self.settings.teams_webhook_url:
             return False
         try:
@@ -60,7 +61,7 @@ class NotificationService:
 
         url = f"{self.settings.graph_base}/users/{self.settings.notification_sender_email}/sendMail"
         to_recipients = [{"emailAddress": {"address": addr}} for addr in recipients]
-        payload = {
+        payload: dict[str, Any] = {
             "message": {
                 "subject": subject,
                 "body": {"contentType": "HTML", "content": body},
