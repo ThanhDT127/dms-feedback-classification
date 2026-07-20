@@ -38,7 +38,10 @@ def test_issue_prompt_renderer_uses_default_template(settings):
 def test_issue_prompt_renderer_prefers_legacy_keyword_override(settings):
     settings.keyword_dir.mkdir(parents=True, exist_ok=True)
     override = settings.keyword_dir / "system_prompt.txt"
-    override.write_text("Prompt {input_json} {minor_order_json} {label_defs} {hints_json} {brand_json}", encoding="utf-8")
+    override.write_text(
+        "Prompt {input_json} {minor_order_json} {label_defs} {hints_json} {brand_json}",
+        encoding="utf-8",
+    )
 
     rendered = render_issue_classifier_prompt(
         settings,

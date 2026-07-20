@@ -46,7 +46,10 @@ class RecordingSharePoint:
         remote_filename: str | None = None,
     ) -> dict:
         self.uploads.append((str(local_path), remote_folder, remote_filename))
-        return {"id": f"sp-{len(self.uploads)}", "webUrl": f"https://sharepoint/{len(self.uploads)}"}
+        return {
+            "id": f"sp-{len(self.uploads)}",
+            "webUrl": f"https://sharepoint/{len(self.uploads)}",
+        }
 
 
 def write_keyword_map(keyword_dir: Path) -> None:

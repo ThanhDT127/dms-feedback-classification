@@ -31,9 +31,7 @@ def main() -> None:
     print("EMAIL NOTIFICATION TEST")
     print("=" * 60)
     print(f"\n  Sender:     {settings.notification_sender_email or '(not configured)'}")
-    print(
-        f"  Recipients: {', '.join(settings.notification_recipients) or '(not configured)'}"
-    )
+    print(f"  Recipients: {', '.join(settings.notification_recipients) or '(not configured)'}")
 
     if not settings.notification_sender_email:
         print("\n  NOTIFICATION_SENDER_EMAIL not set in .env")

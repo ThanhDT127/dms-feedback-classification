@@ -321,4 +321,3 @@ def get_sharepoint_client():
             return None
 
     return _get_or_create("sharepoint_client", _factory)
-

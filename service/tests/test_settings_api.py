@@ -103,6 +103,7 @@ def test_put_settings_success(client, tmp_path):
     # Change backend to apikey and provide gemini_api_key
     payload = {"backend": "api_key", "gemini_api_key": "new-secret-key-12345"}
     from unittest.mock import patch
+
     with patch("dms.gemini_client.GeminiClient.generate", return_value="xin chào"):
         response = client.put("/api/settings", json=payload)
     assert response.status_code == 200
@@ -122,8 +123,7 @@ def test_put_settings_success(client, tmp_path):
 def test_update_env_file_quotes_special_values(tmp_path, monkeypatch):
     monkeypatch.setattr("dms.settings.SERVICE_DIR", tmp_path)
     (tmp_path / ".env").write_text(
-        "GEMINI_API_KEY=old\n"
-        "PLAIN=value\n",
+        "GEMINI_API_KEY=old\nPLAIN=value\n",
         encoding="utf-8",
     )
 

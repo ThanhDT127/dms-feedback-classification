@@ -7,8 +7,8 @@ import logging
 import re
 import time
 from collections.abc import Callable
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -349,7 +349,8 @@ class PipelineRunner:
             except Exception as exc:
                 logger.error(
                     "Issue classifier batch error: %s -> retrying %d rows individually",
-                    exc, len(batch),
+                    exc,
+                    len(batch),
                 )
                 # Sequential per-row retry with individual fallback
                 issue_list = []

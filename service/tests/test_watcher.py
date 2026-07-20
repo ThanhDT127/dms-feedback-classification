@@ -209,9 +209,7 @@ def test_watcher_settings_hot_reloads(settings, monkeypatch, tmp_path):
     assert watcher.settings.notify_on_success is False
 
 
-def test_watcher_error_logging_keeps_original_failure_when_metrics_upload_fails(
-    settings, caplog
-):
+def test_watcher_error_logging_keeps_original_failure_when_metrics_upload_fails(settings, caplog):
     settings.ensure_runtime_dirs()
     watcher = Watcher(
         sharepoint_client=FakeSharePointMetricsUploadFails(
@@ -262,9 +260,7 @@ def test_watcher_auto_resets_failed_file_on_sharepoint_change(settings):
 
 def test_watcher_record_retry_failure_is_final_on_max_retries(settings):
     """Task 9.5: _process_file() calls record_retry_failure(is_final=True) when retries exhausted."""
-    watcher = make_watcher(
-        settings, [{"id": "1", "name": "a.xlsx"}], should_fail=True
-    )
+    watcher = make_watcher(settings, [{"id": "1", "name": "a.xlsx"}], should_fail=True)
     seen = {}
 
     # First failure - not final
@@ -285,4 +281,3 @@ def test_watcher_record_retry_failure_is_final_on_max_retries(settings):
     assert seen["1"]["status"] == "failed"
     assert watcher.metrics.total_retries == 3
     assert watcher.metrics.files_failed == 1  # Final failure counted
-

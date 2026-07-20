@@ -21,9 +21,9 @@ def test_tail_lines_reads_bounded_suffix(tmp_path):
 
 
 def test_web_startup_log_uses_service_port():
-    app_source = (
-        Path(__file__).resolve().parents[1] / "src" / "dms" / "web" / "app.py"
-    ).read_text(encoding="utf-8")
+    app_source = (Path(__file__).resolve().parents[1] / "src" / "dms" / "web" / "app.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "http://0.0.0.0:8501" in app_source
     assert "http://0.0.0.0:8000" not in app_source

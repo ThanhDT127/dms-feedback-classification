@@ -10,5 +10,7 @@ lines.append("\n--- FIRST 10 ROWS ---")
 for idx, row in df.head(10).iterrows():
     lines.append(f"Row {idx}: {row.tolist()[:15]}")
 
-Path(script_dir / "scratch" / "excel_structure.txt").write_text("\n".join(lines), encoding="utf-8")
+Path(script_dir / "scratch" / "excel_structure.txt").write_text(
+    "\n".join(lines), encoding="utf-8"
+)
 print("Structure saved successfully.")

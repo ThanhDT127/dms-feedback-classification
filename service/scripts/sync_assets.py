@@ -1,6 +1,5 @@
 """Tải kw_map.json từ SharePoint về thư mục Keyword/. Chạy: python scripts/sync_assets.py"""
 
-import json
 import os
 import sys
 
@@ -10,7 +9,9 @@ try:
     import requests
 except ImportError:
     print("Đang cài msal, requests...")
-    os.system(f"{sys.executable} -m pip install msal requests --trusted-host pypi.org --trusted-host files.pythonhosted.org -q")
+    os.system(
+        f"{sys.executable} -m pip install msal requests --trusted-host pypi.org --trusted-host files.pythonhosted.org -q"
+    )
     import msal
     import requests
 
@@ -38,7 +39,13 @@ KEYWORD_DIR = os.path.join(SERVICE_DIR, "Keyword")
 
 if not all([TENANT, CLIENT_ID, CLIENT_SECRET, DRIVE_ID, ROOT_FOLDER_ID]):
     print("Thiếu config trong .env:")
-    for k in ["AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "SHAREPOINT_DRIVE_ID", "SHAREPOINT_ROOT_FOLDER_ID"]:
+    for k in [
+        "AZURE_TENANT_ID",
+        "AZURE_CLIENT_ID",
+        "AZURE_CLIENT_SECRET",
+        "SHAREPOINT_DRIVE_ID",
+        "SHAREPOINT_ROOT_FOLDER_ID",
+    ]:
         print(f"  {k}: {'OK' if env.get(k) else 'THIẾU'}")
     sys.exit(1)
 

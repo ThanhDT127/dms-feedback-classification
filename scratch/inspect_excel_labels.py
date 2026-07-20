@@ -17,7 +17,7 @@ output_lines.append("\nNew columns:")
 output_lines.append(str([str(c) for c in new_df.columns]))
 
 output_lines.append("\n--- Row 2 in new_df (dòng 5 Excel) ---")
-row_data = new_df.iloc[2] # index 2 is row 5 in Excel
+row_data = new_df.iloc[2]  # index 2 is row 5 in Excel
 for col in new_df.columns:
     val = row_data[col]
     if pd.notna(val) and str(val).strip() != "":

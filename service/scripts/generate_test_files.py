@@ -1,7 +1,7 @@
-import os
 import random
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
 
 FEEDBACK_POOL = [
     "Đèn led búp Rạng Đông 9W bị hỏng đui, nhờ bảo hành.",
@@ -38,31 +38,31 @@ FEEDBACK_POOL = [
     "Đèn pha chống nước Rạng Đông lắp ngoài trời chịu mưa nắng cực bền bỉ.",
     "Nhân viên thị trường Rạng Đông hỗ trợ đại lý rất nhiệt tình, chu đáo.",
     "Hãng Rạng Đông giao nhầm mã đèn âm trần viền vàng thành viền bạc, cần đổi gấp.",
-    "Đại lý Điện Quang đang chạy chương trình khuyến mãi mua 10 tặng 1 bóng tuýp LED."
+    "Đại lý Điện Quang đang chạy chương trình khuyến mãi mua 10 tặng 1 bóng tuýp LED.",
 ]
+
 
 def generate_files():
     downloads_dir = Path("C:/Users/RD03590/Downloads")
     downloads_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Deterministic generation but varied feedback for each of the 10 files
     # Set seed so they look consistent if regenerated, but have different contents
     random.seed(42)
-    
+
     for i in range(1, 11):
         filename = f"test_feedback_{i}.xlsx"
         filepath = downloads_dir / filename
-        
+
         # Sample 10 feedbacks from the pool
         feedbacks = random.sample(FEEDBACK_POOL, 10)
-        
-        data = {
-            "Nội dung phản hồi": feedbacks
-        }
-        
+
+        data = {"Nội dung phản hồi": feedbacks}
+
         df = pd.DataFrame(data)
         df.to_excel(filepath, index=False)
         print(f"Generated test file {i}/10: {filepath}")
+
 
 if __name__ == "__main__":
     generate_files()

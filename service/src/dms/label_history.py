@@ -89,7 +89,9 @@ class LabelHistoryStore:
         with self._conn() as conn:
             conn.row_factory = sqlite3.Row
             # Total count
-            total = conn.execute(f"SELECT COUNT(*) FROM label_history {where_sql}", params).fetchone()[0]
+            total = conn.execute(
+                f"SELECT COUNT(*) FROM label_history {where_sql}", params
+            ).fetchone()[0]
 
             # Items
             rows = conn.execute(
@@ -143,19 +145,43 @@ class LabelHistoryStore:
                 if key not in old_defs:
                     conn.execute(
                         "INSERT INTO label_history (action, label_name, field, old_value, new_value, user, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        ("add", key, "definition", None, json.dumps(new_defs[key], ensure_ascii=False), user, ts),
+                        (
+                            "add",
+                            key,
+                            "definition",
+                            None,
+                            json.dumps(new_defs[key], ensure_ascii=False),
+                            user,
+                            ts,
+                        ),
                     )
                     changes += 1
                 elif key not in new_defs:
                     conn.execute(
                         "INSERT INTO label_history (action, label_name, field, old_value, new_value, user, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        ("delete", key, "definition", json.dumps(old_defs[key], ensure_ascii=False), None, user, ts),
+                        (
+                            "delete",
+                            key,
+                            "definition",
+                            json.dumps(old_defs[key], ensure_ascii=False),
+                            None,
+                            user,
+                            ts,
+                        ),
                     )
                     changes += 1
                 elif old_defs[key] != new_defs[key]:
                     conn.execute(
                         "INSERT INTO label_history (action, label_name, field, old_value, new_value, user, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        ("edit", key, "definition", json.dumps(old_defs[key], ensure_ascii=False), json.dumps(new_defs[key], ensure_ascii=False), user, ts),
+                        (
+                            "edit",
+                            key,
+                            "definition",
+                            json.dumps(old_defs[key], ensure_ascii=False),
+                            json.dumps(new_defs[key], ensure_ascii=False),
+                            user,
+                            ts,
+                        ),
                     )
                     changes += 1
 
@@ -163,7 +189,15 @@ class LabelHistoryStore:
             if old_order != new_order:
                 conn.execute(
                     "INSERT INTO label_history (action, label_name, field, old_value, new_value, user, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    ("edit", "_system", "minor_order", json.dumps(old_order, ensure_ascii=False), json.dumps(new_order, ensure_ascii=False), user, ts),
+                    (
+                        "edit",
+                        "_system",
+                        "minor_order",
+                        json.dumps(old_order, ensure_ascii=False),
+                        json.dumps(new_order, ensure_ascii=False),
+                        user,
+                        ts,
+                    ),
                 )
                 changes += 1
 
@@ -171,7 +205,15 @@ class LabelHistoryStore:
             if old_mapping != new_mapping:
                 conn.execute(
                     "INSERT INTO label_history (action, label_name, field, old_value, new_value, user, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    ("edit", "_system", "minor_to_major", json.dumps(old_mapping, ensure_ascii=False), json.dumps(new_mapping, ensure_ascii=False), user, ts),
+                    (
+                        "edit",
+                        "_system",
+                        "minor_to_major",
+                        json.dumps(old_mapping, ensure_ascii=False),
+                        json.dumps(new_mapping, ensure_ascii=False),
+                        user,
+                        ts,
+                    ),
                 )
                 changes += 1
 

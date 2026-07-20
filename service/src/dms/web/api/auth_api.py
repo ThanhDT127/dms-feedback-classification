@@ -1,4 +1,5 @@
 """Authentication and user management API endpoints."""
+
 from __future__ import annotations
 
 import re
@@ -135,6 +136,7 @@ def _revoke_access_token(token: str | None) -> None:
     exp = payload.get("exp")
     if jti and exp:
         revoke(str(jti), float(exp))
+
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 user_router = APIRouter(prefix="/api/users", tags=["users"])
@@ -351,20 +353,14 @@ async def create_user(payload: UserCreateRequest, admin: dict = ADMIN_USER_DEP):
 
 
 @user_router.put("/{username}", response_model=UserEnvelopeResponse)
-async def update_user(
-    username: str, payload: UserUpdateRequest, admin: dict = ADMIN_USER_DEP
-):
+async def update_user(username: str, payload: UserUpdateRequest, admin: dict = ADMIN_USER_DEP):
     """Update user fields (admin only)."""
     store = deps.get_user_store()
     if store is None:
         raise HTTPException(status_code=500, detail="User store not available")
 
     allowed = {"display_name", "role", "is_active", "password", "username"}
-    fields = {
-        k: v
-        for k, v in payload.model_dump(exclude_unset=True).items()
-        if k in allowed
-    }
+    fields = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if k in allowed}
     if not fields:
         raise HTTPException(status_code=400, detail="No valid fields to update")
     # Validate new username if it is being changed

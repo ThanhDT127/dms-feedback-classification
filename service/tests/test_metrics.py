@@ -236,4 +236,3 @@ def test_reconstruct_from_seen_overwrites_stale_labels(tmp_path):
     assert "StaleLabel" not in metrics.label_distribution
     assert metrics.label_distribution["ProductQuality"] == 4
     assert metrics.label_distribution["Service"] == 6
-

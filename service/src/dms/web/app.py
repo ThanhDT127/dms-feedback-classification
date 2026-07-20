@@ -66,9 +66,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Add HSTS only outside development
         env = os.environ.get("ENVIRONMENT", "development").lower()
         if env != "development":
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains"
-            )
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
 
@@ -169,6 +167,7 @@ def _stop_classification_worker() -> None:
 
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         logger.info("DMS Web UI đang khởi động...")
@@ -264,4 +263,3 @@ def create_app() -> FastAPI:
             app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
     return app
-

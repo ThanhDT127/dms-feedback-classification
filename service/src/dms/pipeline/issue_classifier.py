@@ -148,7 +148,11 @@ def validate_label_payload(payload: dict) -> dict:
     label_definitions = payload.get("label_definitions")
     minor_order = payload.get("minor_order")
     minor_to_major = payload.get("minor_to_major")
-    if not isinstance(label_definitions, dict) or not isinstance(minor_order, list) or not isinstance(minor_to_major, dict):
+    if (
+        not isinstance(label_definitions, dict)
+        or not isinstance(minor_order, list)
+        or not isinstance(minor_to_major, dict)
+    ):
         raise ValueError("Missing required fields: label_definitions, minor_order, minor_to_major")
 
     normalized_order = [str(label).strip() for label in minor_order if str(label).strip()]
@@ -157,8 +161,12 @@ def validate_label_payload(payload: dict) -> dict:
     if len(set(normalized_order)) != len(normalized_order):
         raise ValueError("minor_order contains duplicate labels")
 
-    normalized_defs = {str(k).strip(): str(v) for k, v in label_definitions.items() if str(k).strip()}
-    normalized_mapping = {str(k).strip(): str(v) for k, v in minor_to_major.items() if str(k).strip()}
+    normalized_defs = {
+        str(k).strip(): str(v) for k, v in label_definitions.items() if str(k).strip()
+    }
+    normalized_mapping = {
+        str(k).strip(): str(v) for k, v in minor_to_major.items() if str(k).strip()
+    }
     missing_defs = [label for label in normalized_order if label not in normalized_defs]
     missing_mapping = [label for label in normalized_order if label not in normalized_mapping]
     if missing_defs:
@@ -407,7 +415,9 @@ class IssueClassifier:
             logger.error("Failed to load kw_map.json: %s", exc)
             return {}
 
-    def _llm_json_call(self, prompt: str, cancellation_check: Callable[[], bool] | None = None) -> str:
+    def _llm_json_call(
+        self, prompt: str, cancellation_check: Callable[[], bool] | None = None
+    ) -> str:
         if cancellation_check is not None and cancellation_check():
             raise PipelineCancelled("Classification job was cancelled.")
         try:
@@ -520,13 +530,12 @@ class IssueClassifier:
         if 0 < len(missing_indices) < n and _retry_depth == 0:
             logger.info(
                 "classify_batch: %d/%d rows missing after initial parse, retrying as mini-batch",
-                len(missing_indices), n,
+                len(missing_indices),
+                n,
             )
             retry_texts = [texts[i] for i in missing_indices]
             retry_products = (
-                [matched_products[i] for i in missing_indices]
-                if matched_products
-                else None
+                [matched_products[i] for i in missing_indices] if matched_products else None
             )
             try:
                 retry_results = self.classify_batch(

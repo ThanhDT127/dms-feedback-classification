@@ -284,7 +284,8 @@ class Watcher:
                 "duration_seconds": result.get("duration_seconds", 0),
                 "label_distribution": result.get("label_distribution", {}),
                 # Giữ lại số lần thất bại trước đó để track retry history
-                "past_failures": _old_entry.get("failures", 0) or _old_entry.get("past_failures", 0),
+                "past_failures": _old_entry.get("failures", 0)
+                or _old_entry.get("past_failures", 0),
                 "failures": 0,
             }
             self._save_seen(seen)
@@ -353,9 +354,7 @@ class Watcher:
             entry["last_attempt"] = utc_now_iso()
 
             is_final = entry["failures"] >= MAX_FILE_RETRIES
-            self.metrics.record_retry_failure(
-                file_name, error_type, str(exc), is_final=is_final
-            )
+            self.metrics.record_retry_failure(file_name, error_type, str(exc), is_final=is_final)
 
             # --- Record failure event in SQLite (task 1.4) ---
             if self.job_store is not None:
@@ -409,7 +408,6 @@ class Watcher:
             seen[file_id] = entry
             self._save_seen(seen)
             return False
-
 
     def reload_settings(self) -> None:
         """Reload settings from disk and update dependent services in-place."""
@@ -590,7 +588,14 @@ class Watcher:
                                SET status = 'completed', total_rows = ?, rows_done = ?, percent = 100,
                                    duration_seconds = ?, completed_at = ?, updated_at = ?
                                WHERE job_id = ?""",
-                            (total_rows, total_rows, duration, completed_at, completed_at, watcher_job_id),
+                            (
+                                total_rows,
+                                total_rows,
+                                duration,
+                                completed_at,
+                                completed_at,
+                                watcher_job_id,
+                            ),
                         )
                         conn.commit()
                     # Migrate label distribution
@@ -616,9 +621,7 @@ class Watcher:
                 logger.warning("Failed to migrate entry %s (%s): %s", file_name, _file_id, exc)
                 skipped += 1
 
-        logger.info(
-            "Migration complete: %d entries migrated, %d skipped", migrated, skipped
-        )
+        logger.info("Migration complete: %d entries migrated, %d skipped", migrated, skipped)
 
     def _reconcile_sqlite_with_seen_files(self, seen: dict) -> None:
         """Fix SQLite records for files done in seen_files but only 'error' in SQLite.
@@ -652,10 +655,7 @@ class Watcher:
             error_filenames = {row["filename"] for row in error_only}
 
             # Build name → seen_info map from seen_files
-            name_to_info = {
-                info.get("name", ""): (fid, info)
-                for fid, info in seen.items()
-            }
+            name_to_info = {info.get("name", ""): (fid, info) for fid, info in seen.items()}
 
             reconciled = 0
             for filename in error_filenames:
@@ -700,7 +700,8 @@ class Watcher:
                     reconciled += 1
                     logger.info(
                         "Reconciled SQLite for '%s': added synthetic completed record (processed_at=%s)",
-                        filename, completed_at[:10] if completed_at else "unknown",
+                        filename,
+                        completed_at[:10] if completed_at else "unknown",
                     )
                 except Exception as exc:
                     logger.warning("Failed to reconcile '%s': %s", filename, exc)
@@ -773,4 +774,3 @@ class Watcher:
             self._shutdown_event.wait(timeout=self.settings.poll_interval_seconds)
 
         logger.info("Watcher exited gracefully")
-

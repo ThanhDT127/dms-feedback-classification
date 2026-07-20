@@ -235,7 +235,9 @@ async def classify_file(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="Could not save file. Please try again.") from exc
+        raise HTTPException(
+            status_code=500, detail="Could not save file. Please try again."
+        ) from exc
 
     # --- Pre-queue validation: check that the Excel has a recognizable text column ---
     try:
@@ -249,7 +251,11 @@ async def classify_file(
             # Secondary check: try reading with header row
             df_hdr = pd.read_excel(input_path, nrows=2)
             text_col = next(
-                (c for c in df_hdr.columns if any(alias in _canon_lower(c) for alias in TEXT_ALIASES)),
+                (
+                    c
+                    for c in df_hdr.columns
+                    if any(alias in _canon_lower(c) for alias in TEXT_ALIASES)
+                ),
                 None,
             )
         if text_col is None:
@@ -328,7 +334,10 @@ async def cancel_job(request: Request, job_id: str, user: dict = CURRENT_USER_DE
             "status": cancelled["status"],
             "cancellation_requested": cancelled.get("cancellation_requested", False),
         }
-    return {"message": f"Đã hủy job: {job_id}", "status": cancelled.get("status") if cancelled else None}
+    return {
+        "message": f"Đã hủy job: {job_id}",
+        "status": cancelled.get("status") if cancelled else None,
+    }
 
 
 @router.post("/jobs/{job_id}/retry")
@@ -372,7 +381,9 @@ async def download_job_result(request: Request, job_id: str, user: dict = CURREN
         raise HTTPException(status_code=404, detail="Result file does not exist")
 
     orig_filename = job.get("filename", "")
-    remote_filename = f"{Path(orig_filename).stem}_output.xlsx" if orig_filename else output_path.name
+    remote_filename = (
+        f"{Path(orig_filename).stem}_output.xlsx" if orig_filename else output_path.name
+    )
 
     headers = {
         "Content-Disposition": f"attachment; filename=\"{remote_filename}\"; filename*=utf-8''{quote(remote_filename)}"
@@ -425,7 +436,9 @@ async def upload_job_to_sharepoint(request: Request, job_id: str, user: dict = C
             input_path.name,
             remote_input_name,
         )
-        sp_client.upload_file(input_path, settings.sp_input_folder, remote_filename=remote_input_name)
+        sp_client.upload_file(
+            input_path, settings.sp_input_folder, remote_filename=remote_input_name
+        )
 
         logger.info(
             "Manually uploading job %s output to SharePoint: %s as %s",
@@ -453,4 +466,6 @@ async def upload_job_to_sharepoint(request: Request, job_id: str, user: dict = C
         }
     except Exception as exc:
         logger.error("SharePoint upload failed for job %s: %s", job_id, exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Could not upload to SharePoint: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Could not upload to SharePoint: {exc}"
+        ) from exc

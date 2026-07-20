@@ -29,8 +29,20 @@ class FakeRunner:
         if cancellation_check and cancellation_check():
             raise RuntimeError("cancelled")
         if progress_callback:
-            progress_callback(done=1, total=2, new_results=[{"text": "alpha", "labels": ["Bao loi"]}], step=3, step_status="running")
-            progress_callback(done=2, total=2, new_results=[{"text": "beta", "labels": ["Bao hanh"]}], step=3, step_status="done")
+            progress_callback(
+                done=1,
+                total=2,
+                new_results=[{"text": "alpha", "labels": ["Bao loi"]}],
+                step=3,
+                step_status="running",
+            )
+            progress_callback(
+                done=2,
+                total=2,
+                new_results=[{"text": "beta", "labels": ["Bao hanh"]}],
+                step=3,
+                step_status="done",
+            )
         Path(output_path).write_bytes(b"fake-xlsx")
         return {
             "total_rows": 2,
@@ -95,7 +107,13 @@ def test_classify_file_creates_durable_owner_scoped_job(tmp_path: Path, monkeypa
 
     response = client.post(
         "/api/classify/file",
-        files={"file": ("feedback.xlsx", b"fake", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "feedback.xlsx",
+                b"fake",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
         data={"mode": "single"},
     )
     assert response.status_code == 200
@@ -126,7 +144,13 @@ def test_classification_job_survives_dependency_reset(tmp_path: Path, monkeypatc
 
     response = client.post(
         "/api/classify/file",
-        files={"file": ("feedback.xlsx", b"fake", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "feedback.xlsx",
+                b"fake",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
         data={"mode": "single"},
     )
     job_id = response.json()["job_id"]

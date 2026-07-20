@@ -45,9 +45,7 @@ def utc_day_bounds_iso(
         else fallback_start
     )
     end_dt = (
-        datetime.combine(date.fromisoformat(date_to), time.max, UTC)
-        if date_to
-        else fallback_end
+        datetime.combine(date.fromisoformat(date_to), time.max, UTC) if date_to else fallback_end
     )
     if start_dt is None or end_dt is None:
         raise ValueError("Both start and end bounds are required")

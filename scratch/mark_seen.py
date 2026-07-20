@@ -29,7 +29,7 @@ seen[file_id] = {
     "lastModifiedDateTime": "2026-04-17T10:00:00Z",
     "total_rows": 0,
     "duration_seconds": 0.0,
-    "label_distribution": {}
+    "label_distribution": {},
 }
 
 print("Saving seen_files.json locally...")

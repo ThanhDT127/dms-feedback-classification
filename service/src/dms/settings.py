@@ -74,9 +74,7 @@ class Settings(BaseSettings):
     cleanup_output_ttl_days: int = Field(7, alias="CLEANUP_OUTPUT_TTL_DAYS")
     cleanup_log_ttl_days: int = Field(7, alias="CLEANUP_LOG_TTL_DAYS")
     cleanup_staging_ttl_hours: int = Field(24, alias="CLEANUP_STAGING_TTL_HOURS")
-    classification_worker_concurrency: int = Field(
-        1, alias="CLASSIFICATION_WORKER_CONCURRENCY"
-    )
+    classification_worker_concurrency: int = Field(1, alias="CLASSIFICATION_WORKER_CONCURRENCY")
     classification_per_user_running_limit: int = Field(
         1, alias="CLASSIFICATION_PER_USER_RUNNING_LIMIT"
     )
@@ -149,7 +147,7 @@ class Settings(BaseSettings):
         if len(self.jwt_secret_key) < 32:
             raise ValueError(
                 "JWT_SECRET_KEY must be at least 32 characters long. "
-                "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+                'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
 
         positive_int_fields = (
@@ -399,14 +397,11 @@ def _format_env_value(value: str) -> str:
     needs_quotes = (
         text == ""
         or text != text.strip()
-        or any(char in text for char in ('#', '=', '"', "'", "\n", "\r"))
+        or any(char in text for char in ("#", "=", '"', "'", "\n", "\r"))
     )
     if not needs_quotes:
         return text
     escaped = (
-        text.replace("\\", "\\\\")
-        .replace("\r", "\\r")
-        .replace("\n", "\\n")
-        .replace('"', '\\"')
+        text.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n").replace('"', '\\"')
     )
     return f'"{escaped}"'

@@ -243,11 +243,14 @@ def test_classification_job_store_cancellation_and_stale_recovery(tmp_path: Path
     retried = store.maybe_retry_after_failure("running", error="provider timeout", max_retries=3)
     assert retried["status"] == JOB_STATUS_CANCELLED
     assert retried["cancellation_requested"] is False
-    assert store.claim_next_job(
-        worker_id="worker",
-        global_running_limit=4,
-        per_user_running_limit=4,
-    ) is None
+    assert (
+        store.claim_next_job(
+            worker_id="worker",
+            global_running_limit=4,
+            per_user_running_limit=4,
+        )
+        is None
+    )
 
     assert store.mark_cancelled("running")["status"] == JOB_STATUS_CANCELLED
 
