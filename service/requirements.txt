@@ -21,4 +21,6 @@ python-multipart>=0.0.9,<1
 aiofiles>=23.2.0,<25
 gunicorn>=21.2.0,<24
 slowapi>=0.1.9
+PyJWT>=2.8.0,<3
+bcrypt>=4.1.0,<5
 
