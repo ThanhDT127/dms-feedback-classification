@@ -67,6 +67,7 @@ DMS/
 ├── README.md                  # English Documentation
 ├── README.vi.md               # Vietnamese Documentation
 ├── docs/                      # Documentation Folder
+│   ├── research/              # Jupyter Notebooks & raw research data (.ipynb, etc.)
 │   ├── OPERATIONS.md          # Detailed Operations & Troubleshooting Guide
 │   ├── OPERATIONS.vi.md       # Detailed Operations (Vietnamese)
 │   ├── TECHNICAL_DOCUMENT.md  # System Architecture & Technical Specifications
@@ -83,8 +84,9 @@ DMS/
     ├── docker-compose.yml     # Multi-container orchestration (Watcher & Web UI)
     ├── pyproject.toml         # PEP 518 packaging and tool configuration
     ├── requirements.txt       # Hardened pip requirements
-    ├── Keyword/               # Committed product catalogs & keyword maps
+    ├── Keyword/               # Committed product catalogs & keyword maps (system_prompt.txt)
     ├── Model/                 # Pre-trained ML baseline model artifacts (TF-IDF, LogReg)
+    ├── scripts/               # Developer utilities & CLI execution scripts (run_pipeline.py)
     ├── src/
     │   └── dms/               # Main Application Package
     │       ├── pipeline/      # Core AI Processing Pipeline
@@ -97,7 +99,7 @@ DMS/
     │       ├── watcher.py     # SharePoint polling & self-healing sync
     │       └── settings.py    # Pydantic-settings configuration
     ├── static/                # Web Dashboard Frontend (Vanilla JS SPA)
-    └── tests/                 # Unit & Integration Test Suite (93 test cases)
+    └── tests/                 # Unit & Integration Test Suite (249 test cases)
 ```
 
 ---

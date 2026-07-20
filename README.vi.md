@@ -67,11 +67,12 @@ DMS/
 ├── README.md                  # Tài liệu tiếng Anh
 ├── README.vi.md               # Tài liệu tiếng Việt
 ├── docs/                      # Thư mục Tài liệu
+│   ├── research/              # Jupyter Notebook nghiên cứu & dữ liệu thô (.ipynb, v.v.)
 │   ├── OPERATIONS.md          # Hướng dẫn deploy & vận hành chi tiết
 │   ├── OPERATIONS.vi.md       # Hướng dẫn vận hành (Tiếng Việt)
 │   ├── TECHNICAL_DOCUMENT.md  # Tài liệu kiến trúc hệ thống & Thiết kế kỹ thuật
 │   └── USER_GUIDE.md          # Tài liệu hướng dẫn sử dụng vận hành
-├── openspec/                  # Thư mục chứa đặc tả kiến trúc (31 spec BDD)
+├── openspec/                  # Thư mục chứa đặc tả kiến trúc (31 đặc tả chi tiết BDD)
 │   └── specs/
 │       ├── issue-llm-classification/spec.md
 │       ├── sharepoint-watcher/spec.md
@@ -80,11 +81,12 @@ DMS/
 │   └── sample_feedback.xlsx   # 10 dòng phản hồi mẫu
 └── service/                   # Thư mục gốc dịch vụ
     ├── Dockerfile             # Định nghĩa container production
-    ├── docker-compose.yml     # Điều phối watcher & Web UI
+    ├── docker-compose.yml     # Điều phối container (Watcher, Web UI, Nginx)
     ├── pyproject.toml         # Cấu hình đóng gói PEP 518 và linting
     ├── requirements.txt       # Danh sách dependencies thư viện
-    ├── Keyword/               # Hệ từ khóa và danh mục sản phẩm mẫu được commit
+    ├── Keyword/               # Hệ từ khóa và danh mục sản phẩm mẫu (system_prompt.txt)
     ├── Model/                 # Các artifact model baseline (TF-IDF, LogReg)
+    ├── scripts/               # Script chạy CLI hỗ trợ dev (run_pipeline.py, v.v.)
     ├── src/
     │   └── dms/               # Package ứng dụng chính
     │       ├── pipeline/      # Đường ống xử lý AI cốt lõi
@@ -96,6 +98,8 @@ DMS/
     │       │   └── app.py     # Vòng đời ứng dụng FastAPI
     │       ├── watcher.py     # Poller SharePoint & tự động phục hồi state
     │       └── settings.py    # Cấu hình Pydantic-settings
+    ├── static/                # Giao diện Web Dashboard (Vanilla JS SPA)
+    └── tests/                 # Bộ kiểm thử Unit & Integration (249 test cases)
 ```
 
 ---
