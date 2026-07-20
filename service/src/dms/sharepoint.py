@@ -207,7 +207,9 @@ class SharePointClient:
 
         if final_response is None or final_response.status_code not in (200, 201):
             raise SharePointError(f"Upload session did not complete for {filename}")
-        logger.info("Uploaded %s as %s -> %s/ via upload session", local_path.name, filename, remote_folder)
+        logger.info(
+            "Uploaded %s as %s -> %s/ via upload session", local_path.name, filename, remote_folder
+        )
         return final_response.json()
 
     def upload_output(self, local_path: str | Path) -> dict:
@@ -224,7 +226,6 @@ class SharePointClient:
         response = self.session.delete(url, headers=self.auth.get_headers())
         if response.status_code not in (200, 202, 204):
             raise SharePointError(
-                f"Delete failed ({response.status_code}) for item {item_id}: "
-                f"{response.text[:300]}"
+                f"Delete failed ({response.status_code}) for item {item_id}: {response.text[:300]}"
             )
         logger.info("Deleted SharePoint item %s", item_id)

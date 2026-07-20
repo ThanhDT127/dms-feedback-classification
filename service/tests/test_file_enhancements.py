@@ -7,9 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from fastapi.testclient import TestClient
-
 from conftest import apply_auth_overrides
+from fastapi.testclient import TestClient
 
 
 class TestFileEnhancements:

@@ -1,4 +1,5 @@
 """JWT token creation and validation utilities."""
+
 from __future__ import annotations
 
 import uuid

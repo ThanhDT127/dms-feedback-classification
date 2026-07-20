@@ -7,8 +7,8 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 from .classification_jobs import JOB_STATUS_CANCELLED, ClassificationJobStore
 from .exceptions import PipelineCancelled
@@ -108,7 +108,10 @@ class ClassificationWorkerManager:
         def heartbeat_if_due(force: bool = False) -> None:
             nonlocal last_heartbeat
             now = time.monotonic()
-            if force or now - last_heartbeat >= self.settings.classification_worker_heartbeat_seconds:
+            if (
+                force
+                or now - last_heartbeat >= self.settings.classification_worker_heartbeat_seconds
+            ):
                 self.job_store.heartbeat(job_id)
                 last_heartbeat = now
 
@@ -130,7 +133,9 @@ class ClassificationWorkerManager:
                 self._upload_input_to_sharepoint(job, input_path)
 
             if cancellation_check():
-                self.job_store.mark_cancelled(job_id, "Job đã được yêu cầu hủy trước khi chạy pipeline.")
+                self.job_store.mark_cancelled(
+                    job_id, "Job đã được yêu cầu hủy trước khi chạy pipeline."
+                )
                 return
 
             runner = self.runner_factory()

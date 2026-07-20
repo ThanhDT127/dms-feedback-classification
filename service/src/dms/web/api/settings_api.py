@@ -36,8 +36,14 @@ async def get_settings(admin: dict = Depends(get_admin_user)):
 
     # Mask sensitive values regardless of source type
     secret_keys = {
-        "azure_client_secret", "gemini_api_key", "jwt_secret_key", "default_admin_password",
-        "AZURE_CLIENT_SECRET", "GEMINI_API_KEY", "JWT_SECRET_KEY", "DEFAULT_ADMIN_PASSWORD",
+        "azure_client_secret",
+        "gemini_api_key",
+        "jwt_secret_key",
+        "default_admin_password",
+        "AZURE_CLIENT_SECRET",
+        "GEMINI_API_KEY",
+        "JWT_SECRET_KEY",
+        "DEFAULT_ADMIN_PASSWORD",
     }
     masked = {}
     for key, value in raw.items():
@@ -49,8 +55,6 @@ async def get_settings(admin: dict = Depends(get_admin_user)):
             masked[key] = value
 
     return masked
-
-
 
 
 # ---------- Prompt templates ----------
@@ -255,7 +259,12 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
                 env_key = MAP[key]
 
                 # Check for masked secret values or empty string (to keep existing value)
-                if isinstance(value, str) and (value.startswith("****") or "••" in value or value == "••••••••••••" or not value.strip()):
+                if isinstance(value, str) and (
+                    value.startswith("****")
+                    or "••" in value
+                    or value == "••••••••••••"
+                    or not value.strip()
+                ):
                     # Keep existing value if it was already set
                     continue
 
@@ -293,6 +302,7 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
         if has_creds:
             try:
                 from ...gemini_client import GeminiClient
+
                 gemini = GeminiClient(settings)
                 gemini.generate("Trả lời đúng 1 từ: xin chào", temperature=0.0)
             except Exception as exc:
@@ -301,7 +311,10 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
                     f"Xác thực kết nối Gemini thất bại. Khóa API hoặc tài khoản dịch vụ không hoạt động. Chi tiết lỗi: {exc}"
                 ) from exc
 
-        return {"success": True, "message": "Đã lưu cấu hình và xác thực kết nối Gemini thành công."}
+        return {
+            "success": True,
+            "message": "Đã lưu cấu hình và xác thực kết nối Gemini thành công.",
+        }
 
     except Exception as exc:
         # 4. Rollback to original .env content and os.environ

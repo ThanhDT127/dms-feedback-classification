@@ -58,11 +58,7 @@ def test_metadata_endpoint_file_not_found(client):
 def test_metadata_endpoint_excel_success(client, tmp_path):
     """Metadata endpoint should extract columns and row counts for Excel files."""
     # Create test excel file
-    df = pd.DataFrame({
-        "A": [1, 2, 3],
-        "B": ["x", "y", "z"],
-        "C": [True, False, True]
-    })
+    df = pd.DataFrame({"A": [1, 2, 3], "B": ["x", "y", "z"], "C": [True, False, True]})
     file_path = tmp_path / "work" / "input" / "test.xlsx"
     df.to_excel(file_path, index=False)
 
@@ -87,7 +83,7 @@ def test_metadata_endpoint_seen_files_sharepoint(client, tmp_path):
             "name": "sp_test.xlsx",
             "status": "done",
             "web_url": "https://sharepoint.example/sp_test.xlsx",
-            "id": "file-id-123"
+            "id": "file-id-123",
         }
     }
     seen_path = tmp_path / "work" / "seen_files.json"
@@ -101,20 +97,16 @@ def test_metadata_endpoint_seen_files_sharepoint(client, tmp_path):
 
 def test_bulk_delete_invalid_folder(client):
     """Bulk delete with invalid folder should return 400."""
-    resp = client.post("/api/files/bulk-delete", json={
-        "folder": "invalid_folder",
-        "filenames": ["a.xlsx"]
-    })
+    resp = client.post(
+        "/api/files/bulk-delete", json={"folder": "invalid_folder", "filenames": ["a.xlsx"]}
+    )
     assert resp.status_code == 400
     assert "Thư mục không hợp lệ" in resp.json()["detail"]
 
 
 def test_bulk_delete_empty_list(client):
     """Bulk delete with empty filenames list should return 400."""
-    resp = client.post("/api/files/bulk-delete", json={
-        "folder": "input",
-        "filenames": []
-    })
+    resp = client.post("/api/files/bulk-delete", json={"folder": "input", "filenames": []})
     assert resp.status_code == 400
     assert "Danh sách file xóa trống" in resp.json()["detail"]
 
@@ -127,10 +119,10 @@ def test_bulk_delete_success(client, tmp_path):
     f1.write_text("dummy")
     f2.write_text("dummy")
 
-    resp = client.post("/api/files/bulk-delete", json={
-        "folder": "input",
-        "filenames": ["f1.xlsx", "f2.xlsx", "missing.xlsx"]
-    })
+    resp = client.post(
+        "/api/files/bulk-delete",
+        json={"folder": "input", "filenames": ["f1.xlsx", "f2.xlsx", "missing.xlsx"]},
+    )
     assert resp.status_code == 200
     data = resp.json()
 

@@ -51,9 +51,7 @@ def test_users_json_migration_invalid_source_preserves_backup(tmp_path):
     assert json.loads(backups[0].read_text(encoding="utf-8"))["users"][0]["username"] == "broken"
 
 
-def test_users_json_migration_rolls_back_when_post_write_validation_fails(
-    tmp_path, monkeypatch
-):
+def test_users_json_migration_rolls_back_when_post_write_validation_fails(tmp_path, monkeypatch):
     users_path = tmp_path / "users.json"
     original = _users_payload()
     users_path.write_text(json.dumps(original), encoding="utf-8")

@@ -6,9 +6,7 @@ for both success and failure paths (tasks 1.3, 1.4, 1.5).
 
 from __future__ import annotations
 
-import sqlite3
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

@@ -84,6 +84,7 @@ async def ws_live_logs(websocket: WebSocket):
         await websocket.close(code=4001, reason="Authentication required")
         return
     from .. import deps
+
     settings = deps.get_settings()
     if not settings:
         await websocket.close(code=4001, reason="Server configuration unavailable")
@@ -106,7 +107,9 @@ async def ws_live_logs(websocket: WebSocket):
 
     identity = ws_connection_limiter.identity_for(websocket, payload.get("sub"))
     if not ws_connection_limiter.acquire("logs", identity):
-        await websocket.close(code=WS_LIMIT_CLOSE_CODE, reason="WebSocket connection limit exceeded")
+        await websocket.close(
+            code=WS_LIMIT_CLOSE_CODE, reason="WebSocket connection limit exceeded"
+        )
         return
 
     await websocket.accept()

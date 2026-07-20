@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from conftest import TEST_ADMIN, apply_auth_overrides
 from fastapi.testclient import TestClient
 
-from conftest import TEST_ADMIN, apply_auth_overrides
 from dms.user_store import UserStore
 from dms.web import deps
 from dms.web.app import create_app

@@ -74,7 +74,9 @@ class SuccessfulRunner:
         cancellation_check=None,
     ):
         if progress_callback:
-            progress_callback(done=1, total=1, new_results=[{"text": "done"}], step=3, step_status="done")
+            progress_callback(
+                done=1, total=1, new_results=[{"text": "done"}], step=3, step_status="done"
+            )
         Path(output_path).write_bytes(b"output")
         Path(ckpt_path).parent.mkdir(parents=True, exist_ok=True)
         Path(ckpt_path).write_text('{"last_index": 1}', encoding="utf-8")
@@ -91,7 +93,9 @@ class FlakyRunner:
         self.failures = failures
         self.calls = 0
 
-    def run_pipeline(self, input_path, output_path, ckpt_path, progress_callback=None, cancellation_check=None):
+    def run_pipeline(
+        self, input_path, output_path, ckpt_path, progress_callback=None, cancellation_check=None
+    ):
         self.calls += 1
         Path(ckpt_path).parent.mkdir(parents=True, exist_ok=True)
         Path(ckpt_path).write_text('{"last_index": 1}', encoding="utf-8")
@@ -107,7 +111,9 @@ class FlakyRunner:
 
 
 class CancellingRunner:
-    def run_pipeline(self, input_path, output_path, ckpt_path, progress_callback=None, cancellation_check=None):
+    def run_pipeline(
+        self, input_path, output_path, ckpt_path, progress_callback=None, cancellation_check=None
+    ):
         if progress_callback:
             progress_callback(done=0, total=1, step=1, step_status="running")
         if cancellation_check and cancellation_check():

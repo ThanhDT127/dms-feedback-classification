@@ -6,7 +6,6 @@ Tests idempotency and correct mapping of done/failed entries (task 2.2).
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest

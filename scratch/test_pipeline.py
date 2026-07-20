@@ -1,5 +1,4 @@
 import sys
-import os
 import time
 from pathlib import Path
 
@@ -14,7 +13,10 @@ from dms.pipeline.runner import PipelineRunner
 
 # Configure logging to stdout so we can see what's happening
 import logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("dms-watcher")
 logger.setLevel(logging.INFO)
 
@@ -26,7 +28,7 @@ settings = get_settings()
 # Let's override settings to make it super fast for test
 settings = settings.model_copy(
     update={
-        "llm_batch_size": 2, # Process only 2 rows in one batch
+        "llm_batch_size": 2,  # Process only 2 rows in one batch
         "rate_gap_sec": 1.0,  # Fast sleep
     }
 )
@@ -36,12 +38,7 @@ gemini = GeminiClient(settings)
 rag = RAGProductMatcher(settings, gemini)
 metrics = MetricsCollector(settings.metrics_path)
 
-runner = PipelineRunner(
-    gemini=gemini,
-    rag=rag,
-    metrics=metrics,
-    settings=settings
-)
+runner = PipelineRunner(gemini=gemini, rag=rag, metrics=metrics, settings=settings)
 
 # Load first 5 rows of test file
 input_path = script_dir / "Input" / "DMS-13102025.xlsx"
@@ -64,9 +61,7 @@ print("Running pipeline on 4 rows...")
 t0 = time.time()
 try:
     results = runner.run_pipeline(
-        input_path=temp_input,
-        output_path=temp_output,
-        ckpt_path=temp_ckpt
+        input_path=temp_input, output_path=temp_output, ckpt_path=temp_ckpt
     )
     print(f"Pipeline finished successfully in {time.time() - t0:.1f}s!")
     print("Output file exists:", temp_output.exists())

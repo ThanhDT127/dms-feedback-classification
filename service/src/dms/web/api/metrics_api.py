@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
@@ -91,9 +92,9 @@ async def get_metrics(user: dict = Depends(get_current_user)):
     # seen_files.json là source of truth về trạng thái cuối cùng của mỗi file.
     # File X thất bại 3 lần → retry thành công → status = "done" → tính là SUCCESS.
     # Không đếm theo SQLite attempts để tránh inflate failure rate.
-    watcher_success = 0   # files với status "done"
-    watcher_failed = 0    # files với status "failed" (stuck, chưa được retry thành công)
-    watcher_retried = 0   # files từng thất bại nhưng cuối cùng thành công (failures > 0 AND done)
+    watcher_success = 0  # files với status "done"
+    watcher_failed = 0  # files với status "failed" (stuck, chưa được retry thành công)
+    watcher_retried = 0  # files từng thất bại nhưng cuối cùng thành công (failures > 0 AND done)
     label_distribution: dict = {}
     recent_files = []
     watcher_pending_retry = 0
@@ -160,7 +161,6 @@ async def get_metrics(user: dict = Depends(get_current_user)):
     if not label_distribution:
         label_distribution = data.get("label_distribution", {})
 
-
     # --- Web upload stats từ SQLite (deduplicated, không tính system_watcher) ---
     web_success = web_stats.get("completed_count", 0)
     web_failed = web_stats.get("failed_count", 0)
@@ -188,7 +188,9 @@ async def get_metrics(user: dict = Depends(get_current_user)):
     data["success_files"] = success_cnt
     data["failed_files"] = failed_cnt
     data["label_distribution"] = label_distribution
-    data["watcher_retried_count"] = watcher_retried  # files từng thất bại nhưng cuối cùng thành công
+    data["watcher_retried_count"] = (
+        watcher_retried  # files từng thất bại nhưng cuối cùng thành công
+    )
 
     for wf in web_stats.get("recent_files", []):
         recent_files.append(
@@ -426,10 +428,17 @@ async def get_usage_metrics(
     usage_tracker = _deps.get_usage_tracker()
     if usage_tracker is None:
         return {
-            "today_tokens": 0, "today_cost": 0, "today_requests": 0,
-            "total_requests": 0, "total_tokens": 0,
-            "total_input_tokens": 0, "total_output_tokens": 0,
-            "total_cost": 0, "daily": [], "cost_by_type": {}, "top_jobs": [],
+            "today_tokens": 0,
+            "today_cost": 0,
+            "today_requests": 0,
+            "total_requests": 0,
+            "total_tokens": 0,
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "total_cost": 0,
+            "daily": [],
+            "cost_by_type": {},
+            "top_jobs": [],
         }
 
     result = usage_tracker.query_usage(period=period, from_date=from_date, to_date=to_date)
@@ -457,12 +466,14 @@ async def get_usage_metrics(
                     date_str = (job.get("created_at") or "")[:10]
             except Exception:
                 pass
-        top_jobs.append({
-            "filename": filename,
-            "total_tokens": tj.get("total_tokens", 0),
-            "cost": tj.get("cost_usd", 0),
-            "date": date_str,
-        })
+        top_jobs.append(
+            {
+                "filename": filename,
+                "total_tokens": tj.get("total_tokens", 0),
+                "cost": tj.get("cost_usd", 0),
+                "date": date_str,
+            }
+        )
 
     # Flatten cost_by_type for doughnut chart
     cost_by_type = {k: v.get("cost_usd", 0) for k, v in by_type.items()}

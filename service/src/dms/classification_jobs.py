@@ -152,9 +152,10 @@ class ClassificationJobStore:
         job["queue_wait_seconds"] = _seconds_between(job.get("queued_at"), job.get("started_at"))
         job["processing_seconds"] = _seconds_between(job.get("started_at"), job.get("completed_at"))
         job["terminal"] = job.get("status") in TERMINAL_STATUSES
-        job["can_cancel"] = job.get("status") in {JOB_STATUS_QUEUED, JOB_STATUS_RUNNING} and not job[
-            "cancellation_requested"
-        ]
+        job["can_cancel"] = (
+            job.get("status") in {JOB_STATUS_QUEUED, JOB_STATUS_RUNNING}
+            and not job["cancellation_requested"]
+        )
         job["can_retry"] = job.get("status") in {JOB_STATUS_ERROR, JOB_STATUS_CANCELLED}
         if job.get("error"):
             job["error_summary"] = str(job["error"])[:180]
@@ -559,7 +560,9 @@ class ClassificationJobStore:
             conn.commit()
             return self.get_job(job_id)
 
-    def maybe_retry_after_failure(self, job_id: str, *, error: str, max_retries: int) -> dict | None:
+    def maybe_retry_after_failure(
+        self, job_id: str, *, error: str, max_retries: int
+    ) -> dict | None:
         with self._lock, self._conn() as conn:
             row = conn.execute(
                 "SELECT retry_count, cancellation_requested FROM classification_jobs WHERE job_id = ?",
@@ -664,7 +667,12 @@ class ClassificationJobStore:
                     COALESCE(SUM(CASE WHEN status = ? THEN duration_seconds ELSE 0 END), 0.0) AS total_duration_seconds
                 FROM classification_jobs
                 """,
-                (JOB_STATUS_COMPLETED, JOB_STATUS_ERROR, JOB_STATUS_COMPLETED, JOB_STATUS_COMPLETED),
+                (
+                    JOB_STATUS_COMPLETED,
+                    JOB_STATUS_ERROR,
+                    JOB_STATUS_COMPLETED,
+                    JOB_STATUS_COMPLETED,
+                ),
             ).fetchone()
 
             completed_count = int(agg["completed_count"])
@@ -815,14 +823,13 @@ class ClassificationJobStore:
                 success_counts.append(int(row["success"]))
                 failed_counts.append(int(row["failed"]))
 
-        counts = [s + f for s, f in zip(success_counts, failed_counts)]
+        counts = [s + f for s, f in zip(success_counts, failed_counts, strict=False)]
         return {
             "dates": dates,
             "success_counts": success_counts,
             "failed_counts": failed_counts,
             "counts": counts,
         }
-
 
     def aggregate_stats_by_user(self) -> list[dict]:
         """Return per-user aggregated classification statistics."""

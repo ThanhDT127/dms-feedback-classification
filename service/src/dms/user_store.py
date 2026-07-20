@@ -1,4 +1,5 @@
 """JSON-file-based user storage with bcrypt password hashing."""
+
 from __future__ import annotations
 
 import logging
@@ -46,19 +47,20 @@ class UserStore:
                     admin_password,
                 )
             hashed = self._hash_password(admin_password)
-            users.append({
-                "username": "admin",
-                "display_name": "Admin",
-                "password_hash": hashed,
-                "role": "admin",
-                "is_active": True,
-                "must_change_password": must_change,
-                "created_at": datetime.now(UTC).isoformat(),
-            })
+            users.append(
+                {
+                    "username": "admin",
+                    "display_name": "Admin",
+                    "password_hash": hashed,
+                    "role": "admin",
+                    "is_active": True,
+                    "must_change_password": must_change,
+                    "created_at": datetime.now(UTC).isoformat(),
+                }
+            )
             self._write({"users": users})
             logger.warning(
-                "Created default admin account (username: admin). "
-                "Please change the password!"
+                "Created default admin account (username: admin). Please change the password!"
             )
 
     # ------------------------------------------------------------------
@@ -76,6 +78,7 @@ class UserStore:
     @staticmethod
     def _hash_password(password: str) -> str:
         import hashlib
+
         # Pre-hash with SHA-256 to handle passwords > 72 bytes (bcrypt limit)
         pw_sha = hashlib.sha256(password.encode("utf-8")).digest()
         return bcrypt.hashpw(pw_sha, bcrypt.gensalt()).decode("utf-8")
@@ -83,6 +86,7 @@ class UserStore:
     @staticmethod
     def _verify_password(plain_password: str, hashed_password: str) -> bool:
         import hashlib
+
         pw_sha = hashlib.sha256(plain_password.encode("utf-8")).digest()
         return bcrypt.checkpw(
             pw_sha,
@@ -105,6 +109,7 @@ class UserStore:
     def _dummy_verify(cls, password: str) -> None:
         """Perform a dummy bcrypt check to prevent timing-based username enumeration."""
         import hashlib
+
         pw_sha = hashlib.sha256(password.encode("utf-8")).digest()
         bcrypt.checkpw(pw_sha, cls._DUMMY_HASH.encode("utf-8"))
 

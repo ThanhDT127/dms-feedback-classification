@@ -18,10 +18,12 @@ def test_classify_config_uses_product_list_endpoint():
 
 
 def test_protected_downloads_do_not_use_plain_internal_anchors():
-    combined = "\n".join([
-        _read("js/pages/classify.js"),
-        _read("js/pages/files.js"),
-    ])
+    combined = "\n".join(
+        [
+            _read("js/pages/classify.js"),
+            _read("js/pages/files.js"),
+        ]
+    )
 
     assert 'href="/api/files/template' not in combined
     assert 'href="/api/classify' not in combined
@@ -55,7 +57,7 @@ def _page_exports(js: str) -> set[str]:
     assert start != -1
     end = js.find("};", start)
     assert end != -1
-    body = js[start + len(marker):end]
+    body = js[start + len(marker) : end]
     return set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\b(?=\s*(?:,|:|$))", body))
 
 
@@ -102,9 +104,9 @@ def test_file_manager_non_admin_controls_are_role_gated():
     files_js = _read("js/pages/files.js")
 
     assert "function isAdminRole()" in files_js
-    assert "${isAdmin ? '<button id=\"btn-upload-file\"" in files_js
-    assert "${isAdmin ? '<button id=\"btn-sync-sharepoint\"" in files_js
-    assert "${isAdmin ? `<div class=\"bulk-toolbar\"" in files_js
+    assert '${isAdmin ? \'<button id="btn-upload-file"' in files_js
+    assert '${isAdmin ? \'<button id="btn-sync-sharepoint"' in files_js
+    assert '${isAdmin ? `<div class="bulk-toolbar"' in files_js
     assert "if (!isAdminRole())" in files_js
 
 
@@ -116,7 +118,7 @@ def test_password_controls_contract():
     assert "window.PasswordControls" in password_js
     assert "normalizeValue" in password_js
     assert "toggleVisibility" in password_js
-    assert "inputmode=\"latin\"" in password_js
+    assert 'inputmode="latin"' in password_js
     assert "Mật khẩu chỉ dùng ký tự tiếng Anh" in password_js
     assert "PasswordControls.renderInput" in login_js
     assert "PasswordControls.renderInput" in settings_js
@@ -130,7 +132,7 @@ def test_sidebar_theme_switch_contract():
 
     assert "Phân quyền theo vai trò" not in sidebar_js
     assert "theme-switch" in sidebar_js
-    assert "role=\"switch\"" in sidebar_js
+    assert 'role="switch"' in sidebar_js
     assert "aria-checked" in sidebar_js
     assert "Chế độ sáng" in sidebar_js
     assert "Chế độ tối" in sidebar_js
@@ -166,8 +168,14 @@ def test_keyword_product_editor_entry_points_contract():
 def test_sync_wrappers_use_explicit_no_body_post_contract():
     api_js = _read("js/api.js")
 
-    assert "function syncKeywordsToSP()    { return post('/pipeline/sync-keywords-to-sp', null); }" in api_js
-    assert "function syncProductsToSP()    { return post('/pipeline/sync-products-to-sp', null); }" in api_js
+    assert (
+        "function syncKeywordsToSP()    { return post('/pipeline/sync-keywords-to-sp', null); }"
+        in api_js
+    )
+    assert (
+        "function syncProductsToSP()    { return post('/pipeline/sync-products-to-sp', null); }"
+        in api_js
+    )
     assert "function syncSharePoint()      { return post('/files/sync', null); }" in api_js
 
 
@@ -259,7 +267,7 @@ def test_classify_queue_aware_job_status_contract():
     ]:
         assert expected in classify_js
 
-    assert "data-mode=\"jobs\"" in classify_js
+    assert 'data-mode="jobs"' in classify_js
     assert "API.cancelJob(jobId)" in classify_js
     assert "API.retryJob(jobId)" in classify_js
 

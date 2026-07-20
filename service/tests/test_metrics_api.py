@@ -18,9 +18,7 @@ def api_client(settings, monkeypatch):
     """Create a test client with admin auth and patched work_dir."""
     settings.ensure_runtime_dirs()
     # Patch _work_dir in the metrics_api module to use test settings
-    monkeypatch.setattr(
-        "dms.web.api.metrics_api._work_dir", lambda: settings.work_dir
-    )
+    monkeypatch.setattr("dms.web.api.metrics_api._work_dir", lambda: settings.work_dir)
     app = create_app()
     apply_auth_overrides(app)
     return TestClient(app)
@@ -30,9 +28,7 @@ def api_client(settings, monkeypatch):
 def api_client_non_admin(settings, monkeypatch):
     """Create a test client with non-admin auth."""
     settings.ensure_runtime_dirs()
-    monkeypatch.setattr(
-        "dms.web.api.metrics_api._work_dir", lambda: settings.work_dir
-    )
+    monkeypatch.setattr("dms.web.api.metrics_api._work_dir", lambda: settings.work_dir)
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: TEST_USER
     return TestClient(app)
@@ -48,13 +44,9 @@ def test_reset_failed_resets_all(settings, api_client):
         "f2": {"status": "done", "name": "b.xlsx"},
         "f3": {"status": "failed", "failures": 3, "name": "c.xlsx"},
     }
-    (settings.work_dir / "seen_files.json").write_text(
-        json.dumps(seen_data), encoding="utf-8"
-    )
+    (settings.work_dir / "seen_files.json").write_text(json.dumps(seen_data), encoding="utf-8")
     metrics_data = {"files_failed": 2, "files_processed": 1}
-    (settings.work_dir / "metrics.json").write_text(
-        json.dumps(metrics_data), encoding="utf-8"
-    )
+    (settings.work_dir / "metrics.json").write_text(json.dumps(metrics_data), encoding="utf-8")
 
     resp = api_client.post("/api/metrics/reset-failed")
     assert resp.status_code == 200
@@ -62,18 +54,14 @@ def test_reset_failed_resets_all(settings, api_client):
     assert body["reset_count"] == 2
 
     # Verify seen_files updated
-    seen_after = json.loads(
-        (settings.work_dir / "seen_files.json").read_text(encoding="utf-8")
-    )
+    seen_after = json.loads((settings.work_dir / "seen_files.json").read_text(encoding="utf-8"))
     assert seen_after["f1"]["status"] == "retry"
     assert seen_after["f1"]["failures"] == 0
     assert seen_after["f3"]["status"] == "retry"
     assert seen_after["f2"]["status"] == "done"  # unchanged
 
     # Verify metrics.json updated
-    m_after = json.loads(
-        (settings.work_dir / "metrics.json").read_text(encoding="utf-8")
-    )
+    m_after = json.loads((settings.work_dir / "metrics.json").read_text(encoding="utf-8"))
     assert m_after["files_failed"] == 0
 
 
@@ -83,21 +71,15 @@ def test_reset_failed_by_ids(settings, api_client):
         "f1": {"status": "failed", "failures": 3, "name": "a.xlsx"},
         "f2": {"status": "failed", "failures": 3, "name": "b.xlsx"},
     }
-    (settings.work_dir / "seen_files.json").write_text(
-        json.dumps(seen_data), encoding="utf-8"
-    )
+    (settings.work_dir / "seen_files.json").write_text(json.dumps(seen_data), encoding="utf-8")
     metrics_data = {"files_failed": 2}
-    (settings.work_dir / "metrics.json").write_text(
-        json.dumps(metrics_data), encoding="utf-8"
-    )
+    (settings.work_dir / "metrics.json").write_text(json.dumps(metrics_data), encoding="utf-8")
 
     resp = api_client.post("/api/metrics/reset-failed", json={"file_ids": ["f1"]})
     assert resp.status_code == 200
     assert resp.json()["reset_count"] == 1
 
-    seen_after = json.loads(
-        (settings.work_dir / "seen_files.json").read_text(encoding="utf-8")
-    )
+    seen_after = json.loads((settings.work_dir / "seen_files.json").read_text(encoding="utf-8"))
     assert seen_after["f1"]["status"] == "retry"
     assert seen_after["f2"]["status"] == "failed"  # not reset
 
@@ -131,8 +113,11 @@ def test_metrics_by_user_admin_returns_data(settings, monkeypatch):
         output_path="/output/test.xlsx",
     )
     store.complete_job(
-        job1, total_rows=50, rows_done=50,
-        output_path="/output/test.xlsx", duration_seconds=5.0,
+        job1,
+        total_rows=50,
+        rows_done=50,
+        output_path="/output/test.xlsx",
+        duration_seconds=5.0,
     )
 
     job2 = str(uuid.uuid4())
@@ -158,14 +143,15 @@ def test_metrics_by_user_admin_returns_data(settings, monkeypatch):
         output_path="/output/test3.xlsx",
     )
     store.complete_job(
-        job3, total_rows=30, rows_done=30,
-        output_path="/output/test3.xlsx", duration_seconds=3.0,
+        job3,
+        total_rows=30,
+        rows_done=30,
+        output_path="/output/test3.xlsx",
+        duration_seconds=3.0,
     )
 
     # Mock the job store
-    monkeypatch.setattr(
-        "dms.web.api.metrics_api._work_dir", lambda: settings.work_dir
-    )
+    monkeypatch.setattr("dms.web.api.metrics_api._work_dir", lambda: settings.work_dir)
     app = create_app()
     apply_auth_overrides(app)
 
@@ -205,19 +191,19 @@ def test_metrics_by_user_empty_state(settings, monkeypatch):
     db_path = settings.work_dir / "classification_jobs.db"
     store = ClassificationJobStore(db_path)
 
-    monkeypatch.setattr(
-        "dms.web.api.metrics_api._work_dir", lambda: settings.work_dir
-    )
+    monkeypatch.setattr("dms.web.api.metrics_api._work_dir", lambda: settings.work_dir)
     app = create_app()
     apply_auth_overrides(app)
 
     from dms.web import deps
+
     monkeypatch.setattr(deps, "get_classification_job_store", lambda: store)
 
     client = TestClient(app)
     resp = client.get("/api/metrics/by-user")
     assert resp.status_code == 200
     assert resp.json()["users"] == []
+
 
 # ---------- GET /api/metrics — file-level outcome (Hướng A) ----------
 
@@ -240,22 +226,20 @@ def test_metrics_retried_file_counts_as_success(settings, api_client):
         "file-retried-success": {
             "name": "retried_ok.xlsx",
             "status": "done",
-            "past_failures": 2,   # ← field mới: Watcher preserve khi retry thành công
-            "failures": 0,        # reset về 0 sau khi done
+            "past_failures": 2,  # ← field mới: Watcher preserve khi retry thành công
+            "failures": 0,  # reset về 0 sau khi done
             "processed_at": "2026-07-16T09:00:00Z",
             "total_rows": 30,
             "duration_seconds": 5.0,
         },
         "file-still-failed": {
             "name": "stuck.xlsx",
-            "status": "failed",     # vẫn thất bại, chưa được retry
+            "status": "failed",  # vẫn thất bại, chưa được retry
             "failures": 3,
             "last_attempt": "2026-07-14T08:00:00Z",
         },
     }
-    (settings.work_dir / "seen_files.json").write_text(
-        json.dumps(seen_data), encoding="utf-8"
-    )
+    (settings.work_dir / "seen_files.json").write_text(json.dumps(seen_data), encoding="utf-8")
 
     resp = api_client.get("/api/metrics")
     assert resp.status_code == 200
@@ -273,23 +257,39 @@ def test_metrics_retried_file_counts_as_success(settings, api_client):
     # Nhưng quan trọng: file retried_ok.xlsx KHÔNG bị tính là failed
     success_files = data["success_files"]
     failed_files = data["failed_files"]
-    assert success_files >= 2   # ít nhất 2 watcher success
-    assert failed_files >= 1    # ít nhất 1 watcher failed
+    assert success_files >= 2  # ít nhất 2 watcher success
+    assert failed_files >= 1  # ít nhất 1 watcher failed
 
 
 def test_metrics_all_retried_success_gives_100_pct(settings, api_client):
     """Nếu tất cả file cuối cùng thành công → watcher failed = 0."""
     seen_data = {
-        "f1": {"name": "a.xlsx", "status": "done", "past_failures": 0, "failures": 0,
-               "processed_at": "2026-07-10T10:00:00Z", "total_rows": 10},
-        "f2": {"name": "b.xlsx", "status": "done", "past_failures": 3, "failures": 0,
-               "processed_at": "2026-07-11T10:00:00Z", "total_rows": 20},
-        "f3": {"name": "c.xlsx", "status": "done", "past_failures": 1, "failures": 0,
-               "processed_at": "2026-07-12T10:00:00Z", "total_rows": 15},
+        "f1": {
+            "name": "a.xlsx",
+            "status": "done",
+            "past_failures": 0,
+            "failures": 0,
+            "processed_at": "2026-07-10T10:00:00Z",
+            "total_rows": 10,
+        },
+        "f2": {
+            "name": "b.xlsx",
+            "status": "done",
+            "past_failures": 3,
+            "failures": 0,
+            "processed_at": "2026-07-11T10:00:00Z",
+            "total_rows": 20,
+        },
+        "f3": {
+            "name": "c.xlsx",
+            "status": "done",
+            "past_failures": 1,
+            "failures": 0,
+            "processed_at": "2026-07-12T10:00:00Z",
+            "total_rows": 15,
+        },
     }
-    (settings.work_dir / "seen_files.json").write_text(
-        json.dumps(seen_data), encoding="utf-8"
-    )
+    (settings.work_dir / "seen_files.json").write_text(json.dumps(seen_data), encoding="utf-8")
 
     resp = api_client.get("/api/metrics")
     assert resp.status_code == 200
@@ -297,8 +297,8 @@ def test_metrics_all_retried_success_gives_100_pct(settings, api_client):
 
     watcher = data["watcher_stats"]
     assert watcher["success"] == 3
-    assert watcher["failed"] == 0        # không file nào stuck
-    assert watcher["retried"] == 2       # 2 file từng thất bại nhưng thành công
+    assert watcher["failed"] == 0  # không file nào stuck
+    assert watcher["retried"] == 2  # 2 file từng thất bại nhưng thành công
 
 
 # ---------- GET /api/metrics/daily (task 9.8) ----------
@@ -397,4 +397,3 @@ def test_daily_metrics_includes_success_and_failed_counts(settings, api_client, 
     assert sum(data["failed_counts"]) >= 1
     # There should be at least some success counts
     assert sum(data["success_counts"]) >= 2
-

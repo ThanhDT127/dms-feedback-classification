@@ -7,12 +7,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from conftest import apply_auth_overrides
 from fastapi.testclient import TestClient
 
 from dms.settings import Settings, get_settings
 from dms.web import deps
 from dms.web.app import create_app
-from conftest import apply_auth_overrides
 
 # ─── Helpers ───
 

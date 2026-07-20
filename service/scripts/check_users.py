@@ -17,7 +17,9 @@ def main() -> None:
     headers = AuthProvider(get_settings()).get_headers()
 
     print("=== Azure AD Users (first 20) ===\n")
-    url = "https://graph.microsoft.com/v1.0/users?$top=20&$select=displayName,mail,userPrincipalName"
+    url = (
+        "https://graph.microsoft.com/v1.0/users?$top=20&$select=displayName,mail,userPrincipalName"
+    )
     resp = requests.get(url, headers=headers, timeout=10)
 
     if resp.status_code == 200:

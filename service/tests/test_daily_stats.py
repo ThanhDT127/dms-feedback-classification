@@ -7,7 +7,6 @@ correctly grouped by date (task 6.3).
 from __future__ import annotations
 
 import uuid
-from pathlib import Path
 
 import pytest
 
@@ -19,7 +18,14 @@ def job_store(tmp_path):
     return ClassificationJobStore(tmp_path / "jobs.db")
 
 
-def _create_completed_job(job_store, *, filename: str, completed_at: str, total_rows: int = 10, owner: str = "system_watcher"):
+def _create_completed_job(
+    job_store,
+    *,
+    filename: str,
+    completed_at: str,
+    total_rows: int = 10,
+    owner: str = "system_watcher",
+):
     """Helper to insert a completed job with a specific completed_at date."""
     job_id = str(uuid.uuid4())
     job_store.create_job(
@@ -44,7 +50,9 @@ def _create_completed_job(job_store, *, filename: str, completed_at: str, total_
     return job_id
 
 
-def _create_failed_job(job_store, *, filename: str, completed_at: str, owner: str = "system_watcher"):
+def _create_failed_job(
+    job_store, *, filename: str, completed_at: str, owner: str = "system_watcher"
+):
     """Helper to insert a failed job with a specific completed_at date."""
     job_id = str(uuid.uuid4())
     job_store.create_job(
@@ -107,23 +115,23 @@ def test_daily_stats_multiple_dates(job_store):
 def test_daily_stats_combines_watcher_and_web(job_store):
     """Jobs from both system_watcher and regular users are combined."""
     _create_completed_job(
-        job_store, filename="watcher.xlsx", completed_at="2026-06-15T08:00:00Z",
-        owner="system_watcher"
+        job_store,
+        filename="watcher.xlsx",
+        completed_at="2026-06-15T08:00:00Z",
+        owner="system_watcher",
     )
     _create_completed_job(
-        job_store, filename="web_upload.xlsx", completed_at="2026-06-15T10:00:00Z",
-        owner="alice"
+        job_store, filename="web_upload.xlsx", completed_at="2026-06-15T10:00:00Z", owner="alice"
     )
     _create_failed_job(
-        job_store, filename="web_failed.xlsx", completed_at="2026-06-15T11:00:00Z",
-        owner="bob"
+        job_store, filename="web_failed.xlsx", completed_at="2026-06-15T11:00:00Z", owner="bob"
     )
 
     result = job_store.daily_stats()
 
     assert result["dates"] == ["2026-06-15"]
     assert result["success_counts"] == [2]  # 1 watcher + 1 web
-    assert result["failed_counts"] == [1]   # 1 web failed
+    assert result["failed_counts"] == [1]  # 1 web failed
     assert result["counts"] == [3]
 
 

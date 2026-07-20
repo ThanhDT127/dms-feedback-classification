@@ -63,7 +63,9 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
 
     identity = ws_connection_limiter.identity_for(websocket, user.get("username") or username)
     if not ws_connection_limiter.acquire("classify", identity):
-        await websocket.close(code=WS_LIMIT_CLOSE_CODE, reason="WebSocket connection limit exceeded")
+        await websocket.close(
+            code=WS_LIMIT_CLOSE_CODE, reason="WebSocket connection limit exceeded"
+        )
         return
 
     job = job_store.get_job(job_id, include_results=False)

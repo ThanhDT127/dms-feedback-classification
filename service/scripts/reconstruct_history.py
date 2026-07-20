@@ -86,6 +86,7 @@ def main() -> None:
         return
 
     import pandas as pd
+
     from dms.pipeline.issue_classifier import MINOR_ORDER
 
     label_distribution = defaultdict(int)
@@ -136,9 +137,15 @@ def main() -> None:
     # 4. Upload to SharePoint Check_Point/
     logger.info("Uploading states to SharePoint Check_Point/...")
     try:
-        sp_client.upload_file(seen_path, settings.sp_checkpoint_folder, remote_filename="seen_files.json")
-        sp_client.upload_file(metrics_path, settings.sp_checkpoint_folder, remote_filename="metrics.json")
-        logger.info("Successfully uploaded reconstructed seen_files.json and metrics.json to SharePoint!")
+        sp_client.upload_file(
+            seen_path, settings.sp_checkpoint_folder, remote_filename="seen_files.json"
+        )
+        sp_client.upload_file(
+            metrics_path, settings.sp_checkpoint_folder, remote_filename="metrics.json"
+        )
+        logger.info(
+            "Successfully uploaded reconstructed seen_files.json and metrics.json to SharePoint!"
+        )
     except Exception as exc:
         logger.error("Failed to upload states to SharePoint Check_Point/: %s", exc)
 

@@ -288,7 +288,11 @@ async def sync_sharepoint(admin: dict = Depends(get_admin_user)):
                 if path.is_file() and path.suffix.lower() == ".xlsx":
                     file_size = path.stat().st_size
                     if file_size < 1024:
-                        logger.warning("Skipping small file %s (%dB) — likely not a valid xlsx", path.name, file_size)
+                        logger.warning(
+                            "Skipping small file %s (%dB) — likely not a valid xlsx",
+                            path.name,
+                            file_size,
+                        )
                         continue
                     if path.name not in sp_output_names:
                         logger.info("Manual Sync: Uploading completed output file %s", path.name)
@@ -575,7 +579,9 @@ async def delete_sharepoint_files(
     folder = payload.folder.lower()
     sp_folder = _get_sharepoint_folder_map().get(folder)
     if not sp_folder:
-        raise HTTPException(status_code=400, detail=f"Thư mục không hỗ trợ SharePoint delete: {folder}")
+        raise HTTPException(
+            status_code=400, detail=f"Thư mục không hỗ trợ SharePoint delete: {folder}"
+        )
 
     requested: list[SharePointDeleteItem] = list(payload.items)
     requested.extend(SharePointDeleteItem(name=name) for name in payload.filenames)
@@ -584,7 +590,9 @@ async def delete_sharepoint_files(
 
     sp_client = get_sharepoint_client()
     if sp_client is None:
-        raise HTTPException(status_code=503, detail="SharePoint chưa được cấu hình hoặc không kết nối được")
+        raise HTTPException(
+            status_code=503, detail="SharePoint chưa được cấu hình hoặc không kết nối được"
+        )
 
     ids_by_name: dict[str, str] = {}
     missing_id = [item.name for item in requested if not item.id]
@@ -594,7 +602,9 @@ async def delete_sharepoint_files(
                 if "file" in item and item.get("name"):
                     ids_by_name[item["name"]] = item.get("id", "")
         except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Không thể liệt kê SharePoint: {exc}") from exc
+            raise HTTPException(
+                status_code=502, detail=f"Không thể liệt kê SharePoint: {exc}"
+            ) from exc
 
     remote_deleted: list[str] = []
     failed: list[dict] = []
@@ -643,7 +653,9 @@ def _safe_dataframe_records(df: pd.DataFrame) -> list[dict]:
 
 
 @router.get("/{folder}/{filename}/preview")
-async def preview_file(folder: str, filename: str, max_rows: int = 20, user: dict = Depends(get_current_user)):
+async def preview_file(
+    folder: str, filename: str, max_rows: int = 20, user: dict = Depends(get_current_user)
+):
     """Đọc preview file — hỗ trợ Excel, CSV, JSON, text (SharePoint Cloud hoặc Local Fallback)."""
     folder_lower = folder.lower()
 
@@ -822,7 +834,12 @@ def cleanup_file(path: Path) -> None:
 
 
 @router.get("/{folder}/{filename}/download")
-async def download_file(folder: str, filename: str, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
+async def download_file(
+    folder: str,
+    filename: str,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_current_user),
+):
     """Tải file — hỗ trợ Excel, CSV, JSON, text (SharePoint Cloud hoặc Local Fallback)."""
     folder_lower = folder.lower()
 

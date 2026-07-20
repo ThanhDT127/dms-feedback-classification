@@ -58,7 +58,7 @@ def _validator(settings, keyword_dir: Path, model_dir: Path) -> None:
 
             joblib.load(tfidf_word_path)
         except Exception as exc:
-            raise ModelArtifactError(f"Failed to load TF-IDF word model: {exc}")
+            raise ModelArtifactError(f"Failed to load TF-IDF word model: {exc}") from exc
     RAGProductMatcher(settings=snapshot_settings, gemini=DummyGemini())
 
 

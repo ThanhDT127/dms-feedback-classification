@@ -5,10 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import apply_auth_overrides
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-
-from conftest import apply_auth_overrides
 
 # ---------------------------------------------------------------------------
 # _validate_safe_path tests (unit-level)

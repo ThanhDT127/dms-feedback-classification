@@ -254,7 +254,9 @@ class UsageTracker:
         to_date: str | None = None,
     ) -> list[dict]:
         """Return the jobs with the highest total token usage."""
-        start, end = self._resolve_date_range("custom" if from_date else "month", from_date, to_date)
+        start, end = self._resolve_date_range(
+            "custom" if from_date else "month", from_date, to_date
+        )
 
         with self._lock:
             cur = self._conn.cursor()

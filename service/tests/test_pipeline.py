@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -267,11 +267,15 @@ def test_pipeline_resume_checkpoint_does_not_duplicate_rows(settings, tmp_path):
     for idx, col in enumerate(["Sản phẩm", "Dòng SP", "Model", "Lớp", "Điểm"]):
         df_all.insert(insert_pos + idx, col, "")
     base_cols = list(df_all.columns)
-    all_cols = base_cols + get_label_config_snapshot()["minor_order"] + [
-        "Sentiment",
-        "LLM_Extracted",
-        "BM25_Score",
-    ]
+    all_cols = (
+        base_cols
+        + get_label_config_snapshot()["minor_order"]
+        + [
+            "Sentiment",
+            "LLM_Extracted",
+            "BM25_Score",
+        ]
+    )
     first_row = {col: "" for col in all_cols}
     first_row[text_col] = "first"
     PipelineRunner._save_output([first_row], all_cols, output_path)
@@ -384,4 +388,3 @@ def test_issue_classifier_maps_scrambled_row_index(settings):
 
     assert labels[0] in result[0]["final_minors"]
     assert labels[15] in result[1]["final_minors"]
-
