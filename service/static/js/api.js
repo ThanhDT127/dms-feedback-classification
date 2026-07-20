@@ -219,6 +219,11 @@ window.API = (() => {
     return get(`/metrics/usage?${params}`);
   }
   function getUsagePricing() { return get('/metrics/usage/config'); }
+  function resetFailedFiles(fileIds = null) {
+    const body = fileIds ? { file_ids: fileIds } : null;
+    return post('/metrics/reset-failed', body);
+  }
+  function getMetricsByUser() { return get('/metrics/by-user'); }
 
   function setTokens(access, refresh) {
     _accessToken = access;
@@ -282,6 +287,7 @@ window.API = (() => {
     getLabels, getKeywords, getBrands, getLogs,
     syncKeywordsToSP, syncProductsToSP, syncSharePoint, uploadJobToSharePoint,
     getUsageMetrics, getUsagePricing,
+    resetFailedFiles, getMetricsByUser,
     logout
   };
 })();

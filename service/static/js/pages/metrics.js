@@ -107,9 +107,10 @@ window.MetricsPage = (() => {
       renderHealthStats(h, m);
       renderDailyChart(d);
 
-      // Admin-only: load usage analytics
+      // Admin-only: load usage analytics and user stats
       if (window.App?.state?.user?.role === 'admin') {
         await loadUsageData();
+        await loadUserStats();
       }
     } catch (e) {
       console.error('Metrics load error:', e);
@@ -124,6 +125,7 @@ window.MetricsPage = (() => {
     const uptimeStr = health?.uptime || '—';
     const total = metrics?.total_files || 0;
     const success = metrics?.success_files || 0;
+    const failed = metrics?.failed_files || 0;
     const pollCycle = health?.poll_interval || 0;
 
     el.innerHTML = `
@@ -161,7 +163,7 @@ window.MetricsPage = (() => {
         <div class="stat-card-top">
           <div>
             <div class="stat-card-value">${total.toLocaleString()}</div>
-            <div class="stat-card-label">Tổng file (${success} thành công)</div>
+            <div class="stat-card-label">Tổng file (${success} TC / ${failed} TB)</div>
           </div>
           <div class="stat-card-icon">📊</div>
         </div>
@@ -180,9 +182,77 @@ window.MetricsPage = (() => {
     if (wrap && !document.getElementById('metrics-daily-chart')) {
       wrap.innerHTML = '<canvas id="metrics-daily-chart"></canvas>';
     }
-    Charts.createBarChart('metrics-daily-chart', data.dates, data.counts, {
-      label: 'Số file xử lý'
-    });
+    // Use stacked bar if success/failed counts available
+    if (data.success_counts && data.failed_counts) {
+      Charts.createStackedBarChart('metrics-daily-chart', data.dates, data.success_counts, data.failed_counts);
+    } else {
+      Charts.createBarChart('metrics-daily-chart', data.dates, data.counts, {
+        label: 'Số file xử lý'
+      });
+    }
+  }
+
+  /* ---- User Stats (admin only) ---- */
+
+  async function loadUserStats() {
+    const section = document.getElementById('usage-analytics-section');
+    if (!section || window.App?.state?.user?.role !== 'admin') return;
+
+    try {
+      const data = await API.getMetricsByUser();
+      const users = data?.users || [];
+      if (users.length === 0) {
+        // Don't render anything if no user data
+        return;
+      }
+
+      const fmtTokens = (n) => {
+        if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+        if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+        return String(n);
+      };
+      const fmtCost = (v) => v > 0 ? '$' + v.toFixed(4) : '—';
+
+      // Insert user stats section before the usage analytics content
+      const userStatsHtml = `
+        <div class="card animate-in" style="margin-bottom:20px;">
+          <div class="card-header">
+            <span class="card-title"><span class="icon">👤</span> Thống kê theo User</span>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="data-table" style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr style="text-align:left;border-bottom:2px solid var(--border);">
+                  <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--text-secondary);">User</th>
+                  <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--text-secondary);text-align:right;">Upload</th>
+                  <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--text-secondary);text-align:right;">Thành công</th>
+                  <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--text-secondary);text-align:right;">Thất bại</th>
+                  <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--text-secondary);text-align:right;">Rows</th>
+                  <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--text-secondary);text-align:right;">Token</th>
+                  <th style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--text-secondary);text-align:right;">Chi phí</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${users.map(u => `
+                  <tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:10px 12px;font-size:13px;font-weight:500;">${esc(u.username)}</td>
+                    <td style="padding:10px 12px;font-size:13px;text-align:right;">${u.total_jobs}</td>
+                    <td style="padding:10px 12px;font-size:13px;text-align:right;color:var(--accent-green);">${u.completed}</td>
+                    <td style="padding:10px 12px;font-size:13px;text-align:right;color:${u.failed > 0 ? 'var(--accent-red)' : 'var(--text-muted)'};">${u.failed}</td>
+                    <td style="padding:10px 12px;font-size:13px;text-align:right;">${u.total_rows.toLocaleString()}</td>
+                    <td style="padding:10px 12px;font-size:13px;text-align:right;">${fmtTokens(u.total_tokens || 0)}</td>
+                    <td style="padding:10px 12px;font-size:13px;text-align:right;color:var(--text-muted);">${fmtCost(u.estimated_cost || 0)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      section.insertAdjacentHTML('afterbegin', userStatsHtml);
+    } catch (e) {
+      console.error('User stats load error:', e);
+    }
   }
 
   /* ---- Usage Analytics (admin only) ---- */

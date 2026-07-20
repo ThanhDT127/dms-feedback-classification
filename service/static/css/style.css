@@ -651,6 +651,8 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
 .stat-card.red::before { background: var(--gradient-red); }
 .stat-card.amber::before { background: var(--gradient-amber); }
 .stat-card.purple::before { background: var(--gradient-purple); }
+.stat-card.orange::before { background: linear-gradient(135deg, #f97316, #ea580c); }
+.stat-card.gray::before { background: linear-gradient(135deg, #6b7280, #9ca3af); }
 
 .stat-card-top {
   display: flex;
@@ -674,6 +676,8 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
 .stat-card.red .stat-card-icon { background: rgba(239,68,68,0.12); }
 .stat-card.amber .stat-card-icon { background: rgba(245,158,11,0.12); }
 .stat-card.purple .stat-card-icon { background: rgba(168,85,247,0.12); }
+.stat-card.orange .stat-card-icon { background: rgba(249,115,22,0.12); }
+.stat-card.gray .stat-card-icon { background: rgba(107,114,128,0.12); }
 
 .stat-card-value {
   font-size: 28px;

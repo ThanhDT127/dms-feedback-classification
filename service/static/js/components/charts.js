@@ -227,6 +227,85 @@ window.Charts = (() => {
     applyDefaults();
   }
 
+  function createStackedBarChart(canvasId, labels, successData, failedData, options = {}) {
+    destroy(canvasId);
+    const ctx = getCanvas(canvasId);
+    if (!ctx) return null;
+
+    const successGradient = ctx.createLinearGradient(0, 0, 0, 300);
+    successGradient.addColorStop(0, 'rgba(34, 197, 94, 0.85)');
+    successGradient.addColorStop(1, 'rgba(34, 197, 94, 0.15)');
+
+    const failedGradient = ctx.createLinearGradient(0, 0, 0, 300);
+    failedGradient.addColorStop(0, 'rgba(239, 68, 68, 0.85)');
+    failedGradient.addColorStop(1, 'rgba(239, 68, 68, 0.15)');
+
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: options.successLabel || 'Thành công',
+            data: successData,
+            backgroundColor: successGradient,
+            borderColor: 'rgba(34, 197, 94, 0.95)',
+            borderWidth: 1,
+            borderRadius: 6,
+            borderSkipped: false,
+            barPercentage: 0.6,
+            categoryPercentage: 0.7,
+          },
+          {
+            label: options.failedLabel || 'Thất bại',
+            data: failedData,
+            backgroundColor: failedGradient,
+            borderColor: 'rgba(239, 68, 68, 0.95)',
+            borderWidth: 1,
+            borderRadius: 6,
+            borderSkipped: false,
+            barPercentage: 0.6,
+            categoryPercentage: 0.7,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 800, easing: 'easeOutQuart' },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: { usePointStyle: true, pointStyle: 'circle', padding: 16 }
+          },
+          ...options.plugins
+        },
+        scales: {
+          x: {
+            stacked: true,
+            grid: { display: false },
+            ticks: { maxRotation: 45 }
+          },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            grid: {
+              color: document.documentElement.getAttribute('data-theme') === 'light'
+                ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
+              drawBorder: false
+            },
+            ticks: { precision: 0 }
+          }
+        },
+        ...options.chartOptions
+      }
+    });
+
+    _instances[canvasId] = chart;
+    return chart;
+  }
+
   function applyThemeColors() {
     applyDefaults();
     Object.keys(_instances).forEach(id => {
@@ -254,5 +333,5 @@ window.Charts = (() => {
     });
   }
 
-  return { createBarChart, createDoughnutChart, createLineChart, destroy, applyThemeColors };
+  return { createBarChart, createStackedBarChart, createDoughnutChart, createLineChart, destroy, applyThemeColors };
 })();
