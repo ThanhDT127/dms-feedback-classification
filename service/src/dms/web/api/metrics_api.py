@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 
 from ...settings import get_settings
 from ...time_utils import utc_now_iso
@@ -87,51 +87,109 @@ async def get_metrics(user: dict = Depends(get_current_user)):
         except Exception as exc:
             logger.warning("Lỗi đọc metrics.json: %s", exc)
 
-    # --- Watcher counts (from JSON) ---
-    watcher_success = data.get("files_processed", 0)
-    watcher_failed = data.get("files_failed", 0)
-
-    # --- Web Upload counts (from SQLite) ---
-    web_stats: dict = {}
-    job_store = get_classification_job_store()
-    if job_store is not None:
-        try:
-            web_stats = job_store.aggregate_stats()
-        except Exception as exc:
-            logger.warning("Lỗi query aggregate_stats: %s", exc)
-
-    web_success = web_stats.get("completed_count", 0)
-    web_failed = web_stats.get("failed_count", 0)
-
-    # --- Merge counts ---
-    success_cnt = watcher_success + web_success
-    failed_cnt = watcher_failed + web_failed
-    data["total_files"] = success_cnt + failed_cnt
-    data["success_files"] = success_cnt
-    data["failed_files"] = failed_cnt
-
-    # Đọc seen_files.json để trả về danh sách recent_files động
+    # --- Watcher stats: file-level outcomes từ seen_files.json (Hướng A) ---
+    # seen_files.json là source of truth về trạng thái cuối cùng của mỗi file.
+    # File X thất bại 3 lần → retry thành công → status = "done" → tính là SUCCESS.
+    # Không đếm theo SQLite attempts để tránh inflate failure rate.
+    watcher_success = 0   # files với status "done"
+    watcher_failed = 0    # files với status "failed" (stuck, chưa được retry thành công)
+    watcher_retried = 0   # files từng thất bại nhưng cuối cùng thành công (failures > 0 AND done)
+    label_distribution: dict = {}
     recent_files = []
+    watcher_pending_retry = 0
+
     if seen_path.is_file():
         try:
             seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
             for fid, info in seen_data.items():
+                status = info.get("status", "done")
+                failures = info.get("failures", 0)
+
+                if status == "done":
+                    watcher_success += 1
+                    # past_failures: số lần thất bại trước khi thành công (preserved by Watcher)
+                    if info.get("past_failures", 0) > 0:
+                        watcher_retried += 1
+
+                elif status == "failed":
+                    watcher_failed += 1
+                elif status == "retry":
+                    watcher_pending_retry += 1
+
                 recent_files.append(
                     {
                         "id": fid,
                         "filename": info.get("name", "Unknown"),
-                        "status": info.get("status", "done"),
+                        "status": status,
                         "timestamp": info.get("processed_at") or info.get("last_attempt") or "",
                         "total_rows": info.get("total_rows", 0),
                         "duration_seconds": info.get("duration_seconds", 0.0),
-                        "failures": info.get("failures", 0),
+                        "failures": failures,
                         "last_error": info.get("last_error", ""),
                     }
                 )
         except Exception as exc:
             logger.warning("Lỗi đọc seen_files.json trong metrics API: %s", exc)
 
-    # --- Merge recent_files from Web Upload ---
+    # Fallback về metrics.json nếu seen_files.json chưa có
+    if watcher_success == 0 and watcher_failed == 0:
+        watcher_success = data.get("files_processed", 0)
+        watcher_failed = data.get("files_failed", 0)
+
+    # --- Label distribution từ SQLite job results ---
+    job_store = get_classification_job_store()
+    web_stats: dict = {}
+    if job_store is not None:
+        try:
+            web_stats = job_store.aggregate_stats()
+            with job_store._lock, job_store._conn() as conn:
+                result_rows = conn.execute(
+                    "SELECT payload FROM classification_job_results"
+                ).fetchall()
+                for row in result_rows:
+                    try:
+                        payload = json.loads(row["payload"])
+                        ld = payload.get("label_distribution", {})
+                        for lbl, cnt in ld.items():
+                            label_distribution[lbl] = label_distribution.get(lbl, 0) + int(cnt)
+                    except Exception:
+                        pass
+        except Exception as exc:
+            logger.warning("Lỗi query SQLite stats: %s", exc)
+
+    if not label_distribution:
+        label_distribution = data.get("label_distribution", {})
+
+
+    # --- Web upload stats từ SQLite (deduplicated, không tính system_watcher) ---
+    web_success = web_stats.get("completed_count", 0)
+    web_failed = web_stats.get("failed_count", 0)
+    # aggregate_stats() gồm ALL owners kể cả system_watcher — trừ ra để tránh double-count
+    watcher_sqlite_success = 0
+    watcher_sqlite_failed = 0
+    if job_store is not None:
+        try:
+            with job_store._lock, job_store._conn() as conn:
+                row = conn.execute(
+                    "SELECT SUM(status='completed') AS s, SUM(status='error') AS f "
+                    "FROM classification_jobs WHERE owner_username='system_watcher'"
+                ).fetchone()
+                watcher_sqlite_success = int(row[0] or 0)
+                watcher_sqlite_failed = int(row[1] or 0)
+        except Exception:
+            pass
+    web_only_success = max(0, web_success - watcher_sqlite_success)
+    web_only_failed = max(0, web_failed - watcher_sqlite_failed)
+
+    # --- Merge tổng ---
+    success_cnt = watcher_success + web_only_success
+    failed_cnt = watcher_failed + web_only_failed
+    data["total_files"] = success_cnt + failed_cnt
+    data["success_files"] = success_cnt
+    data["failed_files"] = failed_cnt
+    data["label_distribution"] = label_distribution
+    data["watcher_retried_count"] = watcher_retried  # files từng thất bại nhưng cuối cùng thành công
+
     for wf in web_stats.get("recent_files", []):
         recent_files.append(
             {
@@ -157,52 +215,116 @@ async def get_metrics(user: dict = Depends(get_current_user)):
         data["avg_processing_time"] = data.get("avg_processing_seconds", 0.0)
 
     data["recent_files"] = recent_files
+    data["total_retries"] = data.get("total_retries", 0)
+    data["pending_retry_files"] = watcher_pending_retry
+    data["watcher_stats"] = {
+        "success": watcher_success,
+        "failed": watcher_failed,
+        "pending_retry": watcher_pending_retry,
+        "retried": watcher_retried,  # đã retry và thành công
+    }
+    data["web_upload_stats"] = {
+        "success": web_only_success,
+        "failed": web_only_failed,
+    }
     return data
 
 
 @router.get("/metrics/daily")
 async def get_daily_metrics(user: dict = Depends(get_current_user)):
-    """Trả về tổng hợp theo ngày cho biểu đồ frontend (Watcher + Web Upload)."""
+    """Trả về tổng hợp theo ngày cho biểu đồ frontend (Watcher + Web Upload).
+
+    Đọc từ SQLite duy nhất — bao gồm cả Watcher (system_watcher) và Web Upload.
+    """
     from ..deps import get_classification_job_store
 
-    daily_counts: dict[str, int] = {}
-
-    seen_path = _work_dir() / "seen_files.json"
-    if seen_path.is_file():
-        try:
-            seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
-            for _fid, info in seen_data.items():
-                if info.get("status") == "done":
-                    # Lấy ngày sửa đổi cuối cùng trên SharePoint hoặc ngày xử lý
-                    date_src = info.get("lastModifiedDateTime") or info.get("processed_at") or ""
-                    if date_src:
-                        if "T" in date_src:
-                            date_str = date_src.split("T")[0]
-                        elif " " in date_src:
-                            date_str = date_src.split(" ")[0]
-                        else:
-                            date_str = date_src
-
-                        if re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
-                            daily_counts[date_str] = daily_counts.get(date_str, 0) + 1
-        except Exception as exc:
-            logger.warning("Lỗi đọc seen_files.json trong daily metrics: %s", exc)
-
-    # --- Merge Web Upload daily counts from SQLite ---
     job_store = get_classification_job_store()
     if job_store is not None:
         try:
-            web_stats = job_store.aggregate_stats()
-            for day, cnt in web_stats.get("daily_counts", {}).items():
-                daily_counts[day] = daily_counts.get(day, 0) + cnt
+            return job_store.daily_stats()
         except Exception as exc:
-            logger.warning("Lỗi query aggregate_stats trong daily metrics: %s", exc)
+            logger.warning("Lỗi query daily_stats từ SQLite: %s", exc)
 
-    # Sắp xếp danh sách ngày và tạo mảng trả về cho biểu đồ
-    sorted_dates = sorted(daily_counts.keys())
-    counts = [daily_counts[d] for d in sorted_dates]
+    # Fallback: trả về empty nếu không có SQLite
+    return {
+        "dates": [],
+        "counts": [],
+        "success_counts": [],
+        "failed_counts": [],
+    }
 
-    return {"dates": sorted_dates, "counts": counts}
+
+class ResetFailedBody(BaseModel):
+    """Request body for POST /metrics/reset-failed."""
+
+    file_ids: list[str] | None = None
+
+
+@router.post("/metrics/reset-failed")
+async def reset_failed_files(
+    body: ResetFailedBody | None = None,
+    admin: dict = Depends(get_admin_user),
+):
+    """Reset failed files to retry status (admin only)."""
+    seen_path = _work_dir() / "seen_files.json"
+    metrics_path = _work_dir() / "metrics.json"
+
+    if not seen_path.is_file():
+        return {"reset_count": 0}
+
+    try:
+        seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Cannot read seen_files.json for reset: %s", exc)
+        return {"reset_count": 0, "error": str(exc)}
+
+    file_ids = body.file_ids if body else None
+
+    reset_count = 0
+    for file_id, info in seen_data.items():
+        if info.get("status") != "failed":
+            continue
+        if file_ids is not None and file_id not in file_ids:
+            continue
+        info["status"] = "retry"
+        info["failures"] = 0
+        reset_count += 1
+
+    if reset_count > 0:
+        from ...utils import atomic_write_json
+
+        atomic_write_json(seen_path, seen_data)
+
+        # Update metrics.json to decrease files_failed
+        if metrics_path.is_file():
+            try:
+                metrics_data = json.loads(metrics_path.read_text(encoding="utf-8"))
+                metrics_data["files_failed"] = max(
+                    0, metrics_data.get("files_failed", 0) - reset_count
+                )
+                atomic_write_json(metrics_path, metrics_data)
+            except Exception as exc:
+                logger.warning("Failed to update metrics.json after reset: %s", exc)
+
+    return {"reset_count": reset_count}
+
+
+@router.get("/metrics/by-user")
+async def get_metrics_by_user(admin: dict = Depends(get_admin_user)):
+    """Return per-user classification statistics (admin only)."""
+    from ..deps import get_classification_job_store
+
+    job_store = get_classification_job_store()
+    if job_store is None:
+        return {"users": []}
+
+    try:
+        user_stats = job_store.aggregate_stats_by_user()
+    except Exception as exc:
+        logger.warning("Error querying user stats: %s", exc)
+        return {"users": []}
+
+    return {"users": user_stats}
 
 
 # ---------- Logs ----------

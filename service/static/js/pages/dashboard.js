@@ -145,6 +145,7 @@ window.DashboardPage = (() => {
     const total = data?.total_files || 0;
     const success = data?.success_files || 0;
     const failed = data?.failed_files || 0;
+    const retried = data?.watcher_retried_count || data?.watcher_stats?.retried || 0;
     const rate = total > 0 ? ((success / total) * 100).toFixed(1) : '0.0';
     const avgTime = data?.avg_processing_time || 0;
 
@@ -176,7 +177,18 @@ window.DashboardPage = (() => {
           <div class="stat-card-icon">❌</div>
         </div>
       </div>
-      <div class="stat-card amber animate-in animate-in-delay-3">
+      <div class="stat-card ${retried > 0 ? 'orange' : 'gray'} animate-in animate-in-delay-3"
+           title="${retried > 0 ? retried + ' file từng thất bại → retry → thành công' : 'Chưa có file nào cần retry'}">
+        <div class="stat-card-top">
+          <div>
+            <div class="stat-card-value" data-count="${retried}">${animateNum(retried)}</div>
+            <div class="stat-card-label">Retry thành công</div>
+          </div>
+          <div class="stat-card-icon">🔄</div>
+        </div>
+        ${retried > 0 ? `<div class="stat-card-sub" style="font-size:11px;color:var(--text-muted);margin-top:4px;">→ đã xử lý thành công sau retry</div>` : ''}
+      </div>
+      <div class="stat-card amber animate-in animate-in-delay-4">
         <div class="stat-card-top">
           <div>
             <div class="stat-card-value">${rate}%</div>
@@ -185,7 +197,7 @@ window.DashboardPage = (() => {
           <div class="stat-card-icon">📈</div>
         </div>
       </div>
-      <div class="stat-card purple animate-in animate-in-delay-4">
+      <div class="stat-card purple animate-in animate-in-delay-5">
         <div class="stat-card-top">
           <div>
             <div class="stat-card-value">${avgTime.toFixed(1)}s</div>
@@ -210,9 +222,14 @@ window.DashboardPage = (() => {
     if (wrap && !document.getElementById('chart-daily')) {
       wrap.innerHTML = '<canvas id="chart-daily"></canvas>';
     }
-    Charts.createBarChart('chart-daily', data.dates, data.counts, {
-      label: 'Số file'
-    });
+    // Use stacked bar if success/failed counts available
+    if (data.success_counts && data.failed_counts) {
+      Charts.createStackedBarChart('chart-daily', data.dates, data.success_counts, data.failed_counts);
+    } else {
+      Charts.createBarChart('chart-daily', data.dates, data.counts, {
+        label: 'Số file'
+      });
+    }
   }
 
   function renderLabelChart(data) {
@@ -313,6 +330,9 @@ window.DashboardPage = (() => {
         retry: { badge: 'badge-purple', icon: '🔁', text: 'Thử lại' }
       };
       const st = statusMap[f.status] || statusMap.new;
+      const retryBtn = f.status === 'failed' && f.id
+        ? `<button class="btn btn-ghost btn-sm" title="Thử lại" onclick="DashboardPage._retryFile('${escHtml(f.id)}')">🔄</button>`
+        : '';
 
       return `
         <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
@@ -321,10 +341,21 @@ window.DashboardPage = (() => {
             <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(f.filename || f.name || 'Unknown')}</div>
             <div style="font-size:11px;color:var(--text-muted);">${f.timestamp || f.date || ''}</div>
           </div>
+          ${retryBtn}
           <span class="badge ${st.badge}">${st.text}</span>
         </div>
       `;
     }).join('');
+  }
+
+  async function retryFile(fileId) {
+    try {
+      await API.resetFailedFiles([fileId]);
+      window.Toast?.show?.('Đã reset file để thử lại', 'success');
+      loadData();
+    } catch (err) {
+      window.Toast?.show?.('Lỗi khi reset file: ' + (err.message || err), 'error');
+    }
   }
 
   function renderSystemStatus(health, metrics) {
@@ -336,6 +367,8 @@ window.DashboardPage = (() => {
     const uptimeStr = health?.uptime || '—';
     const cycle = health?.current_cycle || 0;
     const model = health?.model || metrics?.model || '—';
+
+    const pendingRetry = health?.pending_retry_files || 0;
 
     el.innerHTML = `
       <div class="result-row">
@@ -359,6 +392,12 @@ window.DashboardPage = (() => {
         <span class="result-key">Model</span>
         <span class="result-value text-mono" style="font-size:11px;">${escHtml(model)}</span>
       </div>
+      ${pendingRetry > 0 ? `
+      <div class="result-row">
+        <span class="result-key">File đang chờ retry</span>
+        <span class="result-value" style="color:var(--accent-amber); font-weight:600;">${pendingRetry}</span>
+      </div>
+      ` : ''}
     `;
   }
 
@@ -386,5 +425,5 @@ window.DashboardPage = (() => {
     return d.innerHTML;
   }
 
-  return { render, loadData, destroy };
+  return { render, loadData, destroy, _retryFile: retryFile };
 })();

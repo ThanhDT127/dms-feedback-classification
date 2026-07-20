@@ -116,7 +116,20 @@ LABEL_DEFINITIONS = {
     "HTPP": "Hệ thống phân phối: xung đột kênh C1/C2, tràn vùng, nhà phân phối, đại lý.",
     "Hàng hoá": "Logistics: tồn kho, thiếu hàng, giao hàng chậm, vận chuyển, đóng gói.",
     "Hàng giả": "Nghi ngờ hàng GIẢ/NHÁI, giả mạo thương hiệu. KHÔNG dùng cho SP kém CL chính hãng (đó là Báo lỗi).",
-    "Website": "Lỗi PHẦN MỀM: web, app, portal, DMS, đăng nhập, hệ thống chậm/đơ. KHÔNG dùng cho lỗi SP vật lý.",
+    "Website": (
+        "Lỗi PHẦN MỀM thuần túy: lỗi trang web bán hàng/portal đại lý (DMS, hệ thống đặt hàng), "
+        "app bị crash/đơ/không mở được, lỗi đăng nhập portal, lỗi hiển thị báo cáo trên hệ thống, "
+        "hệ thống web xử lý chậm/timeout, lỗi giao diện phần mềm quản lý. "
+        "Từ khóa đặc trưng: 'web bị lỗi', 'portal không vào được', 'app crash', 'DMS lỗi', "
+        "'đăng nhập không được', 'hệ thống đơ', 'trang web chậm'. "
+        "KHÔNG dùng cho: (1) lỗi SP vật lý hỏng hóc — đó là Báo lỗi; "
+        "(2) HC (Home Controller/bộ điều khiển thông minh) KHÔNG KẾT NỐI được thiết bị vật lý qua wifi — "
+        "nếu nguyên nhân là phần cứng/firmware thiết bị thì là Báo lỗi; "
+        "nếu lỗi tính năng phần mềm của app HC (UI sai, app không nhận lệnh, cập nhật app lỗi) thì mới là Website. "
+        "Ranh giới HC: 'HC không tìm thấy thiết bị' → Báo lỗi (thiết bị ko phát hiện được); "
+        "'app HC hiển thị sai trạng thái' → Website (lỗi hiển thị phần mềm); "
+        "'mất kết nối sau cập nhật firmware' → Báo lỗi (firmware gây mất kết nối phần cứng)."
+    ),
     "Hãng": "Có nhắc đến hãng khác ngoài Rạng Đông (đối thủ cạnh tranh). Ghi tên hãng vào brand.",
     "Hoạt động": "Hoạt động marketing, trưng bày, tặng kệ, event, roadshow, tài trợ CỦA ĐỐI THỦ.",
     "CTKM, giá, cơ chế": "Giá bán, khuyến mãi, chiết khấu, chính sách bán hàng CỦA ĐỐI THỦ cạnh tranh.",

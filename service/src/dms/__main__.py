@@ -6,6 +6,7 @@ import logging
 import signal
 
 from .auth import AuthProvider
+from .classification_jobs import ClassificationJobStore
 from .config_assets import ConfigAssetSyncService
 from .exceptions import ConfigurationError
 from .gemini_client import GeminiClient
@@ -83,6 +84,7 @@ def main() -> None:
         )
 
     runner = build_runner()
+    job_store = ClassificationJobStore(settings.classification_jobs_db_path)
     watcher = Watcher(
         sharepoint_client=sharepoint,
         pipeline_runner=runner,
@@ -91,6 +93,7 @@ def main() -> None:
         settings=settings,
         runner_factory=build_runner,
         config_asset_sync=config_asset_sync,
+        job_store=job_store,
     )
 
     runtime_settings = _build_runtime_settings(settings, config_asset_sync)

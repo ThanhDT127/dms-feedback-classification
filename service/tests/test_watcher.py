@@ -232,3 +232,57 @@ def test_watcher_error_logging_keeps_original_failure_when_metrics_upload_fails(
     assert seen["1"]["last_error"] == "RuntimeError: boom"
     assert watcher.metrics.last_error["error"] == "boom"
     assert "metrics upload failed" in caplog.text
+
+
+def test_watcher_auto_resets_failed_file_on_sharepoint_change(settings):
+    """Task 9.4: poll_once() auto-resets failed file when lastModifiedDateTime changes."""
+    files = [{"id": "1", "name": "a.xlsx", "lastModifiedDateTime": "2026-07-17T10:00:00Z"}]
+    watcher = make_watcher(settings, files, should_fail=True)
+
+    # Fail the file 3 times to reach "failed" status
+    seen = {}
+    watcher.poll_once(seen)
+    watcher.poll_once(seen)
+    watcher.poll_once(seen)
+    assert seen["1"]["status"] == "failed"
+
+    # Now simulate SharePoint returning a newer lastModifiedDateTime
+    watcher.sharepoint_client.files = [
+        {"id": "1", "name": "a.xlsx", "lastModifiedDateTime": "2026-07-17T12:00:00Z"}
+    ]
+
+    # Store the old modified time in seen
+    seen["1"]["lastModifiedDateTime"] = "2026-07-17T10:00:00Z"
+
+    # poll_once should auto-reset the file
+    watcher.poll_once(seen)
+    assert seen["1"]["status"] in ("retry", "failed")  # retry then processed (fails again)
+    assert seen["1"]["failures"] <= 1  # reset to 0 then incremented once
+
+
+def test_watcher_record_retry_failure_is_final_on_max_retries(settings):
+    """Task 9.5: _process_file() calls record_retry_failure(is_final=True) when retries exhausted."""
+    watcher = make_watcher(
+        settings, [{"id": "1", "name": "a.xlsx"}], should_fail=True
+    )
+    seen = {}
+
+    # First failure - not final
+    watcher.poll_once(seen)
+    assert seen["1"]["failures"] == 1
+    assert watcher.metrics.total_retries == 1
+    assert watcher.metrics.files_failed == 0  # Not final yet
+
+    # Second failure - not final
+    watcher.poll_once(seen)
+    assert seen["1"]["failures"] == 2
+    assert watcher.metrics.total_retries == 2
+    assert watcher.metrics.files_failed == 0  # Not final yet
+
+    # Third failure - final (MAX_FILE_RETRIES = 3)
+    watcher.poll_once(seen)
+    assert seen["1"]["failures"] == 3
+    assert seen["1"]["status"] == "failed"
+    assert watcher.metrics.total_retries == 3
+    assert watcher.metrics.files_failed == 1  # Final failure counted
+

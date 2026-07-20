@@ -25,6 +25,7 @@ class MetricsCollector:
         self.files_processed = 0
         self.files_failed = 0
         self.files_skipped = 0
+        self.total_retries = 0
         self.total_rows = 0
         self.total_processing_seconds = 0.0
         self.gemini_calls = 0
@@ -35,6 +36,7 @@ class MetricsCollector:
         self.daily_polls = 0
         self.daily_processed = 0
         self.daily_failed = 0
+        self.daily_retries = 0
         self.daily_rows = 0
         self.daily_processing_seconds = 0.0
         self.daily_gemini_calls = 0
@@ -71,6 +73,7 @@ class MetricsCollector:
             self.files_processed = data.get("files_processed", 0)
             self.files_failed = data.get("files_failed", 0)
             self.files_skipped = data.get("files_skipped", 0)
+            self.total_retries = data.get("total_retries", 0)
             self.total_rows = data.get("total_rows_processed", 0)
             self.total_processing_seconds = data.get("total_processing_seconds", 0.0)
             self.gemini_calls = data.get("gemini_calls", 0)
@@ -154,9 +157,6 @@ class MetricsCollector:
                 self.total_processing_seconds, reconstructed_seconds
             )
 
-            for lbl, cnt in reconstructed_labels.items():
-                self.label_distribution[lbl] = max(self.label_distribution[lbl], cnt)
-
             if not self.last_success and last_done_entry:
                 self.last_success = {
                     "file": last_done_entry.get("name", "Unknown"),
@@ -177,14 +177,30 @@ class MetricsCollector:
                 }
             self.flush()
 
+        # Always overwrite label_distribution from seen_files when data exists.
+        # This runs independently of the main reconstruct condition to handle
+        # edge cases where label content differs but count is the same.
+        if len(reconstructed_labels) > 0:
+            self.label_distribution = defaultdict(int, reconstructed_labels)
+            self.flush()
+
     def record_success(
-        self, file_name: str, rows: int, duration: float, label_dist: dict[str, int] | None = None
+        self,
+        file_name: str,
+        rows: int,
+        duration: float,
+        label_dist: dict[str, int] | None = None,
+        *,
+        was_previously_failed: bool = False,
     ) -> None:
         with self._lock:
             self.files_processed += 1
             self.total_rows += rows
             self.total_processing_seconds += duration
             self._consecutive_failures = 0
+
+            if was_previously_failed:
+                self.files_failed = max(0, self.files_failed - 1)
 
             self.daily_processed += 1
             self.daily_rows += rows
@@ -202,12 +218,19 @@ class MetricsCollector:
             }
             self.flush()
 
-    def record_failure(self, file_name: str, error_type: str, error_msg: str) -> None:
+    def record_retry_failure(
+        self, file_name: str, error_type: str, error_msg: str, *, is_final: bool = False
+    ) -> None:
         with self._lock:
-            self.files_failed += 1
+            self.total_retries += 1
+            self.daily_retries += 1
             self.errors_by_type[error_type] += 1
             self._consecutive_failures += 1
-            self.daily_failed += 1
+
+            if is_final:
+                self.files_failed += 1
+                self.daily_failed += 1
+
             self.last_error = {
                 "file": file_name,
                 "at": utc_now_iso(),
@@ -289,6 +312,7 @@ class MetricsCollector:
                 "label_distribution": dict(self.label_distribution),
                 "gemini_calls": self.gemini_calls,
                 "gemini_retries": self.gemini_retries,
+                "total_retries": self.total_retries,
                 "total_prompt_tokens": self.total_prompt_tokens,
                 "total_completion_tokens": self.total_completion_tokens,
                 "total_cost_usd": round(self.total_cost_usd, 6),
@@ -337,6 +361,7 @@ class MetricsCollector:
             "date": self._current_date,
             "files_processed": self.daily_processed,
             "files_failed": self.daily_failed,
+            "retries": self.daily_retries,
             "total_rows": self.daily_rows,
             "total_processing_seconds": round(self.daily_processing_seconds, 1),
             "avg_time_per_file": (
@@ -366,6 +391,7 @@ class MetricsCollector:
             self.daily_polls = 0
             self.daily_processed = 0
             self.daily_failed = 0
+            self.daily_retries = 0
             self.daily_rows = 0
             self.daily_processing_seconds = 0.0
             self.daily_gemini_calls = 0
@@ -387,6 +413,17 @@ class MetricsCollector:
             return parse_utc_datetime(value).time().isoformat(timespec="seconds")
         except Exception:
             return value[11:19] if len(value) >= 19 else value
+
+    def get_pending_retry_count(self) -> int:
+        """Count files with status 'retry' from seen_files.json."""
+        seen_path = self._path.parent / "seen_files.json"
+        if not seen_path.exists():
+            return 0
+        try:
+            seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
+            return sum(1 for entry in seen_data.values() if entry.get("status") == "retry")
+        except Exception:
+            return 0
 
     def _scan_existing_outputs(self) -> None:
         try:

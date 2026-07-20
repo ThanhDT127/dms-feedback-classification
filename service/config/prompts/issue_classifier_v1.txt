@@ -14,7 +14,7 @@ QUY TRÌNH SUY LUẬN CƯỠNG BỨC (CHAIN-OF-THOUGHT)
 RANH GIỚI NGỮ NGHĨA VÀ LUẬT LOẠI TRỪ (SEMANTIC BOUNDARIES)
 1. "Báo lỗi" VS "Y/c cải tiến":
    - "Báo lỗi": Chỉ gán khi có lỗi kỹ thuật vật lý thực tế, hỏng hóc, cháy nổ, không hoạt động, lệch ren, rò điện, nứt vỡ.
-   - "Y/c cải tiến": Gán cho yêu cầu chỉnh sửa, phàn nàn thiết kế, kích thước, độ dày vỏ nhựa/thanh đồng, bao bì, mẫu mã, phích to vướng của sản phẩm HIỆN CÓ (Ví dụ: "ổ chịu tải vỏ hơi mềm" -> gán Y/c cải tiến, KHÔNG gán Báo lỗi).
+   - "Y/c cải tiến": Gán cho yêu cầu chỉnh sửa, phàn nàn thiết kế, kích thước, độ dày vỏ nhựa/thanh đồng, bao bì, mẫu mã, phích to vướng của sản phẩm HIỆN CÓ đang bán (Ví dụ: "ổ chịu tải vỏ hơi mềm" -> gán Y/c cải tiến, KHÔNG gán Báo lỗi).
 2. "Báo lỗi" VS "Bảo hành":
    - "Báo lỗi": Nói về lỗi hỏng hóc vật lý của sản phẩm.
    - "Bảo hành": Nói về QUY TRÌNH bảo hành, thời gian BH lâu, đổi trả chậm — tức là chất lượng DỊCH VỤ.
@@ -29,6 +29,12 @@ RANH GIỚI NGỮ NGHĨA VÀ LUẬT LOẠI TRỪ (SEMANTIC BOUNDARIES)
    - "Đề xuất SPM": Yêu cầu sản xuất dòng sản phẩm MỚI chưa từng có ("ra thêm", "sản xuất thêm", "thêm mã mới").
    - "Y/c cải tiến": Góp ý chỉnh sửa chi tiết của sản phẩm HIỆN CÓ đang bán.
 6. "Hãng" (Nhãn đối thủ): Chỉ gán nhãn đối thủ ("Hãng", "Hoạt động", "CTKM, giá, cơ chế", "TT SP") khi "brand" là tên hãng đối thủ cạnh tranh. Nếu ý chính là góp ý Rạng Đông và đối thủ chỉ là ví dụ tham khảo (Ví dụ: "làm màu cam giống Sopoka") -> Gán Y/c cải tiến, brand để trống và KHÔNG gán nhãn đối thủ.
+7. "Website" VS "Báo lỗi" cho sản phẩm IoT/Smart Home (HC, thiết bị kết nối):
+   - HC = Home Controller / bộ điều khiển trung tâm smarthome Rạng Đông.
+   - "Website": CHỈ gán khi lỗi là PHẦN MỀM thuần túy trên web/portal/app: portal đặt hàng DMS lỗi, app crash/không mở, lỗi đăng nhập hệ thống, lỗi hiển thị báo cáo trên web.
+   - "Báo lỗi": Gán khi HC/thiết bị IoT KHÔNG KẾT NỐI được phần cứng qua wifi/bluetooth/zigbee, không phát hiện thiết bị, mất kết nối sau cập nhật firmware, lỗi ghép cặp thiết bị vật lý.
+   - QUY TẮC HC: "HC không tìm thấy thiết bị" → Báo lỗi. "App HC đơ/crash" → Website. "Mất kết nối sau update firmware" → Báo lỗi. "Không đổi pass wifi HC được" → Báo lỗi (vấn đề cài đặt phần cứng). "Trang thái HC hiển thị sai" → Website (lỗi hiển thị phần mềm).
+   - KHÔNG gán đồng thời cả "Website" lẫn "Báo lỗi" cho cùng một vấn đề HC — hãy phân tích nguyên nhân gốc rễ.
 
 TỪ ĐIỂN TỪ VIẾT TẮT & SAO CHÍNH TẢ (SPELL GUARD GLOSSARY)
 Đọc cả câu để hiểu nghĩa của các từ viết tắt và từ sai chính tả sau, tuyệt đối KHÔNG bắt nhầm từ khóa đơn lẻ:
@@ -42,6 +48,9 @@ TỪ ĐIỂN TỪ VIẾT TẮT & SAO CHÍNH TẢ (SPELL GUARD GLOSSARY)
 - "bgn" -> viết tắt của đèn "bán nguyệt".
 - "at", "attomat", "atomat" -> viết tắt của thiết bị đóng cắt "aptomat".
 - "ch" -> viết tắt của "cửa hàng".
+- "hc" -> viết tắt của "Home Controller" (bộ điều khiển smarthome Rạng Đông) — lỗi kết nối HC là Báo lỗi, KHÔNG phải Website.
+- "rd hc", "rdhc", "hc01", "hc02" -> bộ điều khiển RD HC — thiết bị phần cứng IoT, mất kết nối là Báo lỗi.
+- "pass wifi", "đổi pass wifi" -> cài đặt kết nối wifi cho thiết bị IoT — lỗi cài đặt thuộc Báo lỗi.
 
 DANH SÁCH NHÃN HỢP LỆ THEO THỨ TỰ:
 {minor_order_json}

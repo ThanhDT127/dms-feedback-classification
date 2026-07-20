@@ -72,6 +72,7 @@ class ClassificationJobStore:
     def _init_db(self) -> None:
         with self._lock, self._conn() as conn:
             conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=30000")  # 30 seconds for cross-container writes
             conn.execute("PRAGMA foreign_keys=ON")
             conn.execute(
                 """
@@ -688,6 +689,25 @@ class ClassificationJobStore:
                 if day and len(day) == 10:  # YYYY-MM-DD
                     daily_counts[day] = int(row["cnt"])
 
+            # --- daily failed counts ---
+            daily_failed_rows = conn.execute(
+                """
+                SELECT SUBSTR(COALESCE(completed_at, created_at), 1, 10) AS day,
+                       COUNT(*) AS cnt
+                FROM classification_jobs
+                WHERE status = ?
+                  AND (completed_at IS NOT NULL OR created_at IS NOT NULL)
+                GROUP BY day
+                ORDER BY day
+                """,
+                (JOB_STATUS_ERROR,),
+            ).fetchall()
+            daily_failed_counts: dict[str, int] = {}
+            for row in daily_failed_rows:
+                day = row["day"]
+                if day and len(day) == 10:
+                    daily_failed_counts[day] = int(row["cnt"])
+
             # --- recent files ---
             recent_rows = conn.execute(
                 """
@@ -716,8 +736,184 @@ class ClassificationJobStore:
             "total_rows": total_rows,
             "total_duration_seconds": total_duration,
             "daily_counts": daily_counts,
+            "daily_failed_counts": daily_failed_counts,
             "recent_files": recent_files,
         }
+
+    def daily_stats(
+        self,
+        *,
+        from_date: str | None = None,
+        to_date: str | None = None,
+    ) -> dict:
+        """Return daily success/failed counts for all jobs (Watcher + Web Upload).
+
+        Groups by date of completion. Returns dict with arrays suitable for charting:
+        ``{"dates": [...], "success_counts": [...], "failed_counts": [...], "counts": [...]}``
+        """
+        where_parts: list[str] = ["completed_at IS NOT NULL"]
+        params: list[Any] = []
+        if from_date:
+            where_parts.append("SUBSTR(completed_at, 1, 10) >= ?")
+            params.append(from_date)
+        if to_date:
+            where_parts.append("SUBSTR(completed_at, 1, 10) <= ?")
+            params.append(to_date)
+        where_sql = " AND ".join(where_parts)
+
+        with self._lock, self._conn() as conn:
+            # Dùng "file-level final outcome" per filename:
+            # - Nếu file X thất bại ngày 1, retry thành công ngày 3
+            #   → hiện là SUCCESS vào ngày 3 (ngày cuối cùng xử lý)
+            # - Nếu file X chưa bao giờ thành công → FAILURE vào ngày thất bại cuối cùng
+            # Web uploads (owner != system_watcher) không có retry → đếm theo attempt bình thường
+            rows = conn.execute(
+                f"""
+                WITH file_outcomes AS (
+                    SELECT
+                        filename,
+                        owner_username,
+                        -- Ngày cuối cùng có completed_at
+                        MAX(CASE WHEN status = '{JOB_STATUS_COMPLETED}' THEN completed_at END)
+                            AS success_at,
+                        MAX(completed_at) AS last_at,
+                        -- Kết quả cuối: nếu có ít nhất 1 completed → success
+                        CASE
+                            WHEN SUM(CASE WHEN status = '{JOB_STATUS_COMPLETED}' THEN 1 ELSE 0 END) > 0
+                            THEN '{JOB_STATUS_COMPLETED}'
+                            ELSE '{JOB_STATUS_ERROR}'
+                        END AS final_status
+                    FROM classification_jobs
+                    WHERE {where_sql}
+                    GROUP BY filename, owner_username
+                )
+                SELECT
+                    SUBSTR(
+                        CASE
+                            WHEN final_status = '{JOB_STATUS_COMPLETED}' THEN success_at
+                            ELSE last_at
+                        END,
+                        1, 10
+                    ) AS day,
+                    SUM(CASE WHEN final_status = '{JOB_STATUS_COMPLETED}' THEN 1 ELSE 0 END) AS success,
+                    SUM(CASE WHEN final_status = '{JOB_STATUS_ERROR}'     THEN 1 ELSE 0 END) AS failed
+                FROM file_outcomes
+                GROUP BY day
+                ORDER BY day
+                """,
+                params,
+            ).fetchall()
+
+        dates: list[str] = []
+        success_counts: list[int] = []
+        failed_counts: list[int] = []
+
+        for row in rows:
+            day = row["day"]
+            if day and len(day) == 10:  # YYYY-MM-DD
+                dates.append(day)
+                success_counts.append(int(row["success"]))
+                failed_counts.append(int(row["failed"]))
+
+        counts = [s + f for s, f in zip(success_counts, failed_counts)]
+        return {
+            "dates": dates,
+            "success_counts": success_counts,
+            "failed_counts": failed_counts,
+            "counts": counts,
+        }
+
+
+    def aggregate_stats_by_user(self) -> list[dict]:
+        """Return per-user aggregated classification statistics."""
+
+        with self._lock, self._conn() as conn:
+            # Check if gemini_usage_log table exists (created by UsageTracker)
+            has_usage = bool(
+                conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='gemini_usage_log'"
+                ).fetchone()
+            )
+
+            if has_usage:
+                rows = conn.execute(
+                    """
+                    SELECT
+                        j.owner_username,
+                        COUNT(DISTINCT j.job_id) AS total_jobs,
+                        COALESCE(SUM(CASE WHEN j.status = ? THEN 1 ELSE 0 END), 0)
+                            AS completed,
+                        COALESCE(SUM(CASE WHEN j.status = ? THEN 1 ELSE 0 END), 0)
+                            AS failed,
+                        COALESCE(
+                            SUM(CASE WHEN j.status = ? THEN j.total_rows ELSE 0 END), 0
+                        ) AS total_rows,
+                        COALESCE(SUM(j.duration_seconds), 0.0)
+                            AS total_duration_seconds,
+                        COALESCE(u.total_tokens, 0) AS total_tokens,
+                        COALESCE(u.total_cost, 0.0) AS total_cost
+                    FROM classification_jobs j
+                    LEFT JOIN (
+                        SELECT
+                            g.job_id,
+                            SUM(g.total_tokens) AS total_tokens,
+                            SUM(g.estimated_cost_usd) AS total_cost
+                        FROM gemini_usage_log g
+                        WHERE g.job_id IS NOT NULL
+                        GROUP BY g.job_id
+                    ) u ON j.job_id = u.job_id
+                    GROUP BY j.owner_username
+                    ORDER BY total_jobs DESC
+                    """,
+                    (JOB_STATUS_COMPLETED, JOB_STATUS_ERROR, JOB_STATUS_COMPLETED),
+                ).fetchall()
+
+                return [
+                    {
+                        "username": row["owner_username"],
+                        "total_jobs": int(row["total_jobs"]),
+                        "completed": int(row["completed"]),
+                        "failed": int(row["failed"]),
+                        "total_rows": int(row["total_rows"]),
+                        "total_duration_seconds": float(row["total_duration_seconds"]),
+                        "total_tokens": int(row["total_tokens"]),
+                        "estimated_cost": round(float(row["total_cost"]), 6),
+                    }
+                    for row in rows
+                ]
+
+            # Fallback: no usage tracking table
+            rows = conn.execute(
+                """
+                SELECT
+                    owner_username,
+                    COUNT(*) AS total_jobs,
+                    COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS completed,
+                    COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0) AS failed,
+                    COALESCE(
+                        SUM(CASE WHEN status = ? THEN total_rows ELSE 0 END), 0
+                    ) AS total_rows,
+                    COALESCE(SUM(duration_seconds), 0.0) AS total_duration_seconds
+                FROM classification_jobs
+                GROUP BY owner_username
+                ORDER BY total_jobs DESC
+                """,
+                (JOB_STATUS_COMPLETED, JOB_STATUS_ERROR, JOB_STATUS_COMPLETED),
+            ).fetchall()
+
+            return [
+                {
+                    "username": row["owner_username"],
+                    "total_jobs": int(row["total_jobs"]),
+                    "completed": int(row["completed"]),
+                    "failed": int(row["failed"]),
+                    "total_rows": int(row["total_rows"]),
+                    "total_duration_seconds": float(row["total_duration_seconds"]),
+                    "total_tokens": 0,
+                    "estimated_cost": 0.0,
+                }
+                for row in rows
+            ]
 
     def update_sharepoint(
         self,
