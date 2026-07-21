@@ -340,7 +340,7 @@ button, input, select, textarea {
   height: 100vh;
   position: fixed;
   left: 0; top: 0;
-  z-index: 100;
+  z-index: 600;  /* above modal backdrop (z-index:500) so sidebar always shows on top */
   display: flex;
   flex-direction: column;
   background: var(--bg-glass);
@@ -1784,19 +1784,16 @@ th.sortable.sorted { color: var(--accent-blue); }
 }
 
 /* --- File Preview (modal overlay) ----------------------------------------- */
-/* Backdrop — starts AFTER the sidebar so the nav stays visible */
+/* Backdrop — full screen, sidebar sits above it via z-index:600 */
 #preview-panel {
   position: fixed;
-  top: 0;
-  left: var(--sidebar-width); /* don't cover the sidebar */
-  right: 0;
-  bottom: 0;
-  z-index: 1000;
+  inset: 0;
+  z-index: 500;
   background: rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 24px 24px 24px calc(var(--sidebar-width) + 24px); /* indent dialog past sidebar */
   backdrop-filter: blur(2px);
 }
 #preview-panel.hidden {
