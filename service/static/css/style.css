@@ -1813,8 +1813,9 @@ th.sortable.sorted { color: var(--accent-blue); }
 
 /* Preview table: horizontal scroll confined to the preview box */
 .table-preview-wrapper {
-  overflow-x: auto;
   width: 100%;
+  /* NO overflow-x here — let the wide table bubble up to .preview-body
+     so the scrollbar sits at the visible bottom of the 480px viewport */
 }
 .table-preview {
   min-width: max-content; /* never shrink columns, always scroll instead */
@@ -1826,6 +1827,7 @@ th.sortable.sorted { color: var(--accent-blue); }
   max-width: 420px;
   word-break: break-word;
 }
+
 
 
 /* --- Skeleton / Shimmer Loading --------------------------- */
