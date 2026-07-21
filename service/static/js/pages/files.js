@@ -3,12 +3,11 @@
    ============================================================ */
 
 window.FilesPage = (() => {
+  // Checkpoint and Model tabs are hidden from UI (synced by Watcher backend only)
   const FOLDERS = [
-    { id: 'input',      label: 'Đầu vào',   icon: '📥' },
-    { id: 'output',     label: 'Kết quả',    icon: '📤' },
-    { id: 'checkpoint', label: 'Lưu vết', icon: '💾' },
-    { id: 'keyword',    label: 'Từ khóa',   icon: '🔑' },
-    { id: 'model',      label: 'Mô hình',      icon: '🤖' },
+    { id: 'input',   label: 'Đầu vào', icon: '📥' },
+    { id: 'output',  label: 'Kết quả',  icon: '📤' },
+    { id: 'keyword', label: 'Từ khóa', icon: '🔑' },
   ];
 
   let _activeFolder = 'input';
@@ -33,6 +32,14 @@ window.FilesPage = (() => {
   let _onMouseEnter = null;
   let _onMouseLeave = null;
   let _onScroll = null;
+
+  // Search / filter / sort state (file-manager-ui-overhaul)
+  let _searchQuery = '';
+  let _statusFilter = 'all';
+  let _sortCol = 'modified';
+  let _sortDir = 'desc';
+  let _allFiles = [];      // master list from API (post-keyword-filter)
+  let _lastMetrics = null; // cached metrics for output folder count display
 
   function isAdminRole() {
     return window.App?.state?.user?.role === 'admin';
@@ -121,6 +128,24 @@ window.FilesPage = (() => {
             ${f.icon} ${f.label}
           </div>
         `).join('')}
+      </div>
+
+      <!-- File Control Bar: search, status filter (file-manager-ui-overhaul) -->
+      <div class="file-control-bar" id="file-control-bar">
+        <div class="fcb-search">
+          <input type="text" id="fcb-search-input" class="fcb-input"
+            placeholder="🔍 Tìm tên file (hỗ trợ tiếng Việt không dấu)..."
+            oninput="FilesPage.onSearch(this.value)">
+        </div>
+        <div class="fcb-filter">
+          <select id="fcb-status-filter" class="fcb-select" onchange="FilesPage.onFilterStatus(this.value)">
+            <option value="all">Tất cả trạng thái</option>
+            <option value="new">🆕 File mới</option>
+            <option value="processing">🔄 Đang xử lý</option>
+            <option value="done">✅ Hoàn thành</option>
+            <option value="failed">❌ Thất bại</option>
+          </select>
+        </div>
       </div>
 
       <div class="sync-help-card" id="file-sync-help" style="margin:0 0 16px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-secondary);font-size:12px;color:var(--text-secondary);">
@@ -318,32 +343,13 @@ window.FilesPage = (() => {
 
   function applyPendingData() {
     if (!_pendingData) return;
-    const { newFiles, isInput, metrics } = _pendingData;
+    const { newFiles, metrics } = _pendingData;
     _pendingData = null;
     _hideBanner();
 
-    const tbody = document.getElementById('file-tbody');
-    if (!tbody) return;
-
-    _files = newFiles;
-    _updateFileCount(metrics);
-
-    if (_files.length === 0) {
-      const isAdmin = isAdminRole();
-      const colSpan = isInput ? (isAdmin ? 8 : 7) : (isAdmin ? 7 : 6);
-      tbody.innerHTML = `
-        <tr><td colspan="${colSpan}">
-          <div class="empty-state">
-            <div class="empty-state-icon">📭</div>
-            <p class="empty-state-text">Thư mục trống</p>
-            <p class="empty-state-hint">Chưa có file nào trong thư mục ${_activeFolder}</p>
-          </div>
-        </td></tr>
-      `;
-      return;
-    }
-
-    diffFileRows(tbody, newFiles, isInput, true);
+    _allFiles = newFiles;
+    if (metrics) _lastMetrics = metrics;
+    _applyFilters(true);
   }
 
   // === Row rendering helper (task 1.3) ===
@@ -377,9 +383,14 @@ window.FilesPage = (() => {
         <td><span class="expand-icon ${isExpanded ? 'expanded' : ''}" onclick="FilesPage.toggleRowDetail('${escAttr(name)}')">▶</span></td>
         <td class="text-muted">${index + 1}</td>
         <td>
-          <span style="cursor:pointer;color:var(--accent-blue);" onclick="FilesPage.preview('${escAttr(name)}')">
-            ${escHtml(name)}
-          </span>
+          <div style="display:flex;flex-direction:column;gap:3px;">
+            <span style="cursor:pointer;color:var(--accent-blue);" onclick="FilesPage.preview('${escAttr(name)}')">
+              ${escHtml(name)}
+            </span>
+            <span class="badge-cache ${source === 'local_cache' ? 'badge-cache-local' : 'badge-cache-cloud'}">
+              ${source === 'local_cache' ? '💾 Đã lưu cache' : '☁️ Chỉ trên Cloud'}
+            </span>
+          </div>
         </td>
         <td class="text-muted text-mono" style="font-size:12px;">${size}</td>
         <td class="text-muted" style="font-size:12px;">${escHtml(date)}</td>
@@ -480,15 +491,8 @@ window.FilesPage = (() => {
   // === File count helper ===
 
   function _updateFileCount(metrics) {
-    const countEl = document.getElementById('file-count');
-    if (!countEl) return;
-
-    if (_activeFolder === 'output' && metrics) {
-      const totalProcessed = metrics.total_files || 0;
-      countEl.innerHTML = `${_files.length} file <span style="font-size:12px;color:var(--text-muted);margin-left:8px;">💡 Thư mục Kết quả chứa ${_files.length} file vật lý trên SharePoint (bao gồm cả các bản nháp/chạy lại), trong đó Dashboard ghi nhận ${totalProcessed} file input gốc đã được xử lý hoàn tất.</span>`;
-    } else {
-      countEl.textContent = `${_files.length} file`;
-    }
+    // Store metrics for output folder count; actual rendering is done in _applyFilters
+    if (metrics) _lastMetrics = metrics;
   }
 
   function switchFolder(folder) {
@@ -501,6 +505,17 @@ window.FilesPage = (() => {
     _selectedFiles.clear();
     _expandedRows.clear();
     _metadataCache.clear();
+    // Reset search / filter / sort state when switching tabs
+    _searchQuery = '';
+    _statusFilter = 'all';
+    _sortCol = 'modified';
+    _sortDir = 'desc';
+    _allFiles = [];
+    _lastMetrics = null;
+    const searchInput = document.getElementById('fcb-search-input');
+    if (searchInput) searchInput.value = '';
+    const statusSelect = document.getElementById('fcb-status-filter');
+    if (statusSelect) statusSelect.value = 'all';
 
     document.querySelectorAll('#file-tabs .tab-item').forEach(t => {
       t.classList.toggle('active', t.dataset.folder === folder);
@@ -533,22 +548,8 @@ window.FilesPage = (() => {
       uploadHint.style.display = isInput && isAdmin ? 'flex' : 'none';
     }
 
-    // Update the thead dynamically
-    const thead = document.querySelector('#file-table thead');
-    if (thead) {
-      thead.innerHTML = `
-        <tr>
-          ${isAdmin ? '<th style="width:30px;"><input type="checkbox" class="file-checkbox" id="select-all-cb" onchange="FilesPage.toggleSelectAll()"></th>' : ''}
-          <th style="width:30px;"></th>
-          <th style="width:40px;">#</th>
-          <th>Tên file</th>
-          <th>Kích thước</th>
-          <th>Ngày sửa đổi</th>
-          ${isInput ? '<th>Trạng thái</th>' : ''}
-          <th style="width:120px;">Hành động</th>
-        </tr>
-      `;
-    }
+    // Render sortable thead (updated via _refreshSortHeaders)
+    _refreshSortHeaders();
 
     // Show loading spinner only on initial (non-silent) load (task 1.5)
     if (!silent) {
@@ -562,7 +563,18 @@ window.FilesPage = (() => {
       }
 
       const [data, metrics] = await Promise.all(promises);
-      const newFiles = Array.isArray(data) ? data : (data.files || []);
+      let newFiles = Array.isArray(data) ? data : (data.files || []);
+
+      // Filter keyword tab: only show business config files; hide technical ML assets (.pkl, thresholds.json)
+      if (_activeFolder === 'keyword') {
+        const KW_WHITELIST = new Set(['kw_map.json', 'system_prompt.txt']);
+        newFiles = newFiles.filter(f => {
+          const lower = (f.name || f.filename || '').toLowerCase();
+          return KW_WHITELIST.has(lower)
+            || lower.includes('phân chia nhóm sản phẩm v2')
+            || lower.includes('phan chia nhom san pham v2');
+        });
+      }
 
       // Smart refresh: skip re-render if data unchanged
       const newHash = JSON.stringify(newFiles);
@@ -578,28 +590,9 @@ window.FilesPage = (() => {
         return;
       }
 
-      _files = newFiles;
+      _allFiles = newFiles;
       _updateFileCount(metrics);
-
-      if (_files.length === 0) {
-        tbody.innerHTML = `
-          <tr><td colspan="${colSpan}">
-            <div class="empty-state">
-              <div class="empty-state-icon">📭</div>
-              <p class="empty-state-text">Thư mục trống</p>
-              <p class="empty-state-hint">Chưa có file nào trong thư mục ${_activeFolder}</p>
-            </div>
-          </td></tr>
-        `;
-        return;
-      }
-
-      // Use DOM diffing for silent refresh, full innerHTML for initial load (tasks 1.4-1.5)
-      if (silent) {
-        diffFileRows(tbody, _files, isInput, true);
-      } else {
-        tbody.innerHTML = _files.map((f, i) => buildRowHTML(f, i, isInput, false)).join('');
-      }
+      _applyFilters(silent);
     } catch (e) {
       if (!silent) {
         tbody.innerHTML = `<tr><td colspan="${colSpan}"><div class="text-center text-red" style="padding:30px;">Lỗi tải file: ${escHtml(e.message)}</div></td></tr>`;
@@ -616,6 +609,146 @@ window.FilesPage = (() => {
       failed:     '<span class="badge badge-red">❌ Thất bại</span>',
     };
     return map[status] || '<span class="badge badge-muted">—</span>';
+  }
+
+  // ================================================================
+  // Search / Filter / Sort helpers  (file-manager-ui-overhaul)
+  // ================================================================
+
+  /** Strip Vietnamese diacritics and lowercase for accent-insensitive matching. */
+  function _normalizeVN(str) {
+    return String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
+  /** Render a sort-direction indicator icon for a column header. */
+  function _sortIcon(col) {
+    if (_sortCol !== col) return '<span class="sort-icon">↕</span>';
+    return _sortDir === 'asc'
+      ? '<span class="sort-icon active">↑</span>'
+      : '<span class="sort-icon active">↓</span>';
+  }
+
+  /** Rewrite the file table thead with sortable, clickable column headers. */
+  function _refreshSortHeaders() {
+    const thead = document.querySelector('#file-table thead');
+    if (!thead) return;
+    const isAdmin = isAdminRole();
+    const isInput = _activeFolder === 'input';
+    thead.innerHTML = `
+      <tr>
+        ${isAdmin ? '<th style="width:30px;"><input type="checkbox" class="file-checkbox" id="select-all-cb" onchange="FilesPage.toggleSelectAll()"></th>' : ''}
+        <th style="width:30px;"></th>
+        <th style="width:40px;">#</th>
+        <th class="sortable${_sortCol === 'name' ? ' sorted' : ''}" onclick="FilesPage.onSort('name')">Tên file ${_sortIcon('name')}</th>
+        <th class="sortable${_sortCol === 'size' ? ' sorted' : ''}" onclick="FilesPage.onSort('size')">Kích thước ${_sortIcon('size')}</th>
+        <th class="sortable${_sortCol === 'modified' ? ' sorted' : ''}" onclick="FilesPage.onSort('modified')">Ngày sửa đổi ${_sortIcon('modified')}</th>
+        ${isInput ? '<th>Trạng thái</th>' : ''}
+        <th style="width:120px;">Hành động</th>
+      </tr>
+    `;
+  }
+
+  /**
+   * Filter + sort _allFiles into _files, update the count badge, refresh
+   * column headers and re-render the tbody.  Pass silent=true to use DOM-diff.
+   */
+  function _applyFilters(silent = false) {
+    const query = _normalizeVN(_searchQuery);
+    let filtered = _allFiles.filter(f => {
+      const name = _normalizeVN(f.name || f.filename || '');
+      if (query && !name.includes(query)) return false;
+      if (_statusFilter !== 'all' && (f.status || null) !== _statusFilter) return false;
+      return true;
+    });
+
+    // Sort filtered list
+    filtered.sort((a, b) => {
+      let valA, valB;
+      if (_sortCol === 'name') {
+        valA = _normalizeVN(a.name || a.filename || '');
+        valB = _normalizeVN(b.name || b.filename || '');
+      } else if (_sortCol === 'size') {
+        valA = a.size || 0;
+        valB = b.size || 0;
+      } else { // 'modified' (default)
+        valA = a.modified || '';
+        valB = b.modified || '';
+      }
+      if (valA < valB) return _sortDir === 'asc' ? -1 : 1;
+      if (valA > valB) return _sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    _files = filtered;
+
+    // Update file count display
+    const countEl = document.getElementById('file-count');
+    if (countEl) {
+      const total = _allFiles.length;
+      const shown = _files.length;
+      if (_activeFolder === 'output' && _lastMetrics) {
+        const totalProcessed = _lastMetrics.total_files || 0;
+        countEl.innerHTML = `${shown} file <span style="font-size:12px;color:var(--text-muted);margin-left:8px;">💡 Thư mục Kết quả chứa ${total} file vật lý trên SharePoint (bao gồm cả các bản nháp/chạy lại), trong đó Dashboard ghi nhận ${totalProcessed} file input gốc đã được xử lý hoàn tất.</span>`;
+      } else if (query || _statusFilter !== 'all') {
+        countEl.textContent = `${shown}/${total} file (đang lọc)`;
+      } else {
+        countEl.textContent = `${total} file`;
+      }
+    }
+
+    // Refresh sortable column headers
+    _refreshSortHeaders();
+
+    // Re-render tbody
+    const tbody = document.getElementById('file-tbody');
+    if (!tbody) return;
+    const isInput = _activeFolder === 'input';
+    const isAdmin = isAdminRole();
+    const colSpan = isInput ? (isAdmin ? 8 : 7) : (isAdmin ? 7 : 6);
+
+    if (_files.length === 0) {
+      const hasFilter = query || _statusFilter !== 'all';
+      tbody.innerHTML = `
+        <tr><td colspan="${colSpan}">
+          <div class="empty-state">
+            <div class="empty-state-icon">${hasFilter ? '🔍' : '📭'}</div>
+            <p class="empty-state-text">${hasFilter ? 'Không có file nào khớp bộ lọc' : 'Thư mục trống'}</p>
+            <p class="empty-state-hint">${hasFilter ? 'Thử xóa từ khóa hoặc thay đổi bộ lọc trạng thái' : 'Chưa có file nào trong thư mục ' + _activeFolder}</p>
+          </div>
+        </td></tr>
+      `;
+      return;
+    }
+
+    if (silent) {
+      diffFileRows(tbody, _files, isInput, true);
+    } else {
+      tbody.innerHTML = _files.map((f, i) => buildRowHTML(f, i, isInput, false)).join('');
+    }
+  }
+
+  /** Called by File Control Bar search input oninput. */
+  function onSearch(value) {
+    _searchQuery = value;
+    _applyFilters(true);
+  }
+
+  /** Called by File Control Bar status dropdown onchange. */
+  function onFilterStatus(value) {
+    _statusFilter = value;
+    _applyFilters(true);
+  }
+
+  /** Called when user clicks a sortable column header. Toggles direction if same column. */
+  function onSort(col) {
+    if (_sortCol === col) {
+      _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      _sortCol = col;
+      // Default: modified → desc (newest first), others → asc
+      _sortDir = col === 'modified' ? 'desc' : 'asc';
+    }
+    _applyFilters(true);
   }
 
   async function preview(filename) {
@@ -1095,9 +1228,11 @@ window.FilesPage = (() => {
     overlay.id = 'bulk-confirm-overlay';
     overlay.innerHTML = `
       <div class="bulk-confirm-dialog">
-        <h3>🗑️ Xóa local/cache ${filenames.length} file</h3>
+        <h3>🗑️ Giải phóng bộ nhớ: ${filenames.length} file</h3>
         <p style="font-size:13px;color:var(--text-secondary);margin:0 0 8px;">
-          Hành động này chỉ xóa bản local/cache trên máy chủ Web UI. SharePoint không bị xóa.
+          Hành động này chỉ xóa bản sao đang lưu trên ổ đĩa máy chủ (local cache).
+          File gốc trên SharePoint Cloud <strong>không bị xóa</strong>.
+          Sau khi xóa, badge của file sẽ chuyển sang <em>☁️ Chỉ trên Cloud</em>.
         </p>
         <ul class="file-list">
           ${filenames.map(f => `<li>📄 ${escHtml(f)}</li>`).join('')}
@@ -1232,6 +1367,7 @@ window.FilesPage = (() => {
     refresh, handleUpload, syncSharePoint,
     applyPendingData,
     toggleFileSelection, toggleSelectAll, selectAllFiles, clearSelection, bulkDelete, bulkDeleteSharePoint,
-    toggleRowDetail, editKeywordAsset
+    toggleRowDetail, editKeywordAsset,
+    onSearch, onFilterStatus, onSort
   };
 })();
