@@ -460,10 +460,15 @@ window.FilesPage = (() => {
         if (existingRow.innerHTML !== newRow.innerHTML) {
           existingRow.innerHTML = newRow.innerHTML;
         }
-        // Update index number
-        const indexCell = existingRow.querySelector('td:first-child');
-        if (indexCell && indexCell.textContent !== String(i + 1)) {
-          indexCell.textContent = i + 1;
+        // Update index number — find the # cell robustly regardless of admin/non-admin layout.
+        // Admin: [checkbox][expand][#][name]...  Non-admin: [expand][#][name]...
+        // The # cell is always a plain <td> containing only a number, so search all tds.
+        const allTds = existingRow.querySelectorAll('td');
+        for (const td of allTds) {
+          if (/^\d+$/.test(td.textContent.trim()) && !td.querySelector('input,button,span')) {
+            if (td.textContent.trim() !== String(i + 1)) td.textContent = i + 1;
+            break;
+          }
         }
         // Ensure data-filename is set
         existingRow.setAttribute('data-filename', name);
@@ -482,6 +487,15 @@ window.FilesPage = (() => {
         }
         prevRow = newRow;
       }
+    });
+
+    // Reorder rows in the DOM to match newFiles order (critical for sort to take effect).
+    // We append each row in newFiles order; the browser moves them if already in tbody.
+    newFiles.forEach((f) => {
+      const name = f.name || f.filename || 'unknown';
+      // Find the row in the current DOM (may have been updated above)
+      const existingRow = tbody.querySelector(`tr[data-filename="${CSS.escape(name)}"]`);
+      if (existingRow) tbody.appendChild(existingRow);
     });
 
     // Restore scroll position (task 4.2)
