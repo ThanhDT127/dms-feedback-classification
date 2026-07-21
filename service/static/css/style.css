@@ -1784,13 +1784,13 @@ th.sortable.sorted { color: var(--accent-blue); }
 }
 
 /* --- File Preview (modal overlay) ----------------------------------------- */
-/* Backdrop — offset by sidebar width so sidebar stays visible */
+/* Backdrop — starts AFTER the sidebar so the nav stays visible */
 #preview-panel {
   position: fixed;
   top: 0;
+  left: var(--sidebar-width); /* don't cover the sidebar */
   right: 0;
   bottom: 0;
-  left: var(--sidebar-width); /* sidebar always visible */
   z-index: 1000;
   background: rgba(0, 0, 0, 0.55);
   display: flex;
@@ -1803,23 +1803,17 @@ th.sortable.sorted { color: var(--accent-blue); }
   display: none;
 }
 
-/* Dialog box — resizable by dragging the bottom-right corner */
+/* Dialog box — fills the available content area */
 .preview-panel {
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
-  width: 90%;
-  max-width: 1100px;
-  height: 80vh;           /* explicit height so resize works */
-  max-height: 92vh;
-  min-width: 480px;
-  min-height: 240px;
+  width: 100%;        /* stretch full width of the content area */
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  resize: both;           /* drag bottom-right corner to resize */
-  position: relative;
 }
 
 .preview-header {
