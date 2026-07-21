@@ -1784,37 +1784,29 @@ th.sortable.sorted { color: var(--accent-blue); }
 }
 
 /* --- File Preview (modal overlay) ----------------------------------------- */
-/* Backdrop — full screen backdrop, sidebar (z:600) renders on top */
+/* Backdrop — full screen, sidebar (z:600) renders on top */
 #preview-panel {
   position: fixed;
   inset: 0;
   z-index: 500;
   background: rgba(0, 0, 0, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
   backdrop-filter: blur(2px);
 }
 #preview-panel.hidden {
   display: none;
 }
 
-/* Dialog box — centered in the content area (viewport minus sidebar) */
+/* Dialog box — pinned to content area (right of sidebar), 24px margins all sides */
 .preview-panel {
+  position: absolute;
+  top: 24px;
+  bottom: 24px;
+  left: calc(var(--sidebar-width) + 24px); /* start after sidebar */
+  right: 24px;
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
-  /* Width = content area (100vw - sidebar) minus both margins */
-  width: calc(100vw - var(--sidebar-width) - 48px);
-  /* Shift right by half of sidebar so flexbox centers us in the content area:
-     center of viewport = 50vw
-     center of content  = sidebar-width + (100vw - sidebar-width)/2
-                        = (100vw + sidebar-width) / 2
-     offset needed      = sidebar-width / 2                           */
-  margin-left: calc(var(--sidebar-width) / 2);
-  max-height: 90vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
