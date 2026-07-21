@@ -1804,12 +1804,29 @@ th.sortable.sorted { color: var(--accent-blue); }
 
 .preview-body {
   padding: 16px;
-  max-height: 400px;
+  max-height: 480px;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;   /* allow horizontal scroll inside the panel, not at page level */
   font-family: var(--font-mono);
   font-size: 12px;
 }
+
+/* Preview table: horizontal scroll confined to the preview box */
+.table-preview-wrapper {
+  overflow-x: auto;
+  width: 100%;
+}
+.table-preview {
+  min-width: max-content; /* never shrink columns, always scroll instead */
+  white-space: nowrap;
+}
+.table-preview td.wrap {
+  white-space: normal;
+  min-width: 240px;
+  max-width: 420px;
+  word-break: break-word;
+}
+
 
 /* --- Skeleton / Shimmer Loading --------------------------- */
 .skeleton {
