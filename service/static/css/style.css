@@ -1783,12 +1783,35 @@ th.sortable.sorted { color: var(--accent-blue); }
   min-width: 0;
 }
 
-/* --- File Preview ----------------------------------------- */
+/* --- File Preview (modal overlay) ----------------------------------------- */
+/* Backdrop */
+#preview-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(2px);
+}
+#preview-panel.hidden {
+  display: none;
+}
+
+/* Dialog box */
 .preview-panel {
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
+  width: 100%;
+  max-width: 1100px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 .preview-header {
@@ -1800,15 +1823,17 @@ th.sortable.sorted { color: var(--accent-blue); }
   justify-content: space-between;
   font-size: 13px;
   font-weight: 600;
+  flex-shrink: 0; /* never squish the header */
 }
 
 .preview-body {
   padding: 16px;
-  max-height: 480px;
-  overflow-y: auto;
-  overflow-x: auto;   /* allow horizontal scroll inside the panel, not at page level */
+  overflow-y: auto;  /* vertical scroll within the modal */
+  overflow-x: auto;  /* horizontal scrollbar at the VISIBLE bottom of the modal */
   font-family: var(--font-mono);
   font-size: 12px;
+  flex: 1;           /* fills remaining height so scrollbars are always in view */
+  min-height: 0;     /* flex child must opt-in to shrink below content height */
 }
 
 /* Preview table: horizontal scroll confined to the preview box */

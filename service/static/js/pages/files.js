@@ -229,8 +229,8 @@ window.FilesPage = (() => {
         <div>Thả file .xlsx vào đây</div>
       </div>
 
-      <!-- Preview Panel -->
-      <div id="preview-panel" class="hidden mt-6">
+      <!-- Preview Panel (modal overlay) -->
+      <div id="preview-panel" class="hidden" onclick="FilesPage._onBackdropClick(event)">
         <div class="preview-panel">
           <div class="preview-header">
             <span id="preview-filename">📄 Preview</span>
@@ -774,6 +774,7 @@ window.FilesPage = (() => {
     if (!panel || !body) return;
 
     panel.classList.remove('hidden');
+    document.addEventListener('keydown', _escHandler);
     nameEl.textContent = `📄 ${filename}`;
     body.innerHTML = '<div class="text-center" style="padding:20px;"><span class="spinner"></span> Đang tải...</div>';
 
@@ -851,7 +852,18 @@ window.FilesPage = (() => {
 
   function closePreview() {
     document.getElementById('preview-panel')?.classList.add('hidden');
+    document.removeEventListener('keydown', _escHandler);
     _previewFile = null;
+  }
+
+  /** Close modal when clicking the dark backdrop (not the inner dialog). */
+  function _onBackdropClick(e) {
+    if (e.target === document.getElementById('preview-panel')) closePreview();
+  }
+
+  /** ESC key handler — attached while a preview is open. */
+  function _escHandler(e) {
+    if (e.key === 'Escape') closePreview();
   }
 
   function previewTemplate() {
@@ -1384,6 +1396,8 @@ window.FilesPage = (() => {
     applyPendingData,
     toggleFileSelection, toggleSelectAll, selectAllFiles, clearSelection, bulkDelete, bulkDeleteSharePoint,
     toggleRowDetail, editKeywordAsset,
-    onSearch, onFilterStatus, onSort
+    onSearch, onFilterStatus, onSort,
+    _onBackdropClick,
+
   };
 })();
