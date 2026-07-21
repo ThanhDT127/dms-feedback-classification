@@ -1784,7 +1784,7 @@ th.sortable.sorted { color: var(--accent-blue); }
 }
 
 /* --- File Preview (modal overlay) ----------------------------------------- */
-/* Backdrop — full screen, sidebar (z:600) renders on top */
+/* Backdrop: full-screen dark overlay, nav sidebar (z:600) renders on top */
 #preview-panel {
   position: fixed;
   inset: 0;
@@ -1796,13 +1796,13 @@ th.sortable.sorted { color: var(--accent-blue); }
   display: none;
 }
 
-/* Dialog box — pinned to content area (right of sidebar), 24px margins all sides */
+/* Dialog: absolutely positioned in the content area (right of sidebar) */
 .preview-panel {
   position: absolute;
-  top: 24px;
+  top:    24px;
   bottom: 24px;
-  left: calc(var(--sidebar-width) + 24px); /* start after sidebar */
-  right: 24px;
+  left:   calc(var(--sidebar-width) + 24px); /* start after sidebar + margin */
+  right:  24px;                              /* margin from right edge */
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
