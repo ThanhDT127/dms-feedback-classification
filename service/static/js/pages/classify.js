@@ -1387,20 +1387,53 @@ window.ClassifyPage = (() => {
 
   function handleBatchFiles(fileList) {
     if (!fileList || fileList.length === 0) return;
-    _batchFiles = Array.from(fileList);
-    _batchState = _batchFiles.map(f => ({
-      name: f.name,
-      size: f.size,
-      status: 'pending', // 'pending', 'running', 'completed', 'failed'
-      percent: 0,
-      jobId: null,
-      error: null,
-      spWebUrl: null
-    }));
-    _batchDone = 0;
+    const newFiles = Array.from(fileList);
+    const startIdx = _batchFiles.length;
+
+    // Append mode: add new files to end of existing queue instead of overwriting
+    newFiles.forEach(f => {
+      _batchFiles.push(f);
+      _batchState.push({
+        name: f.name,
+        size: f.size,
+        status: 'pending', // 'pending', 'running', 'completed', 'failed'
+        percent: 0,
+        jobId: null,
+        error: null,
+        spWebUrl: null
+      });
+    });
 
     document.getElementById('batch-queue')?.classList.remove('hidden');
-    renderBatchTable();
+
+    if (_isBatchRunning) {
+      // Batch is running: append new rows directly to DOM without full re-render
+      // (avoids resetting progress bars / status badges of in-progress rows)
+      const tbody = document.getElementById('batch-tbody');
+      if (tbody) {
+        newFiles.forEach((_, j) => {
+          const i = startIdx + j;
+          const tr = document.createElement('tr');
+          tr.id = `batch-row-${i}`;
+          tr.innerHTML = `
+            <td class="text-muted">${i + 1}</td>
+            <td style="font-weight:500;">${esc(_batchState[i].name)}</td>
+            <td class="text-muted text-mono" style="font-size:12px;">${formatSize(_batchState[i].size)}</td>
+            <td><span class="badge badge-muted" id="batch-status-${i}">⏳ Chờ</span></td>
+            <td>
+              <div class="progress-wrap" style="height:6px;">
+                <div class="progress-bar" id="batch-bar-${i}" style="width:0%"></div>
+              </div>
+            </td>
+            <td></td>
+          `;
+          tbody.appendChild(tr);
+        });
+        updateBatchOverall();
+      }
+    } else {
+      renderBatchTable();
+    }
   }
 
   function renderBatchTable() {
@@ -1507,6 +1540,67 @@ window.ClassifyPage = (() => {
     }
   }
 
+  // Process a single file in the batch at a given index.
+  // Isolated: errors only affect this index, not the whole queue.
+  async function _processBatchFile(index) {
+    _batchState[index].status = 'running';
+    _batchState[index].percent = 0;
+    updateBatchRowUI(index);
+
+    const fd = new FormData();
+    fd.append('file', _batchFiles[index]);
+    fd.append('batch_size', 10);
+    fd.append('mode', 'batch');
+
+    try {
+      const job = await API.classifyFile(fd);
+      const jobId = job.job_id || job.id;
+      _batchState[index].jobId = jobId;
+
+      let completed = false;
+      while (!completed) {
+        await sleep(2000);
+        const statusJob = await API.get(`/classify/jobs/${jobId}`);
+        const status = statusJob.status;
+
+        if (status === 'completed') {
+          completed = true;
+          _batchState[index].status = 'completed';
+          _batchState[index].percent = 100;
+          _batchState[index].spWebUrl = statusJob.sp_web_url || null;
+        } else if (status === 'error') {
+          completed = true;
+          _batchState[index].status = 'failed';
+          _batchState[index].error = statusJob.error || 'Lỗi không xác định';
+        } else if (status === 'cancelled') {
+          completed = true;
+          _batchState[index].status = 'cancelled';
+          _batchState[index].error = 'Tác vụ bị hủy';
+        } else {
+          const done = statusJob.rows_done || 0;
+          const total = statusJob.total_rows || 0;
+          const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+          _batchState[index].status = statusJob.status || 'running';
+          _batchState[index].percent = pct;
+          _batchState[index].rowsDone = done;
+          _batchState[index].totalRows = total;
+          _batchState[index].step = statusJob.step || null;
+          _batchState[index].stepStatus = statusJob.step_status || null;
+        }
+
+        updateBatchRowUI(index);
+      }
+    } catch (e) {
+      // Task 2.2: isolate per-file errors — only this row fails, queue continues
+      _batchState[index].status = 'failed';
+      _batchState[index].error = e.message || 'Lỗi kết nối';
+      updateBatchRowUI(index);
+    }
+
+    _batchDone++;
+    updateBatchOverall();
+  }
+
   async function startBatch() {
     if (_isBatchRunning) return;
     _isBatchRunning = true;
@@ -1514,83 +1608,33 @@ window.ClassifyPage = (() => {
     const btn = document.getElementById('btn-batch-start');
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Đang xử lý...'; }
 
-    renderBatchTable(); // disable remove buttons
+    renderBatchTable(); // lock remove buttons during processing
 
     try {
       _batchDone = _batchState.filter(s => s.status === 'completed').length;
       updateBatchOverall();
 
-      const promises = [];
-      for (let i = 0; i < _batchFiles.length; i++) {
-        if (_batchState[i].status === 'completed') {
-          continue;
-        }
+      // Task 2.1: While-loop drains all pending items, including files appended mid-run.
+      // Each iteration finds all current 'pending' indices and runs them concurrently.
+      // Loop exits only when no pending items remain in the queue.
+      while (true) {
+        const pendingIndices = _batchState
+          .map((s, i) => s.status === 'pending' ? i : -1)
+          .filter(i => i !== -1);
 
-        promises.push((async (index) => {
-          _batchState[index].status = 'running';
-          _batchState[index].percent = 0;
-          updateBatchRowUI(index);
+        if (pendingIndices.length === 0) break;
 
-          const fd = new FormData();
-          fd.append('file', _batchFiles[index]);
-          fd.append('batch_size', 10);
-          fd.append('mode', 'batch');
+        // Launch all currently-pending files concurrently
+        await Promise.all(pendingIndices.map(index => _processBatchFile(index)));
 
-          try {
-            const job = await API.classifyFile(fd);
-            const jobId = job.job_id || job.id;
-            _batchState[index].jobId = jobId;
-            
-            let completed = false;
-            while (!completed) {
-              await sleep(2000);
-              const statusJob = await API.get(`/classify/jobs/${jobId}`);
-              const status = statusJob.status;
-              
-              if (status === 'completed') {
-                completed = true;
-                _batchState[index].status = 'completed';
-                _batchState[index].percent = 100;
-                _batchState[index].spWebUrl = statusJob.sp_web_url || null;
-              } else if (status === 'error') {
-                completed = true;
-                _batchState[index].status = 'failed';
-                _batchState[index].error = statusJob.error || 'Lỗi không xác định';
-              } else if (status === 'cancelled') {
-                completed = true;
-                _batchState[index].status = 'cancelled';
-                _batchState[index].error = 'Tác vụ bị hủy';
-              } else {
-                 const done = statusJob.rows_done || 0;
-                 const total = statusJob.total_rows || 0;
-                 const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-                 _batchState[index].status = statusJob.status || 'running';
-                 _batchState[index].percent = pct;
-                 _batchState[index].rowsDone = done;
-                 _batchState[index].totalRows = total;
-                 _batchState[index].step = statusJob.step || null;
-                 _batchState[index].stepStatus = statusJob.step_status || null;
-              }
-              
-              updateBatchRowUI(index);
-            }
-          } catch (e) {
-            _batchState[index].status = 'failed';
-            _batchState[index].error = e.message || 'Lỗi kết nối';
-            updateBatchRowUI(index);
-          }
-
-          _batchDone++;
-          updateBatchOverall();
-        })(i));
+        // Brief yield so any appended files can register in _batchState
+        await sleep(300);
       }
-
-      await Promise.all(promises);
     } finally {
       _isBatchRunning = false;
       const activeBtn = document.getElementById('btn-batch-start');
       if (activeBtn) { activeBtn.disabled = false; activeBtn.innerHTML = '🚀 Bắt đầu tất cả'; }
-      renderBatchTable(); // enable remove buttons back if needed
+      renderBatchTable(); // restore remove buttons
       Toast.success(`Đã xử lý ${_batchDone}/${_batchFiles.length} file`);
     }
   }
