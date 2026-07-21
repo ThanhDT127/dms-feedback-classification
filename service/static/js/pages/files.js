@@ -762,7 +762,9 @@ window.FilesPage = (() => {
       // Default: modified → desc (newest first), others → asc
       _sortDir = col === 'modified' ? 'desc' : 'asc';
     }
-    _applyFilters(true);
+    // Full re-render (not DOM-diff) so rows are reordered instantly in one pass.
+    // Sort is a deliberate user action — losing scroll pos is acceptable.
+    _applyFilters(false);
   }
 
   async function preview(filename) {
