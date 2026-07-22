@@ -187,7 +187,7 @@ window.API = (() => {
   function getMetrics()          { return get('/metrics'); }
   function getMetricsDaily()     { return get('/metrics/daily'); }
   function getFiles(folder)      { return get(`/files/${folder}`); }
-  function getFilePreview(f, n, maxRows = 100)  { return get(`/files/${f}/${encodeURIComponent(n)}/preview?max_rows=${maxRows}`); }
+  function getFilePreview(f, n)  { return get(`/files/${f}/${encodeURIComponent(n)}/preview`); }
   function getFileTree()         { return get('/files/tree'); }
   function getFilesSeen()        { return get('/files/seen'); }
   function uploadFile(formData)  { return upload('/files/upload', formData); }

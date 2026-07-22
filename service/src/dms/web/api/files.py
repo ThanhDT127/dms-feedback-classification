@@ -654,7 +654,7 @@ def _safe_dataframe_records(df: pd.DataFrame) -> list[dict]:
 
 @router.get("/{folder}/{filename}/preview")
 async def preview_file(
-    folder: str, filename: str, max_rows: int = 100, user: dict = Depends(get_current_user)
+    folder: str, filename: str, max_rows: int | None = None, user: dict = Depends(get_current_user)
 ):
     """Đọc preview file — hỗ trợ Excel, CSV, JSON, text (SharePoint Cloud hoặc Local Fallback)."""
     folder_lower = folder.lower()
@@ -719,12 +719,12 @@ async def preview_file(
         # ── Excel ──
         if ext in EXCEL_EXTS:
             try:
-                df = pd.read_excel(file_path, nrows=max_rows)
+                df = pd.read_excel(file_path, nrows=max_rows) if max_rows else pd.read_excel(file_path)
                 return {
                     "type": "table",
                     "filename": filename,
                     "total_columns": len(df.columns),
-                    "preview_rows": max_rows,
+                    "total_rows": len(df),
                     "columns": list(df.columns),
                     "data": _safe_dataframe_records(df),
                 }
@@ -737,9 +737,9 @@ async def preview_file(
         # ── CSV ──
         if ext in CSV_EXTS:
             try:
-                df = pd.read_csv(file_path, nrows=max_rows, encoding="utf-8")
+                df = pd.read_csv(file_path, nrows=max_rows, encoding="utf-8") if max_rows else pd.read_csv(file_path, encoding="utf-8")
             except UnicodeDecodeError:
-                df = pd.read_csv(file_path, nrows=max_rows, encoding="cp1252")
+                df = pd.read_csv(file_path, nrows=max_rows, encoding="cp1252") if max_rows else pd.read_csv(file_path, encoding="cp1252")
             except Exception as exc:
                 raise HTTPException(
                     status_code=422,
@@ -749,7 +749,7 @@ async def preview_file(
                 "type": "table",
                 "filename": filename,
                 "total_columns": len(df.columns),
-                "preview_rows": max_rows,
+                "total_rows": len(df),
                 "columns": list(df.columns),
                 "data": _safe_dataframe_records(df),
             }

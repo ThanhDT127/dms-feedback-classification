@@ -1826,19 +1826,22 @@ th.sortable.sorted { color: var(--accent-blue); }
 
 .preview-body {
   padding: 16px;
-  overflow-y: auto;  /* vertical scroll within the modal */
-  overflow-x: auto;  /* horizontal scrollbar at the VISIBLE bottom of the modal */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   font-family: var(--font-mono);
   font-size: 12px;
-  flex: 1;           /* fills remaining height so scrollbars are always in view */
-  min-height: 0;     /* flex child must opt-in to shrink below content height */
+  flex: 1;
+  min-height: 0;
 }
 
-/* Preview table: horizontal scroll confined to the preview box */
+/* Preview table: horizontal and vertical scroll confined to visible table area */
 .table-preview-wrapper {
   width: 100%;
-  /* NO overflow-x here — let the wide table bubble up to .preview-body
-     so the scrollbar sits at the visible bottom of the 480px viewport */
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: auto;
 }
 .table-preview {
   min-width: max-content; /* never shrink columns, always scroll instead */

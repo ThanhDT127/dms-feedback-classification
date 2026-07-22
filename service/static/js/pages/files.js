@@ -822,8 +822,6 @@ window.FilesPage = (() => {
     } catch (e) {
       body.innerHTML = `<div class="text-center text-red" style="padding:20px;">Không thể xem trước: ${escHtml(e.message)}</div>`;
     }
-
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function renderPreviewTable(rows, headers) {
