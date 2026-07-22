@@ -1804,12 +1804,12 @@ th.sortable.sorted { color: var(--accent-blue); }
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  overflow: hidden;
   width: 100%;
-  height: calc(100vh - 64px);
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
-  overflow: clip; /* clips corners for border-radius without blocking child scrollbars */
 }
 
 .preview-header {
@@ -1826,10 +1826,12 @@ th.sortable.sorted { color: var(--accent-blue); }
 
 .preview-body {
   padding: 16px;
-  overflow-y: auto;
-  overflow-x: auto;
-  flex: 1 1 0;     /* grow AND shrink, basis 0 → gets a real height from flex parent */
-  min-height: 0;   /* allow flex child to shrink below content size */
+  overflow-y: auto;  /* vertical scroll within the modal */
+  overflow-x: auto;  /* horizontal scrollbar at the VISIBLE bottom of the modal */
+  font-family: var(--font-mono);
+  font-size: 12px;
+  flex: 1;           /* fills remaining height so scrollbars are always in view */
+  min-height: 0;     /* flex child must opt-in to shrink below content height */
 }
 
 /* Preview table: horizontal scroll confined to the preview box */

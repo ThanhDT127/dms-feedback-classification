@@ -833,7 +833,7 @@ window.FilesPage = (() => {
     let html = '<div class="table-preview-wrapper"><table class="table table-preview">';
     html += '<thead><tr>' + hdr.map(h => `<th>${escHtml(String(h))}</th>`).join('') + '</tr></thead>';
     html += '<tbody>';
-    rows.slice(0, 20).forEach(row => {
+    rows.forEach(row => {
       html += '<tr>';
       hdr.forEach(h => {
         const val = Array.isArray(row) ? row[hdr.indexOf(h)] : (row[h] ?? '');
@@ -844,9 +844,7 @@ window.FilesPage = (() => {
       html += '</tr>';
     });
     html += '</tbody></table></div>';
-    if (rows.length > 20) {
-      html += `<p class="text-muted text-center mt-4" style="font-size:12px;">Hiển thị 20/${rows.length} dòng</p>`;
-    }
+    html += `<p class="text-muted text-center mt-3" style="font-size:12px;">Đã tải xem trước ${rows.length} dòng</p>`;
     return html;
   }
 

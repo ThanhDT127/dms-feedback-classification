@@ -654,7 +654,7 @@ def _safe_dataframe_records(df: pd.DataFrame) -> list[dict]:
 
 @router.get("/{folder}/{filename}/preview")
 async def preview_file(
-    folder: str, filename: str, max_rows: int = 20, user: dict = Depends(get_current_user)
+    folder: str, filename: str, max_rows: int = 100, user: dict = Depends(get_current_user)
 ):
     """Đọc preview file — hỗ trợ Excel, CSV, JSON, text (SharePoint Cloud hoặc Local Fallback)."""
     folder_lower = folder.lower()
