@@ -179,6 +179,7 @@ class PipelineRunner:
         ckpt_path: str | Path,
         progress_callback: Callable[..., Any] | None = None,
         cancellation_check: Callable[[], bool] | None = None,
+        job_id: str | None = None,
     ) -> dict:
         try:
             return self._run_pipeline(
@@ -187,6 +188,7 @@ class PipelineRunner:
                 ckpt_path,
                 progress_callback,
                 cancellation_check,
+                job_id=job_id,
             )
         except PipelineCancelled:
             raise
@@ -200,7 +202,9 @@ class PipelineRunner:
         ckpt_path: str | Path,
         progress_callback: Callable[..., Any] | None = None,
         cancellation_check: Callable[[], bool] | None = None,
+        job_id: str | None = None,
     ) -> dict:
+        self._current_job_id = job_id
         input_path = Path(input_path)
         output_path = Path(output_path)
         ckpt_path = Path(ckpt_path)
@@ -296,6 +300,7 @@ class PipelineRunner:
                         completion_tokens=rag_usage.get("completion_tokens", 0),
                         total_tokens=rag_usage.get("total_tokens", 0),
                         estimated_cost_usd=rag_cost,
+                        job_id=self._current_job_id,
                     )
 
             if progress_callback is not None:
@@ -343,6 +348,7 @@ class PipelineRunner:
                         completion_tokens=usage.get("completion_tokens", 0),
                         total_tokens=usage.get("total_tokens", 0),
                         estimated_cost_usd=cost,
+                        job_id=self._current_job_id,
                     )
             except PipelineCancelled:
                 raise
@@ -480,6 +486,7 @@ class PipelineRunner:
                     progress_callback(done, n_total, new_results_batch)
 
         duration = time.time() - t_start
+        self._current_job_id = None  # Clear job_id after pipeline completes
         logger.info("Pipeline complete: %d rows in %.1fs -> %s", n_total, duration, output_path)
         return {
             "total_rows": n_total,

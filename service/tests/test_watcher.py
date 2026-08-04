@@ -44,7 +44,7 @@ class FakePipeline:
         self.label = label
         self.calls = []
 
-    def run_pipeline(self, input_path, output_path, ckpt_path):
+    def run_pipeline(self, input_path, output_path, ckpt_path, job_id=None, **kwargs):
         self.calls.append(self.label)
         if self.should_fail:
             raise RuntimeError("boom")

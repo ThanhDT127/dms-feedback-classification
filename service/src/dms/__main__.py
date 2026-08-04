@@ -18,6 +18,7 @@ from .pipeline.rag_product import RAGProductMatcher
 from .pipeline.runner import PipelineRunner
 from .settings import Settings, get_settings
 from .sharepoint import SharePointClient
+from .usage_tracker import UsageTracker
 from .watcher import Watcher
 
 
@@ -60,6 +61,7 @@ def main() -> None:
     sharepoint = SharePointClient(auth=auth, settings=settings, session=session)
     notifications = NotificationService(auth=auth, settings=settings, session=session)
     metrics = MetricsCollector(settings.metrics_path)
+    usage_tracker = UsageTracker(db_path=settings.classification_jobs_db_path)
     config_asset_sync = ConfigAssetSyncService(
         settings=settings,
         sharepoint_client=sharepoint,
@@ -81,6 +83,7 @@ def main() -> None:
             rag=rag,
             metrics=metrics,
             settings=runtime_settings,
+            usage_tracker=usage_tracker,
         )
 
     runner = build_runner()
@@ -109,6 +112,8 @@ def main() -> None:
     signal.signal(signal.SIGINT, _handle_shutdown)
 
     watcher.run_forever()
+    usage_tracker.close()
+    logger.info("UsageTracker connection closed")
 
 
 if __name__ == "__main__":

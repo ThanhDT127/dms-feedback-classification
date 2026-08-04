@@ -25,6 +25,7 @@ class FakeRunner:
         ckpt_path,
         progress_callback=None,
         cancellation_check=None,
+        job_id=None,
     ):
         if cancellation_check and cancellation_check():
             raise RuntimeError("cancelled")

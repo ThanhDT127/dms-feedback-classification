@@ -72,6 +72,7 @@ class SuccessfulRunner:
         ckpt_path,
         progress_callback=None,
         cancellation_check=None,
+        job_id=None,
     ):
         if progress_callback:
             progress_callback(
@@ -94,7 +95,7 @@ class FlakyRunner:
         self.calls = 0
 
     def run_pipeline(
-        self, input_path, output_path, ckpt_path, progress_callback=None, cancellation_check=None
+        self, input_path, output_path, ckpt_path, progress_callback=None, cancellation_check=None, job_id=None
     ):
         self.calls += 1
         Path(ckpt_path).parent.mkdir(parents=True, exist_ok=True)
@@ -112,7 +113,7 @@ class FlakyRunner:
 
 class CancellingRunner:
     def run_pipeline(
-        self, input_path, output_path, ckpt_path, progress_callback=None, cancellation_check=None
+        self, input_path, output_path, ckpt_path, progress_callback=None, cancellation_check=None, job_id=None
     ):
         if progress_callback:
             progress_callback(done=0, total=1, step=1, step_status="running")

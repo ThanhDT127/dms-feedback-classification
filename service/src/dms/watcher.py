@@ -265,7 +265,7 @@ class Watcher:
             self.sharepoint_client.download_file(file_id, local_input)
 
             logger.info("Processing: %s", file_name)
-            result = self.pipeline_runner.run_pipeline(local_input, local_output, local_ckpt)
+            result = self.pipeline_runner.run_pipeline(local_input, local_output, local_ckpt, job_id=file_name)
 
             logger.info("Uploading results for: %s", file_name)
             self.sharepoint_client.upload_output(local_output)

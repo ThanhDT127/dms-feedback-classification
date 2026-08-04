@@ -171,6 +171,7 @@ class ClassificationWorkerManager:
                 ckpt_path=ckpt_path,
                 progress_callback=progress_callback,
                 cancellation_check=cancellation_check,
+                job_id=job_id,
             )
 
             if cancellation_check():
