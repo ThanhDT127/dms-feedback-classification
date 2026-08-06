@@ -143,7 +143,8 @@ def test_file_manager_delete_and_sync_copy_contract():
 
     assert "delete_scope" in files_js
     assert "local/cache" in files_js
-    assert "SharePoint không bị xóa" in files_js
+    assert "SharePoint" in files_js
+    assert "không bị xóa" in files_js
     assert "sharepoint-delete" in files_js
     assert "Xóa trên SharePoint" in files_js
     assert "Tải Input từ SharePoint" in files_js

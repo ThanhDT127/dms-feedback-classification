@@ -719,7 +719,11 @@ async def preview_file(
         # ── Excel ──
         if ext in EXCEL_EXTS:
             try:
-                df = pd.read_excel(file_path, nrows=max_rows) if max_rows else pd.read_excel(file_path)
+                df = (
+                    pd.read_excel(file_path, nrows=max_rows)
+                    if max_rows
+                    else pd.read_excel(file_path)
+                )
                 return {
                     "type": "table",
                     "filename": filename,
@@ -737,9 +741,17 @@ async def preview_file(
         # ── CSV ──
         if ext in CSV_EXTS:
             try:
-                df = pd.read_csv(file_path, nrows=max_rows, encoding="utf-8") if max_rows else pd.read_csv(file_path, encoding="utf-8")
+                df = (
+                    pd.read_csv(file_path, nrows=max_rows, encoding="utf-8")
+                    if max_rows
+                    else pd.read_csv(file_path, encoding="utf-8")
+                )
             except UnicodeDecodeError:
-                df = pd.read_csv(file_path, nrows=max_rows, encoding="cp1252") if max_rows else pd.read_csv(file_path, encoding="cp1252")
+                df = (
+                    pd.read_csv(file_path, nrows=max_rows, encoding="cp1252")
+                    if max_rows
+                    else pd.read_csv(file_path, encoding="cp1252")
+                )
             except Exception as exc:
                 raise HTTPException(
                     status_code=422,

@@ -107,7 +107,9 @@ prompt_v2_comparison.md
 # ===========================
 # SCRATCH STATE & TEMP
 # ===========================
-scratch/*.json
+scratch/
+outputs/
+opendesign/
 
 # ===========================
 # IGNORED DOCUMENTATION
