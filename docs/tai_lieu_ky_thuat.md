@@ -109,7 +109,7 @@ graph TD
     %% Styling
     classDef enterprise fill:#e0f2fe,stroke:#0284c7,stroke-width:2px;
     classDef cloud fill:#fef9c3,stroke:#ca8a04,stroke-width:2px;
-    class Enterprise_LAN rangdong;
+    class Enterprise_LAN enterprise;
     class Internet_Cloud cloud;
 ```
 
