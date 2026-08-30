@@ -7,11 +7,13 @@ from .models import (
     FeedbackInputRecord,
     ParsedFeedbackWorkbook,
 )
+from .repository import FeedbackAnalyticsRepository
 
 __all__ = [
     "AnalyticsFilter",
     "BatchClassificationResult",
     "FeedbackInputRecord",
+    "FeedbackAnalyticsRepository",
     "ParsedFeedbackWorkbook",
     "read_feedback_workbook",
     "sha256_file",
