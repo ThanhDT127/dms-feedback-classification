@@ -342,8 +342,9 @@ class FeedbackAnalyticsRepository:
                     SELECT v.feedback_record_version_id, v.feedback_id
                     FROM feedback_record_versions v
                     WHERE v.job_id = ? AND v.source_row_number = ?
+                        AND v.classification_state = ?
                     """,
-                    (job_id, result.source_row_number),
+                    (job_id, result.source_row_number, _PENDING),
                 ).fetchall()
                 for version in version_rows:
                     feedback_id = int(version["feedback_id"])

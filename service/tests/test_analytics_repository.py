@@ -96,6 +96,38 @@ def test_batch_replaces_current_labels_but_keeps_each_version_label_snapshot(tmp
     assert json.loads(repo.fetch_versions(job_id="job-1")[0]["labels_json"])[0]["label"] == "Báo lỗi"
 
 
+def test_duplicate_result_callback_preserves_completed_version_and_current_projection(tmp_path: Path):
+    db_path = tmp_path / "classification_jobs.db"
+    jobs = ClassificationJobStore(db_path)
+    create_job(jobs, "job-1")
+    repo = FeedbackAnalyticsRepository(db_path)
+    repo.persist_input_snapshot(
+        job_id="job-1",
+        source_file_key="sha256:a",
+        source_file_name="a.xlsx",
+        records=[make_record()],
+        deactivate_absent=False,
+    )
+    repo.apply_batch_results(
+        job_id="job-1",
+        results=[make_result(labels=["Báo lỗi"], product="Original")],
+        minor_to_major={"Báo lỗi": "Sản phẩm"},
+    )
+
+    repo.apply_batch_results(
+        job_id="job-1",
+        results=[make_result(labels=["Website"], product="Replacement")],
+        minor_to_major={"Website": "Website"},
+    )
+
+    version = repo.fetch_versions(job_id="job-1", row=2)[0]
+    current = repo.fetch_current_records(row=2)[0]
+    assert version["product"] == "Original"
+    assert json.loads(version["labels_json"])[0]["label"] == "Báo lỗi"
+    assert current["product"] == "Original"
+    assert repo.fetch_current_labels(row=2) == ["Báo lỗi"]
+
+
 def test_stale_result_callback_does_not_overwrite_newer_current_record(tmp_path: Path):
     db_path = tmp_path / "classification_jobs.db"
     jobs = ClassificationJobStore(db_path)
