@@ -57,8 +57,8 @@ nhật record hiện hữu thay vì tăng số phản hồi. Job history vẫn n
 Nếu cùng SharePoint file bị chỉnh sửa, record cùng dòng được cập nhật theo input
 mới nhất. Sau khi đọc file thành công, các row cũ của file không còn xuất hiện
 trong input được đặt `is_active = false`, không bị xóa. API analytics mặc định
-chỉ tính row active. Đây là dashboard trạng thái hiện tại; lịch sử job vẫn cho
-biết lần chạy trước. Lịch sử phiên bản từng row không nằm trong MVP.
+chỉ tính row active. Đây là dashboard trạng thái hiện tại; lịch sử job và
+snapshot version vẫn giữ lần chạy trước, nhưng MVP chưa có API/UI để xem lịch sử.
 
 Với upload thủ công, hash nội dung tạo một `source_file_key` mới khi file thay
 đổi; mỗi lần upload như vậy là một tập dữ liệu đã nhận độc lập và vẫn active.
@@ -74,6 +74,39 @@ tương lai không viết lại báo cáo lịch sử.
 `classification_job_results` hiện có được giữ nguyên cho WebSocket/progress;
 analytics không đọc trực tiếp JSON payload đó.
 
+### `feedback_record_versions`
+
+Mỗi lần một row được nhận trong một job tạo một snapshot input bất biến. Bảng gồm
+`version_id`, `feedback_id`, `job_id`, `source_file_key`, `source_row_number`,
+`raw_data_json`, các metadata chuẩn, kết quả pipeline, `labels_json` (mỗi nhãn
+kèm `major_group` tại thời điểm phân loại),
+`classification_state` và `recorded_at`/`classified_at`. Unique key
+`(feedback_id, job_id)` bảo đảm retry callback không tạo thêm phiên bản.
+
+Kết quả và state của version chỉ được hoàn tất bởi callback của đúng `job_id`;
+sau `completed` hoặc `failed` version không bị cập nhật bởi các job sau.
+
+`feedback_records` là projection mới nhất để dashboard truy vấn nhanh;
+`feedback_record_versions` là audit trail. Khi input cùng dòng bị thay đổi hoặc
+một trường biến mất, projection mới nhất được cập nhật (trường không có thành
+`NULL`) nhưng snapshot cũ vẫn giữ nguyên. Dashboard MVP chỉ đọc projection;
+lịch sử version được dành cho audit và API riêng khi cần.
+
+### Phát triển schema và lưu giữ dữ liệu
+
+- `raw_data_json` chấp nhận tự động cột mới hoặc cột bị bỏ khỏi Excel, nên thay
+  đổi cấu trúc input không làm mất dữ liệu lịch sử.
+- Một trường chỉ được thêm thành cột chuẩn khi cần lọc, index hoặc tính KPI.
+  Migration thêm cột nullable; dữ liệu lịch sử không có trường đó vẫn là `NULL`.
+- Đổi tên cột input dùng alias cũ và mới để ghi về một trường chuẩn. Bỏ dùng
+  một trường chuẩn chỉ đánh dấu deprecated và ngừng trả ở dashboard, không
+  `DROP COLUMN` hay xóa dữ liệu.
+- Xóa vật lý dữ liệu hoặc cột chỉ được thực hiện bởi migration/lệnh lưu giữ dữ
+  liệu riêng, có backup và thời hạn lưu giữ được phê duyệt trước. Nó không
+  thuộc dashboard MVP.
+- SQLite khởi tạo schema bằng các migration có version, chạy theo thứ tự và
+  chỉ tiến về trước; không sửa ngược cấu trúc của database đang có dữ liệu.
+
 ## Luồng ghi dữ liệu
 
 1. Job được tạo trước khi pipeline chạy, cho cả upload thủ công và Watcher.
@@ -81,14 +114,18 @@ analytics không đọc trực tiếp JSON payload đó.
    đọc trọn file trước. Nếu hợp lệ, repository tạo/upsert toàn bộ
    `feedback_records` trong một transaction, đặt `classification_state =
    pending`, giữ metadata không có là `NULL`, và với Watcher chỉ inactive các
-   row cũ của chính file không có trong lần đọc này.
+   row cũ của chính file không có trong lần đọc này. Trong transaction đó nó
+   cũng tạo một `feedback_record_versions` pending, bất biến, cho từng row và
+   job.
 3. `PipelineRunner` bổ sung source row number vào mỗi item `new_results` của
    progress callback.
 4. Sau mỗi batch, repository cập nhật record phù hợp với kết quả RAG/LLM,
    thay toàn bộ label cũ của record bằng label batch mới và đặt state
-   `completed`, trong một transaction.
+   `completed`, đồng thời cập nhật snapshot version của chính job với kết quả
+   và `labels_json`, trong một transaction.
 5. Nếu job bị hủy hoặc lỗi, các row chưa hoàn tất được đánh dấu `failed`; row
-   từ các batch đã commit giữ kết quả `completed`.
+   từ các batch đã commit giữ kết quả `completed`. Các version tương ứng mang
+   cùng state để audit có thể phân biệt input chưa phân loại với input thành công.
 6. Retry chạy lại cùng file thực hiện upsert và thay kết quả cũ, không nhân đôi
    dashboard count.
 
@@ -171,7 +208,7 @@ khi không thể tính.
 ## Kiểm thử
 
 - Repository: metadata NULL, JSON raw row, upsert/retry, labels replacement,
-  duplicate normalization và transaction rollback.
+  tạo/finalize version theo job, duplicate normalization và transaction rollback.
 - Pipeline integration: upload thủ công persist trước khi chạy, callback cập
   nhật đúng row, failure/cancel không làm mất raw record.
 - Watcher integration: tạo job trước pipeline, persist row level cho success
@@ -186,4 +223,5 @@ khi không thể tính.
 - UI dashboard, biểu đồ và chỉnh trạng thái nghiệp vụ bằng UI.
 - Backfill file lịch sử. Đây là utility riêng, chỉ chạy khi được yêu cầu và
   không điền metadata thiếu.
-- Lưu phiên bản lịch sử của từng row khi một file nguồn bị chỉnh sửa.
+- API/UI xem lịch sử version và tác vụ xóa vật lý theo chính sách lưu giữ dữ
+  liệu; database vẫn lưu version để các phần đó bổ sung sau.
