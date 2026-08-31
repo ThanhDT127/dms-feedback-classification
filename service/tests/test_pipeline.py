@@ -185,7 +185,7 @@ def test_rag_bm25_and_keyword_fallback(settings, tmp_path: Path):
     assert fallback[0]["Sản phẩm"] == "Den LED"
 
 
-def test_pipeline_runner_processes_file_with_prelim_handoff(settings, tmp_path: Path):
+def test_pipeline_progress_result_contains_physical_source_row(settings, tmp_path: Path):
     settings.data_dir = tmp_path / "data"
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.keyword_dir.mkdir(parents=True, exist_ok=True)
@@ -208,7 +208,18 @@ def test_pipeline_runner_processes_file_with_prelim_handoff(settings, tmp_path: 
         input_path, index=False
     )
 
-    result = runner.run_pipeline(input_path, tmp_path / "out.xlsx", tmp_path / "ckpt.json")
+    callbacks: list[list[dict]] = []
+
+    def capture(done=None, total=None, new_results=None, **kwargs):
+        if new_results:
+            callbacks.append(new_results)
+
+    result = runner.run_pipeline(
+        input_path,
+        tmp_path / "out.xlsx",
+        tmp_path / "ckpt.json",
+        progress_callback=capture,
+    )
     assert result["total_rows"] == 1
     assert (tmp_path / "out.xlsx").exists()
     assert any(
@@ -217,6 +228,7 @@ def test_pipeline_runner_processes_file_with_prelim_handoff(settings, tmp_path: 
     assert metrics.gemini_calls == 2
     assert metrics.total_prompt_tokens == 2
     assert metrics.total_completion_tokens == 2
+    assert callbacks[0][0]["source_row_number"] == 2
 
 
 def test_issue_classifier_prompt_inverted_cot():
