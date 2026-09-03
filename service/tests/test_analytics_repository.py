@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from analytics_support import create_job, make_record, make_result
 
 from dms.analytics.repository import FeedbackAnalyticsRepository
@@ -31,7 +32,27 @@ def test_persist_input_creates_current_row_and_immutable_version(tmp_path: Path)
     assert versions[0]["classification_state"] == "pending"
 
 
-def test_retry_preserves_completed_version_and_soft_deactivates_removed_watcher_rows(tmp_path: Path):
+def test_fetch_versions_supports_optional_job_and_row_filters(tmp_path: Path):
+    db_path = tmp_path / "classification_jobs.db"
+    jobs = ClassificationJobStore(db_path)
+    repo = FeedbackAnalyticsRepository(db_path)
+    for job_id, row in (("job-1", 2), ("job-2", 3)):
+        create_job(jobs, job_id)
+        repo.persist_input_snapshot(
+            job_id=job_id,
+            source_file_key=f"sha256:{job_id}",
+            source_file_name=f"{job_id}.xlsx",
+            records=[make_record(source_row_number=row)],
+            deactivate_absent=False,
+        )
+
+    assert [version["job_id"] for version in repo.fetch_versions()] == ["job-1", "job-2"]
+    assert [version["job_id"] for version in repo.fetch_versions(row=3)] == ["job-2"]
+
+
+def test_retry_preserves_completed_version_and_soft_deactivates_removed_watcher_rows(
+    tmp_path: Path,
+):
     db_path = tmp_path / "classification_jobs.db"
     jobs = ClassificationJobStore(db_path)
     create_job(jobs, "job-1")
@@ -93,10 +114,14 @@ def test_batch_replaces_current_labels_but_keeps_each_version_label_snapshot(tmp
     )
 
     assert repo.fetch_current_labels(row=2) == ["Bảo hành"]
-    assert json.loads(repo.fetch_versions(job_id="job-1")[0]["labels_json"])[0]["label"] == "Báo lỗi"
+    assert (
+        json.loads(repo.fetch_versions(job_id="job-1")[0]["labels_json"])[0]["label"] == "Báo lỗi"
+    )
 
 
-def test_duplicate_result_callback_preserves_completed_version_and_current_projection(tmp_path: Path):
+def test_duplicate_result_callback_preserves_completed_version_and_current_projection(
+    tmp_path: Path,
+):
     db_path = tmp_path / "classification_jobs.db"
     jobs = ClassificationJobStore(db_path)
     create_job(jobs, "job-1")
@@ -126,6 +151,67 @@ def test_duplicate_result_callback_preserves_completed_version_and_current_proje
     assert json.loads(version["labels_json"])[0]["label"] == "Báo lỗi"
     assert current["product"] == "Original"
     assert repo.fetch_current_labels(row=2) == ["Báo lỗi"]
+
+
+def test_batch_rejects_result_without_matching_input_snapshot(tmp_path: Path):
+    db_path = tmp_path / "classification_jobs.db"
+    jobs = ClassificationJobStore(db_path)
+    create_job(jobs, "job-1")
+    repo = FeedbackAnalyticsRepository(db_path)
+    repo.persist_input_snapshot(
+        job_id="job-1",
+        source_file_key="sha256:a",
+        source_file_name="a.xlsx",
+        records=[make_record(source_row_number=2)],
+        deactivate_absent=False,
+    )
+
+    with pytest.raises(ValueError, match="No input snapshot"):
+        repo.apply_batch_results(
+            job_id="job-1",
+            results=[make_result(source_row_number=999)],
+            minor_to_major={},
+        )
+
+    assert repo.fetch_current_records(row=2)[0]["classification_state"] == "pending"
+    assert repo.fetch_versions(job_id="job-1", row=2)[0]["classification_state"] == "pending"
+
+
+def test_invalid_batch_rolls_back_valid_results_and_rejects_ambiguous_snapshots(tmp_path: Path):
+    db_path = tmp_path / "classification_jobs.db"
+    jobs = ClassificationJobStore(db_path)
+    create_job(jobs, "job-1")
+    repo = FeedbackAnalyticsRepository(db_path)
+    repo.persist_input_snapshot(
+        job_id="job-1",
+        source_file_key="sha256:a",
+        source_file_name="a.xlsx",
+        records=[make_record(source_row_number=2), make_record(source_row_number=3)],
+        deactivate_absent=False,
+    )
+
+    with pytest.raises(ValueError, match="No input snapshot"):
+        repo.apply_batch_results(
+            job_id="job-1",
+            results=[make_result(source_row_number=2), make_result(source_row_number=999)],
+            minor_to_major={},
+        )
+
+    assert repo.fetch_versions(job_id="job-1", row=2)[0]["classification_state"] == "pending"
+
+    repo.persist_input_snapshot(
+        job_id="job-1",
+        source_file_key="sha256:b",
+        source_file_name="b.xlsx",
+        records=[make_record(source_row_number=2)],
+        deactivate_absent=False,
+    )
+    with pytest.raises(ValueError, match="Ambiguous input snapshots"):
+        repo.apply_batch_results(
+            job_id="job-1",
+            results=[make_result(source_row_number=2)],
+            minor_to_major={},
+        )
 
 
 def test_stale_result_callback_does_not_overwrite_newer_current_record(tmp_path: Path):

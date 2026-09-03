@@ -6,13 +6,20 @@ import json
 import logging
 import threading
 import traceback
+import uuid
 from pathlib import Path
 
+from .analytics import (
+    BatchClassificationResult,
+    FeedbackAnalyticsRepository,
+    read_feedback_workbook,
+)
 from .classification_jobs import ClassificationJobStore
 from .cleanup import RuntimeCleanup
 from .config_assets import ConfigAssetSyncService
 from .metrics import MetricsCollector
 from .notification import NotificationService
+from .pipeline.issue_classifier import get_label_config_snapshot
 from .pipeline.runner import PipelineRunner
 from .settings import Settings
 from .sharepoint import SharePointClient
@@ -36,6 +43,7 @@ class Watcher:
         runner_factory=None,
         config_asset_sync: ConfigAssetSyncService | None = None,
         job_store: ClassificationJobStore | None = None,
+        analytics_repository: FeedbackAnalyticsRepository | None = None,
     ) -> None:
         self.sharepoint_client = sharepoint_client
         self.pipeline_runner = pipeline_runner
@@ -45,6 +53,7 @@ class Watcher:
         self.runner_factory = runner_factory
         self.config_asset_sync = config_asset_sync
         self.job_store = job_store
+        self.analytics_repository = analytics_repository
         self.cleanup = RuntimeCleanup(settings)
         self._last_sync_health: dict = {}
         self._shutdown_event = threading.Event()
@@ -250,8 +259,6 @@ class Watcher:
             logger.warning("Failed to write daily summary: %s", exc)
 
     def _process_file(self, file_info: dict, seen: dict) -> bool:
-        import uuid
-
         file_id = file_info["id"]
         file_name = file_info["name"]
         base_name = Path(file_name).stem
@@ -259,19 +266,102 @@ class Watcher:
         local_input = self.settings.work_dir / "input" / file_name
         local_output = self.settings.work_dir / "output" / f"{base_name}_output.xlsx"
         local_ckpt = self.settings.work_dir / "checkpoint" / f"{base_name}.json"
+        watcher_job_id: str | None = None
 
         try:
+            if self.job_store is not None:
+                watcher_job_id = str(uuid.uuid4())
+                self.job_store.create_job(
+                    job_id=watcher_job_id,
+                    owner_username="system_watcher",
+                    owner_role="system",
+                    filename=file_name,
+                    mode="watcher",
+                    input_path=local_input,
+                    output_path=local_output,
+                )
+                self.job_store.mark_running(watcher_job_id)
+
             logger.info("Downloading: %s", file_name)
             self.sharepoint_client.download_file(file_id, local_input)
 
+            if self.analytics_repository is not None and watcher_job_id is not None:
+                parsed_input = read_feedback_workbook(local_input)
+                self.analytics_repository.persist_input_snapshot(
+                    job_id=watcher_job_id,
+                    source_file_key=file_id,
+                    source_file_name=file_name,
+                    records=parsed_input.records,
+                    deactivate_absent=True,
+                )
+
+            local_output.unlink(missing_ok=True)
+            local_ckpt.unlink(missing_ok=True)
+
+            def progress_callback(
+                done: int | None = None,
+                total: int | None = None,
+                new_results: list[dict] | None = None,
+                step: int | None = None,
+                step_status: str | None = None,
+            ) -> None:
+                if self.job_store is not None and watcher_job_id is not None:
+                    self.job_store.update_progress(
+                        watcher_job_id,
+                        done=done,
+                        total=total,
+                        step=step,
+                        step_status=step_status,
+                    )
+                if not new_results:
+                    return
+                if self.analytics_repository is not None and watcher_job_id is not None:
+                    batch_results = [
+                        BatchClassificationResult(
+                            source_row_number=int(item["source_row_number"]),
+                            text=str(item.get("text", "")),
+                            product=item.get("product") or None,
+                            product_line=item.get("product_line") or None,
+                            model=item.get("model") or None,
+                            bm25_score=item.get("bm25_score"),
+                            sentiment=item.get("sentiment") or None,
+                            labels=list(item.get("labels", [])),
+                            brand=item.get("brand") or None,
+                        )
+                        for item in new_results
+                    ]
+                    self.analytics_repository.apply_batch_results(
+                        job_id=watcher_job_id,
+                        results=batch_results,
+                        minor_to_major=get_label_config_snapshot()["minor_to_major"],
+                    )
+                if self.job_store is not None and watcher_job_id is not None:
+                    self.job_store.append_results(watcher_job_id, new_results)
+
             logger.info("Processing: %s", file_name)
             result = self.pipeline_runner.run_pipeline(
-                local_input, local_output, local_ckpt, job_id=file_name
+                local_input,
+                local_output,
+                local_ckpt,
+                progress_callback=progress_callback,
+                job_id=watcher_job_id or file_name,
             )
 
             logger.info("Uploading results for: %s", file_name)
             self.sharepoint_client.upload_output(local_output)
             self.sharepoint_client.upload_checkpoint(local_ckpt)
+
+            rows = result.get("total_rows", 0)
+            duration = result.get("duration_seconds", 0)
+            label_dist = result.get("label_distribution", {})
+            if self.job_store is not None and watcher_job_id is not None:
+                self.job_store.complete_job(
+                    watcher_job_id,
+                    total_rows=rows,
+                    rows_done=result.get("processed_rows", rows),
+                    output_path=local_output,
+                    duration_seconds=float(duration),
+                )
 
             # Preserve retry history before overwriting entry
             _old_entry = seen.get(file_id, {})
@@ -292,41 +382,9 @@ class Watcher:
             }
             self._save_seen(seen)
 
-            rows = result.get("total_rows", 0)
-            duration = result.get("duration_seconds", 0)
-            label_dist = result.get("label_distribution", {})
             self.metrics.record_success(
                 file_name, rows, duration, label_dist, was_previously_failed=was_previously_failed
             )
-
-            # --- Record event in SQLite (task 1.3 + 1.5) ---
-            if self.job_store is not None:
-                try:
-                    watcher_job_id = str(uuid.uuid4())
-                    self.job_store.create_job(
-                        job_id=watcher_job_id,
-                        owner_username="system_watcher",
-                        owner_role="system",
-                        filename=file_name,
-                        mode="watcher",
-                        input_path=local_input,
-                        output_path=local_output,
-                    )
-                    self.job_store.complete_job(
-                        watcher_job_id,
-                        total_rows=rows,
-                        rows_done=rows,
-                        output_path=local_output,
-                        duration_seconds=float(duration),
-                    )
-                    # Store label_distribution as a job result payload (task 1.5)
-                    if label_dist:
-                        self.job_store.append_results(
-                            watcher_job_id,
-                            [{"label_distribution": label_dist, "source": "watcher"}],
-                        )
-                except Exception as db_exc:
-                    logger.warning("Failed to record watcher job in SQLite: %s", db_exc)
 
             try:
                 self.sharepoint_client.upload_checkpoint(self.settings.metrics_path)
@@ -358,27 +416,15 @@ class Watcher:
             is_final = entry["failures"] >= MAX_FILE_RETRIES
             self.metrics.record_retry_failure(file_name, error_type, str(exc), is_final=is_final)
 
-            # --- Record failure event in SQLite (task 1.4) ---
-            if self.job_store is not None:
-                try:
-                    watcher_job_id = str(uuid.uuid4())
-                    error_label = (
-                        f"FINAL: {error_msg} (max {MAX_FILE_RETRIES} retries exceeded)"
-                        if is_final
-                        else error_msg
-                    )
-                    self.job_store.create_job(
-                        job_id=watcher_job_id,
-                        owner_username="system_watcher",
-                        owner_role="system",
-                        filename=file_name,
-                        mode="watcher",
-                        input_path=local_input,
-                        output_path=local_output,
-                    )
-                    self.job_store.fail_job(watcher_job_id, error=error_label)
-                except Exception as db_exc:
-                    logger.warning("Failed to record watcher failure in SQLite: %s", db_exc)
+            if self.analytics_repository is not None and watcher_job_id is not None:
+                self.analytics_repository.mark_job_unfinished_failed(watcher_job_id)
+            if self.job_store is not None and watcher_job_id is not None:
+                error_label = (
+                    f"FINAL: {error_msg} (max {MAX_FILE_RETRIES} retries exceeded)"
+                    if is_final
+                    else error_msg
+                )
+                self.job_store.fail_job(watcher_job_id, error=error_label)
 
             try:
                 self.sharepoint_client.upload_checkpoint(self.settings.metrics_path)

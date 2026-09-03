@@ -153,7 +153,12 @@ class FeedbackAnalyticsRepository:
 
     @staticmethod
     def _snapshot_values(
-        *, job_id: str, source_file_key: str, source_file_name: str, record: FeedbackInputRecord, now: str
+        *,
+        job_id: str,
+        source_file_key: str,
+        source_file_name: str,
+        record: FeedbackInputRecord,
+        now: str,
     ) -> tuple[object, ...]:
         return (
             job_id,
@@ -211,7 +216,9 @@ class FeedbackAnalyticsRepository:
                             now,
                         ),
                     )
-                    feedback_id = int(cursor.lastrowid)
+                    if cursor.lastrowid is None:
+                        raise RuntimeError("Inserted feedback record did not return an id")
+                    feedback_id = cursor.lastrowid
                 else:
                     feedback_id = int(existing["feedback_id"])
                     keep_completed_current = (
@@ -249,7 +256,9 @@ class FeedbackAnalyticsRepository:
                                 feedback_id,
                             ),
                         )
-                        conn.execute("DELETE FROM feedback_labels WHERE feedback_id = ?", (feedback_id,))
+                        conn.execute(
+                            "DELETE FROM feedback_labels WHERE feedback_id = ?", (feedback_id,)
+                        )
 
                 version = conn.execute(
                     """
@@ -268,13 +277,16 @@ class FeedbackAnalyticsRepository:
                             unit_name, business_status, classification_state, created_at, updated_at
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
-                        (feedback_id, *self._snapshot_values(
-                            job_id=job_id,
-                            source_file_key=source_file_key,
-                            source_file_name=source_file_name,
-                            record=record,
-                            now=now,
-                        )),
+                        (
+                            feedback_id,
+                            *self._snapshot_values(
+                                job_id=job_id,
+                                source_file_key=source_file_key,
+                                source_file_name=source_file_name,
+                                record=record,
+                                now=now,
+                            ),
+                        ),
                     )
                 elif version["classification_state"] != _COMPLETED:
                     conn.execute(
@@ -334,18 +346,33 @@ class FeedbackAnalyticsRepository:
             conn.execute("BEGIN IMMEDIATE")
             for result in results:
                 label_snapshot = [
-                    {"label": label, "major_group": minor_to_major.get(label)} for label in result.labels
+                    {"label": label, "major_group": minor_to_major.get(label)}
+                    for label in result.labels
                 ]
                 labels_json = json.dumps(label_snapshot, ensure_ascii=False)
-                version_rows = conn.execute(
+                matching_versions = conn.execute(
                     """
-                    SELECT v.feedback_record_version_id, v.feedback_id
+                    SELECT v.feedback_record_version_id, v.feedback_id, v.classification_state
                     FROM feedback_record_versions v
                     WHERE v.job_id = ? AND v.source_row_number = ?
-                        AND v.classification_state = ?
                     """,
-                    (job_id, result.source_row_number, _PENDING),
+                    (job_id, result.source_row_number),
                 ).fetchall()
+                if not matching_versions:
+                    raise ValueError(
+                        "No input snapshot for "
+                        f"job_id={job_id!r}, source_row_number={result.source_row_number}"
+                    )
+                if len(matching_versions) > 1:
+                    raise ValueError(
+                        "Ambiguous input snapshots for "
+                        f"job_id={job_id!r}, source_row_number={result.source_row_number}"
+                    )
+                version_rows = [
+                    version
+                    for version in matching_versions
+                    if version["classification_state"] == _PENDING
+                ]
                 for version in version_rows:
                     feedback_id = int(version["feedback_id"])
                     conn.execute(
@@ -400,7 +427,9 @@ class FeedbackAnalyticsRepository:
                             job_id,
                         ),
                     )
-                    conn.execute("DELETE FROM feedback_labels WHERE feedback_id = ?", (feedback_id,))
+                    conn.execute(
+                        "DELETE FROM feedback_labels WHERE feedback_id = ?", (feedback_id,)
+                    )
                     conn.executemany(
                         """
                         INSERT INTO feedback_labels (feedback_id, label, major_group, created_at)
@@ -445,12 +474,41 @@ class FeedbackAnalyticsRepository:
             ).fetchall()
         return [dict(item) for item in rows]
 
-    def fetch_versions(self, *, job_id: str, row: int | None = None) -> list[dict]:
-        where = "WHERE job_id = ?"
-        params: list[object] = [job_id]
+    def fetch_analytics_rows(self) -> list[dict]:
+        """Return current records with their current label memberships."""
+        with self._lock, self._conn() as conn:
+            records = conn.execute("SELECT * FROM feedback_records ORDER BY feedback_id").fetchall()
+            labels = conn.execute(
+                """
+                SELECT feedback_id, label, major_group
+                FROM feedback_labels
+                ORDER BY feedback_id, rowid
+                """
+            ).fetchall()
+
+        labels_by_feedback: dict[int, list[dict[str, str | None]]] = {}
+        for label in labels:
+            labels_by_feedback.setdefault(int(label["feedback_id"]), []).append(
+                {"label": str(label["label"]), "major_group": label["major_group"]}
+            )
+        return [
+            {
+                **dict(record),
+                "labels": labels_by_feedback.get(int(record["feedback_id"]), []),
+            }
+            for record in records
+        ]
+
+    def fetch_versions(self, *, job_id: str | None = None, row: int | None = None) -> list[dict]:
+        conditions: list[str] = []
+        params: list[object] = []
+        if job_id is not None:
+            conditions.append("job_id = ?")
+            params.append(job_id)
         if row is not None:
-            where += " AND source_row_number = ?"
+            conditions.append("source_row_number = ?")
             params.append(row)
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         with self._lock, self._conn() as conn:
             rows = conn.execute(
                 f"SELECT * FROM feedback_record_versions {where} ORDER BY feedback_record_version_id",

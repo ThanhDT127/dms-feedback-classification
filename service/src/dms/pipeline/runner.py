@@ -30,6 +30,7 @@ from .rag_product import RAGProductMatcher
 
 logger = logging.getLogger("dms-watcher")
 
+
 class PipelineRunner:
     """Run the full classification pipeline for one Excel workbook."""
 
@@ -380,6 +381,7 @@ class PipelineRunner:
 
                     new_results_batch.append(
                         {
+                            "source_row_number": parsed_input.source_row_numbers[i + idx_in_batch],
                             "text": batch[idx_in_batch],
                             "product": best_cat,
                             "product_line": best_line,
