@@ -285,3 +285,105 @@ def test_admin_job_operations_exports_and_api_contract():
     assert "function retryJob(jobId)" in api_js
     assert "/classify/jobs/metrics" in api_js
     assert "/retry" in api_js
+
+
+def test_analytics_api_client_has_authenticated_query_wrappers():
+    api_js = _read("js/api.js")
+
+    for expected in [
+        "function getAnalyticsOverview(params = {})",
+        "function getAnalyticsSources(params = {})",
+        "function getAnalyticsUnits(params = {})",
+        "function getAnalyticsGroups(params = {})",
+        "function getAnalyticsProducts(params = {})",
+        "function getAnalyticsIssues(params = {})",
+        "function getAnalyticsDataQuality(params = {})",
+        "buildAnalyticsQuery",
+        "/analytics/overview",
+        "/analytics/issues",
+    ]:
+        assert expected in api_js
+
+    for exported in [
+        "getAnalyticsOverview",
+        "getAnalyticsSources",
+        "getAnalyticsUnits",
+        "getAnalyticsGroups",
+        "getAnalyticsProducts",
+        "getAnalyticsIssues",
+        "getAnalyticsDataQuality",
+    ]:
+        assert exported in _page_exports(api_js)
+
+
+def test_analytics_page_is_a_separate_authenticated_spa_route():
+    index_html = _read("index.html")
+    app_js = _read("js/app.js")
+    sidebar_js = _read("js/components/sidebar.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "js/pages/analytics.js" in index_html
+    assert "analytics:  { module: () => window.AnalyticsPage" in app_js
+    assert "{ id: 'analytics', icon: '📊', label: 'Phân tích phản hồi' }" in sidebar_js
+    assert "window.AnalyticsPage" in analytics_js
+    assert "API.getAnalyticsOverview" in analytics_js
+    assert "fetch(" not in analytics_js
+    assert "XMLHttpRequest" not in analytics_js
+    assert {"render", "destroy", "applyFilters", "resetFilters", "refresh"} <= _page_exports(
+        analytics_js
+    )
+
+
+def test_analytics_page_exposes_accessible_global_date_filters():
+    analytics_js = _read("js/pages/analytics.js")
+
+    for expected in [
+        "dateField('analytics-date-from'",
+        "dateField('analytics-date-to'",
+        "dateField('analytics-compare-from'",
+        "dateField('analytics-compare-to'",
+        'aria-label="Bộ lọc thời gian phân tích"',
+        "AnalyticsPage.applyFilters()",
+        "AnalyticsPage.resetFilters()",
+        "AnalyticsPage.refresh()",
+    ]:
+        assert expected in analytics_js
+
+
+def test_analytics_page_supports_safe_issue_drilldown_filters_and_pagination():
+    analytics_js = _read("js/pages/analytics.js")
+
+    for expected in [
+        "textField('analytics-issue-source'",
+        "textField('analytics-issue-unit'",
+        "textField('analytics-issue-label'",
+        "textField('analytics-issue-product'",
+        "textField('analytics-issue-status'",
+        "API.getAnalyticsIssues",
+        "page_size: DEFAULT_PAGE_SIZE",
+        "AnalyticsPage.changeIssuePage(-1)",
+        "AnalyticsPage.changeIssuePage(1)",
+        "AnalyticsPage.showIssueDetail",
+        "App.showModal",
+        "analytics-date-from",
+        "analytics-compare-to",
+    ]:
+        assert expected in analytics_js
+
+    assert {"applyIssueFilters", "clearIssueFilters", "changeIssuePage", "showIssueDetail"} <= _page_exports(
+        analytics_js
+    )
+
+
+def test_analytics_page_uses_chart_helpers_and_cleans_up_its_charts():
+    analytics_js = _read("js/pages/analytics.js")
+
+    for expected in [
+        "Charts.createBarChart('analytics-sources-chart'",
+        "Charts.createDoughnutChart('analytics-units-chart'",
+        "Charts.destroy('analytics-sources-chart')",
+        "Charts.destroy('analytics-units-chart')",
+        "Chưa gán cảm xúc",
+        "available === false",
+    ]:
+        assert expected in analytics_js

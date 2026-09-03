@@ -225,6 +225,23 @@ window.API = (() => {
   }
   function getMetricsByUser() { return get('/metrics/by-user'); }
 
+  function buildAnalyticsQuery(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+    });
+    const text = query.toString();
+    return text ? `?${text}` : '';
+  }
+
+  function getAnalyticsOverview(params = {}) { return get(`/analytics/overview${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsSources(params = {}) { return get(`/analytics/sources${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsUnits(params = {}) { return get(`/analytics/units${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsGroups(params = {}) { return get(`/analytics/groups${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsProducts(params = {}) { return get(`/analytics/products${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsIssues(params = {}) { return get(`/analytics/issues${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsDataQuality(params = {}) { return get(`/analytics/data-quality${buildAnalyticsQuery(params)}`); }
+
   function setTokens(access, refresh) {
     _accessToken = access;
     _refreshToken = refresh;
@@ -288,6 +305,8 @@ window.API = (() => {
     syncKeywordsToSP, syncProductsToSP, syncSharePoint, uploadJobToSharePoint,
     getUsageMetrics, getUsagePricing,
     resetFailedFiles, getMetricsByUser,
+    getAnalyticsOverview, getAnalyticsSources, getAnalyticsUnits, getAnalyticsGroups,
+    getAnalyticsProducts, getAnalyticsIssues, getAnalyticsDataQuality,
     logout
   };
 })();
