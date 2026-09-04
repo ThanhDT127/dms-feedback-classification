@@ -185,6 +185,13 @@ class FeedbackAnalyticsRepository:
         now = utc_now_iso()
         with self._lock, self._conn() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            job = conn.execute(
+                "SELECT mode FROM classification_jobs WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+            if job is None:
+                raise ValueError(f"Unknown classification job: {job_id!r}")
+            is_analytics_ingest = job["mode"] == "analytics_ingest"
             seen_rows = {record.source_row_number for record in snapshot_records}
             for record in snapshot_records:
                 existing = conn.execute(
@@ -221,9 +228,8 @@ class FeedbackAnalyticsRepository:
                     feedback_id = cursor.lastrowid
                 else:
                     feedback_id = int(existing["feedback_id"])
-                    keep_completed_current = (
-                        existing["last_job_id"] == job_id
-                        and existing["classification_state"] == _COMPLETED
+                    keep_completed_current = existing["classification_state"] == _COMPLETED and (
+                        existing["last_job_id"] == job_id or is_analytics_ingest
                     )
                     if keep_completed_current:
                         conn.execute(

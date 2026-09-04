@@ -82,6 +82,49 @@ def test_retry_preserves_completed_version_and_soft_deactivates_removed_watcher_
     assert repo.fetch_current_records(row=3)[0]["is_active"] == 0
 
 
+def test_late_analytics_ingest_preserves_classification_completed_first(tmp_path: Path):
+    db_path = tmp_path / "classification_jobs.db"
+    jobs = ClassificationJobStore(db_path)
+    repo = FeedbackAnalyticsRepository(db_path)
+    jobs.create_job(
+        job_id="analytics-ingest-late",
+        owner_username="system_analytics_ingest",
+        owner_role="admin",
+        filename="a.xlsx",
+        mode="analytics_ingest",
+        input_path="a.xlsx",
+        output_path="a.xlsx",
+    )
+    create_job(jobs, "classify-first")
+    record = make_record(source_row_number=2, content="Nội dung gốc")
+    repo.persist_input_snapshot(
+        job_id="classify-first",
+        source_file_key="sha256:a",
+        source_file_name="a.xlsx",
+        records=[record],
+        deactivate_absent=False,
+    )
+    repo.apply_batch_results(
+        job_id="classify-first",
+        results=[make_result(source_row_number=2, labels=["Báo lỗi"], product="Sản phẩm A")],
+        minor_to_major={"Báo lỗi": "Sản phẩm"},
+    )
+
+    repo.persist_input_snapshot(
+        job_id="analytics-ingest-late",
+        source_file_key="sha256:a",
+        source_file_name="a.xlsx",
+        records=[record],
+        deactivate_absent=False,
+    )
+
+    current = repo.fetch_current_records(row=2)[0]
+    assert current["last_job_id"] == "classify-first"
+    assert current["classification_state"] == "completed"
+    assert current["product"] == "Sản phẩm A"
+    assert repo.fetch_current_labels(row=2) == ["Báo lỗi"]
+
+
 def test_batch_replaces_current_labels_but_keeps_each_version_label_snapshot(tmp_path: Path):
     db_path = tmp_path / "classification_jobs.db"
     jobs = ClassificationJobStore(db_path)
