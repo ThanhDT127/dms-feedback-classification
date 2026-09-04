@@ -44,8 +44,10 @@ def analytics_filter_dependency(
     date_to: str | None = Query(None, alias="to"),
     compare_from: str | None = Query(None),
     compare_to: str | None = Query(None),
+    province: str | None = Query(None),
+    district: str | None = Query(None),
 ) -> AnalyticsFilter:
-    """Parse complete inclusive ISO date ranges for analytics queries."""
+    """Parse complete inclusive ISO date ranges and geography filters."""
     date_from, date_to = _validate_range(date_from, date_to)
     compare_from, compare_to = _validate_range(compare_from, compare_to)
     return AnalyticsFilter(
@@ -53,6 +55,8 @@ def analytics_filter_dependency(
         date_to=date_to,
         compare_from=compare_from,
         compare_to=compare_to,
+        province=province.strip() if province and province.strip() else None,
+        district=district.strip() if district and district.strip() else None,
     )
 
 
@@ -77,6 +81,56 @@ def sources(
     analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
 ):
     return _service().sources(analytics_filter)
+
+
+@router.get("/trends/daily")
+def daily_trend(
+    user: _CURRENT_USER,
+    analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
+):
+    return _service().daily_trend(analytics_filter)
+
+
+@router.get("/issue-types")
+def issue_types(
+    user: _CURRENT_USER,
+    analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
+):
+    return _service().issue_types(analytics_filter)
+
+
+@router.get("/duplicates")
+def duplicate_details(
+    user: _CURRENT_USER,
+    analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+):
+    return _service().duplicate_details(analytics_filter, page=page, page_size=page_size)
+
+
+@router.get("/unit-issue-type-matrix")
+def unit_issue_type_matrix(
+    user: _CURRENT_USER,
+    analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
+):
+    return _service().unit_issue_type_matrix(analytics_filter)
+
+
+@router.get("/geography")
+def geography(
+    user: _CURRENT_USER,
+    analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
+):
+    return _service().geography(analytics_filter)
+
+
+@router.get("/status-backlog")
+def status_backlog(
+    user: _CURRENT_USER,
+    analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
+):
+    return _service().status_backlog(analytics_filter)
 
 
 @router.get("/units")

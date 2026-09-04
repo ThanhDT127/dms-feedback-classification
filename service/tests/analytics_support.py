@@ -12,9 +12,11 @@ from dms.classification_jobs import ClassificationJobStore
 
 def make_record(**values: object) -> FeedbackInputRecord:
     content = str(values.get("content", "Đèn lỗi"))
+    raw_data = {"Nội dung phản hồi": content}
+    raw_data.update(dict(values.get("raw_data", {})))
     return FeedbackInputRecord(
         source_row_number=int(values.get("source_row_number", 2)),
-        raw_data={"Nội dung phản hồi": content},
+        raw_data=raw_data,
         content=content,
         normalized_content=normalize_duplicate_content(content),
         issue_code=values.get("issue_code", "A"),
@@ -68,7 +70,11 @@ def seed_classified_records(
         create_job(jobs, job_id)
         record = make_record(
             source_row_number=2,
-            **{key: value for key, value in entry.items() if key not in {"labels", "product", "sentiment"}},
+            **{
+                key: value
+                for key, value in entry.items()
+                if key not in {"labels", "product", "sentiment"}
+            },
         )
         repo.persist_input_snapshot(
             job_id=job_id,

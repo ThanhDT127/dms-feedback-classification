@@ -235,6 +235,12 @@ window.API = (() => {
   }
 
   function getAnalyticsOverview(params = {}) { return get(`/analytics/overview${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsDailyTrend(params = {}) { return get(`/analytics/trends/daily${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsIssueTypes(params = {}) { return get(`/analytics/issue-types${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsDuplicates(params = {}) { return get(`/analytics/duplicates${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsUnitIssueTypeMatrix(params = {}) { return get(`/analytics/unit-issue-type-matrix${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsGeography(params = {}) { return get(`/analytics/geography${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsStatusBacklog(params = {}) { return get(`/analytics/status-backlog${buildAnalyticsQuery(params)}`); }
   function getAnalyticsSources(params = {}) { return get(`/analytics/sources${buildAnalyticsQuery(params)}`); }
   function getAnalyticsUnits(params = {}) { return get(`/analytics/units${buildAnalyticsQuery(params)}`); }
   function getAnalyticsGroups(params = {}) { return get(`/analytics/groups${buildAnalyticsQuery(params)}`); }
@@ -305,7 +311,7 @@ window.API = (() => {
     syncKeywordsToSP, syncProductsToSP, syncSharePoint, uploadJobToSharePoint,
     getUsageMetrics, getUsagePricing,
     resetFailedFiles, getMetricsByUser,
-    getAnalyticsOverview, getAnalyticsSources, getAnalyticsUnits, getAnalyticsGroups,
+    getAnalyticsOverview, getAnalyticsDailyTrend, getAnalyticsIssueTypes, getAnalyticsDuplicates, getAnalyticsUnitIssueTypeMatrix, getAnalyticsGeography, getAnalyticsStatusBacklog, getAnalyticsSources, getAnalyticsUnits, getAnalyticsGroups,
     getAnalyticsProducts, getAnalyticsIssues, getAnalyticsDataQuality,
     logout
   };

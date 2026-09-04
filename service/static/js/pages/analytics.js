@@ -5,10 +5,12 @@
 window.AnalyticsPage = (() => {
   const DEFAULT_PAGE_SIZE = 25;
   const _state = {
-    filters: { from: '', to: '', compare_from: '', compare_to: '' },
+    filters: { from: '', to: '', compare_from: '', compare_to: '', province: '', district: '' },
     issueFilters: { source: '', unit: '', label: '', product: '', status: '' },
     issuePage: 1,
+    duplicatePage: 1,
     issues: null,
+    duplicates: null,
     units: [],
     requestId: 0,
   };
@@ -32,6 +34,8 @@ window.AnalyticsPage = (() => {
           ${dateField('analytics-date-to', 'Đến ngày', _state.filters.to)}
           ${dateField('analytics-compare-from', 'So sánh từ ngày', _state.filters.compare_from)}
           ${dateField('analytics-compare-to', 'So sánh đến ngày', _state.filters.compare_to)}
+          ${textField('analytics-province', 'Tỉnh/TP', _state.filters.province)}
+          ${textField('analytics-district', 'Quận/huyện', _state.filters.district)}
           <div class="analytics-filter-actions">
             <button class="btn btn-primary btn-sm" type="button" onclick="AnalyticsPage.applyFilters()">Áp dụng</button>
             <button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.resetFilters()">Đặt lại</button>
@@ -48,7 +52,13 @@ window.AnalyticsPage = (() => {
         <div id="analytics-overview" class="stat-grid">${renderMetricSkeletons(8)}</div>
       </section>
 
+      <section class="card" aria-labelledby="analytics-daily-title">
+        <div class="card-header"><span id="analytics-daily-title" class="card-title">📅 Xu hướng vấn đề theo ngày</span></div>
+        <div id="analytics-daily-trend" class="analytics-panel-body">${renderPanelLoading()}</div>
+      </section>
+
       <div class="grid-2 analytics-panel-grid">
+        ${panel('analytics-issue-type-title', '🧭 Phân bổ loại vấn đề', 'analytics-issue-types')}
         ${panel('analytics-source-title', '📡 Nguồn thông tin', 'analytics-sources')}
         ${panel('analytics-unit-title', '🏢 Theo đơn vị', 'analytics-units')}
         ${panel('analytics-group-title', '🏷️ Nhóm vấn đề & cảm xúc', 'analytics-groups')}
@@ -58,6 +68,26 @@ window.AnalyticsPage = (() => {
       <section class="card" aria-labelledby="analytics-quality-title">
         <div class="card-header"><span id="analytics-quality-title" class="card-title">🔎 Chất lượng dữ liệu</span></div>
         <div id="analytics-data-quality" class="analytics-panel-body">${renderPanelLoading()}</div>
+      </section>
+
+      <section class="card" aria-labelledby="analytics-status-title">
+        <div class="card-header"><span id="analytics-status-title" class="card-title">⏳ Trạng thái xử lý & tồn đọng</span></div>
+        <div id="analytics-status-backlog" class="analytics-panel-body">${renderPanelLoading()}</div>
+      </section>
+
+      <section class="card" aria-labelledby="analytics-geography-title">
+        <div class="card-header"><span id="analytics-geography-title" class="card-title">🗺️ Phân bổ địa lý</span></div>
+        <div id="analytics-geography" class="analytics-panel-body">${renderPanelLoading()}</div>
+      </section>
+
+      <section class="card" aria-labelledby="analytics-unit-matrix-title">
+        <div class="card-header"><span id="analytics-unit-matrix-title" class="card-title">🧩 Ma trận đơn vị × loại vấn đề</span></div>
+        <div id="analytics-unit-issue-type-matrix" class="analytics-panel-body">${renderPanelLoading()}</div>
+      </section>
+
+      <section class="card" aria-labelledby="analytics-duplicates-title">
+        <div class="card-header"><span id="analytics-duplicates-title" class="card-title">♻️ Nội dung phản hồi trùng</span></div>
+        <div id="analytics-duplicates" class="analytics-panel-body">${renderPanelLoading()}</div>
       </section>
 
       <section class="card" aria-labelledby="analytics-issues-title">
@@ -102,6 +132,8 @@ window.AnalyticsPage = (() => {
       to: document.getElementById('analytics-date-to')?.value || '',
       compare_from: document.getElementById('analytics-compare-from')?.value || '',
       compare_to: document.getElementById('analytics-compare-to')?.value || '',
+      province: document.getElementById('analytics-province')?.value.trim() || '',
+      district: document.getElementById('analytics-district')?.value.trim() || '',
     };
   }
 
@@ -120,17 +152,26 @@ window.AnalyticsPage = (() => {
     if (error) return;
     _state.filters = filters;
     _state.issuePage = 1;
+    _state.duplicatePage = 1;
     refresh();
   }
 
   function resetFilters() {
-    _state.filters = { from: '', to: '', compare_from: '', compare_to: '' };
-    const inputIds = { from: 'analytics-date-from', to: 'analytics-date-to', compare_from: 'analytics-compare-from', compare_to: 'analytics-compare-to' };
+    _state.filters = { from: '', to: '', compare_from: '', compare_to: '', province: '', district: '' };
+    const inputIds = {
+      from: 'analytics-date-from',
+      to: 'analytics-date-to',
+      compare_from: 'analytics-compare-from',
+      compare_to: 'analytics-compare-to',
+      province: 'analytics-province',
+      district: 'analytics-district',
+    };
     Object.entries(inputIds).forEach(([key, id]) => {
       const input = document.getElementById(id);
       if (input) input.value = _state.filters[key];
     });
     _state.issuePage = 1;
+    _state.duplicatePage = 1;
     setFilterError(null);
     refresh();
   }
@@ -187,11 +228,20 @@ window.AnalyticsPage = (() => {
   }
 
   function globalQueryParams() {
-    return { from: _state.filters.from || undefined, to: _state.filters.to || undefined };
+    return {
+      from: _state.filters.from || undefined,
+      to: _state.filters.to || undefined,
+      province: _state.filters.province || undefined,
+      district: _state.filters.district || undefined,
+    };
   }
 
   function issueQueryParams() {
     return { ...globalQueryParams(), ..._state.issueFilters, page: _state.issuePage, page_size: DEFAULT_PAGE_SIZE };
+  }
+
+  function duplicateQueryParams() {
+    return { ...globalQueryParams(), page: _state.duplicatePage, page_size: DEFAULT_PAGE_SIZE };
   }
 
   async function refresh() {
@@ -201,6 +251,12 @@ window.AnalyticsPage = (() => {
     const overviewParams = { ...globalQueryParams(), compare_from: _state.filters.compare_from || undefined, compare_to: _state.filters.compare_to || undefined };
     const requests = {
       overview: API.getAnalyticsOverview(overviewParams),
+      dailyTrend: API.getAnalyticsDailyTrend(globalQueryParams()),
+      issueTypes: API.getAnalyticsIssueTypes(globalQueryParams()),
+      unitIssueTypeMatrix: API.getAnalyticsUnitIssueTypeMatrix(globalQueryParams()),
+      geography: API.getAnalyticsGeography(globalQueryParams()),
+      statusBacklog: API.getAnalyticsStatusBacklog(globalQueryParams()),
+      duplicates: API.getAnalyticsDuplicates(duplicateQueryParams()),
       sources: API.getAnalyticsSources(globalQueryParams()),
       units: API.getAnalyticsUnits(globalQueryParams()),
       groups: API.getAnalyticsGroups(globalQueryParams()),
@@ -213,6 +269,12 @@ window.AnalyticsPage = (() => {
     if (requestId !== _state.requestId) return;
     const results = Object.fromEntries(entries.map(([key], index) => [key, settled[index]]));
     renderResult(results.overview, renderOverview, 'analytics-overview');
+    renderResult(results.dailyTrend, renderDailyTrend, 'analytics-daily-trend');
+    renderResult(results.issueTypes, renderIssueTypes, 'analytics-issue-types');
+    renderResult(results.unitIssueTypeMatrix, renderUnitIssueTypeMatrix, 'analytics-unit-issue-type-matrix');
+    renderResult(results.geography, renderGeography, 'analytics-geography');
+    renderResult(results.statusBacklog, renderStatusBacklog, 'analytics-status-backlog');
+    renderResult(results.duplicates, (element, data) => { _state.duplicates = data; renderDuplicates(element, data); }, 'analytics-duplicates');
     renderResult(results.sources, renderSources, 'analytics-sources');
     renderResult(results.units, renderUnits, 'analytics-units');
     renderResult(results.groups, renderGroups, 'analytics-groups');
@@ -240,6 +302,27 @@ window.AnalyticsPage = (() => {
       if (requestId !== _state.requestId) return;
       renderFailure(element, error, 'Không thể tải chi tiết vấn đề');
     }
+  }
+
+  async function loadDuplicates() {
+    const element = document.getElementById('analytics-duplicates');
+    if (!element) return;
+    element.innerHTML = renderPanelLoading();
+    try {
+      const data = await API.getAnalyticsDuplicates(duplicateQueryParams());
+      _state.duplicates = data;
+      renderDuplicates(element, data);
+    } catch (error) {
+      renderFailure(element, error, 'Không thể tải nội dung trùng');
+    }
+  }
+
+  function changeDuplicatePage(delta) {
+    const totalPages = _state.duplicates?.total_pages || 0;
+    const page = _state.duplicatePage + delta;
+    if (page < 1 || (totalPages > 0 && page > totalPages)) return;
+    _state.duplicatePage = page;
+    loadDuplicates();
   }
 
   function renderResult(result, renderer, elementId) {
@@ -277,6 +360,26 @@ window.AnalyticsPage = (() => {
     if (!comparison.available) return `<div class="analytics-metric-hint">${escHtml(comparison.reason || 'Không thể so sánh kỳ.')}</div>`;
     const direction = comparison.direction === 'up' ? 'up' : comparison.direction === 'down' ? 'down' : 'unchanged';
     return `<div class="stat-card-delta ${direction}">${comparison.change_percent > 0 ? '+' : ''}${formatPercent(comparison.change_percent)} so với kỳ so sánh</div>`;
+  }
+
+  function renderDailyTrend(element, data) {
+    const items = data?.items || [];
+    if (!items.length) return renderEmpty(element, 'Chưa có dữ liệu xu hướng theo ngày.');
+    element.innerHTML = '<div class="analytics-chart-wrap"><canvas id="analytics-daily-trend-chart"></canvas></div>';
+    Charts.createLineChart('analytics-daily-trend-chart', items.map(item => item.date), [{
+      label: 'Số vấn đề',
+      data: items.map(item => item.issue_count),
+      borderColor: '#22c55e',
+      backgroundColor: 'rgba(34, 197, 94, 0.12)',
+      fill: true,
+    }]);
+  }
+
+  function renderIssueTypes(element, data) {
+    const items = data?.items || [];
+    if (!items.length) return renderEmpty(element, 'Chưa có dữ liệu loại vấn đề.');
+    element.innerHTML = `<div class="analytics-chart-wrap"><canvas id="analytics-issue-types-chart"></canvas></div>${renderDistribution(items)}`;
+    Charts.createDoughnutChart('analytics-issue-types-chart', items.map(item => item.label), items.map(item => item.issue_count));
   }
 
   function renderSources(element, data) {
@@ -322,6 +425,36 @@ window.AnalyticsPage = (() => {
     element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Chất lượng dữ liệu phản hồi"><thead><tr><th>Trường</th><th>Có dữ liệu</th><th>Thiếu</th><th>Không hợp lệ</th></tr></thead><tbody>${rows.map(([field, counts]) => `<tr><td>${escHtml(labels[field] || field)}</td><td>${formatNumber(counts.present)}</td><td>${formatNumber(counts.missing)}</td><td>${formatNumber(counts.invalid)}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
+  function renderStatusBacklog(element, data) {
+    const statuses = data?.statuses || [];
+    if (!statuses.length) return renderEmpty(element, 'Chưa có dữ liệu trạng thái xử lý.');
+    const ageBuckets = data?.age_buckets || [];
+    element.innerHTML = `<div class="analytics-status-layout"><div><div class="analytics-chart-wrap"><canvas id="analytics-status-chart"></canvas></div></div><div><div class="analytics-backlog-summary"><div><strong>${formatNumber(data.processed_count)}</strong><span>Đã xử lý</span></div><div><strong>${formatNumber(data.backlog_count)}</strong><span>Tồn đọng (${formatPercent(data.backlog_rate)})</span></div></div><h4>Tuổi tồn đọng</h4><p class="analytics-panel-note">Tính đến ${escHtml(data.age_as_of || 'chưa có ngày tham chiếu')}</p><div class="analytics-age-grid">${ageBuckets.map(item => `<div><span>${escHtml(item.label)}</span><strong>${formatNumber(item.issue_count)}</strong></div>`).join('')}</div></div></div>`;
+    Charts.createDoughnutChart('analytics-status-chart', statuses.map(item => item.label), statuses.map(item => item.issue_count));
+  }
+
+  function renderGeography(element, data) {
+    const provinces = (data?.provinces || []).slice(0, 10);
+    const districts = (data?.districts || []).slice(0, 10);
+    if (!provinces.length) return renderEmpty(element, 'Chưa có dữ liệu tỉnh/thành.');
+    element.innerHTML = `<div class="grid-2"><div><div class="analytics-chart-wrap"><canvas id="analytics-provinces-chart"></canvas></div></div><div><h4>Top quận/huyện</h4>${renderDistribution(districts)}</div></div>`;
+    Charts.createBarChart('analytics-provinces-chart', provinces.map(item => item.label), provinces.map(item => item.issue_count), { label: 'Số vấn đề', chartOptions: { indexAxis: 'y' } });
+  }
+
+  function renderUnitIssueTypeMatrix(element, data) {
+    const rows = data?.rows || [];
+    const issueTypes = data?.issue_types || [];
+    if (!rows.length || !issueTypes.length) return renderEmpty(element, 'Chưa có dữ liệu cho ma trận đơn vị và loại vấn đề.');
+    const maxCount = Math.max(1, ...rows.flatMap(row => issueTypes.map(issueType => Number(row.counts?.[issueType] || 0))));
+    element.innerHTML = `<div class="table-wrap"><table class="table analytics-matrix" aria-label="Ma trận đơn vị theo loại vấn đề"><thead><tr><th>Đơn vị</th>${issueTypes.map(issueType => `<th>${escHtml(issueType)}</th>`).join('')}<th>Tổng</th></tr></thead><tbody>${rows.map(row => `<tr><th scope="row">${escHtml(row.unit)}</th>${issueTypes.map(issueType => { const count = Number(row.counts?.[issueType] || 0); const strength = Math.max(0.08, Math.min(0.85, count / maxCount)); return `<td class="analytics-heat-cell" style="--heat-strength:${strength}" title="${escHtml(`${row.unit} · ${issueType}: ${formatNumber(count)}`)}">${formatNumber(count)}</td>`; }).join('')}<td><strong>${formatNumber(row.total)}</strong></td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  function renderDuplicates(element, data) {
+    const items = data?.items || [];
+    if (!items.length) return renderEmpty(element, 'Không có nhóm nội dung trùng trong khoảng thời gian đã chọn.');
+    element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Danh sách nội dung phản hồi trùng"><thead><tr><th>Nội dung đại diện</th><th>Bản ghi</th><th>Dòng trùng</th><th>Mã vấn đề</th><th>Đơn vị</th></tr></thead><tbody>${items.map(item => `<tr><td class="wrap">${escHtml(item.content)}</td><td>${formatNumber(item.record_count)}</td><td>${formatNumber(item.duplicate_rows)}</td><td class="wrap">${escHtml((item.issue_codes || []).join(', '))}</td><td class="wrap">${escHtml((item.units || []).join(', ') || 'Chưa xác định')}</td></tr>`).join('')}</tbody></table></div><div class="analytics-pagination"><span class="analytics-panel-note">${formatNumber(data.total)} nhóm nội dung trùng.</span><div><button class="btn btn-ghost btn-sm" type="button" ${data.page <= 1 ? 'disabled' : ''} onclick="AnalyticsPage.changeDuplicatePage(-1)">← Trước</button><span class="analytics-page-number">Trang ${formatNumber(data.page)} / ${formatNumber(data.total_pages || 1)}</span><button class="btn btn-ghost btn-sm" type="button" ${data.page >= data.total_pages ? 'disabled' : ''} onclick="AnalyticsPage.changeDuplicatePage(1)">Tiếp →</button></div></div>`;
+  }
+
   function renderIssues(element, data) {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Không có vấn đề nào trong khoảng thời gian và bộ lọc đã chọn.');
@@ -364,9 +497,14 @@ window.AnalyticsPage = (() => {
   function destroy() {
     _state.requestId += 1;
     _state.issues = null;
+    _state.duplicates = null;
+    Charts.destroy('analytics-daily-trend-chart');
+    Charts.destroy('analytics-issue-types-chart');
+    Charts.destroy('analytics-status-chart');
+    Charts.destroy('analytics-provinces-chart');
     Charts.destroy('analytics-sources-chart');
     Charts.destroy('analytics-units-chart');
   }
 
-  return { render, destroy, applyFilters, resetFilters, refresh, applyIssueFilters, clearIssueFilters, changeIssuePage, showIssueDetail, filterIssuesByUnit };
+  return { render, destroy, applyFilters, resetFilters, refresh, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, filterIssuesByUnit };
 })();

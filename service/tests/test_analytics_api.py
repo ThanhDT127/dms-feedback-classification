@@ -29,6 +29,12 @@ def analytics_api(settings, monkeypatch):
         "/api/analytics/products",
         "/api/analytics/issues",
         "/api/analytics/data-quality",
+        "/api/analytics/trends/daily",
+        "/api/analytics/issue-types",
+        "/api/analytics/duplicates",
+        "/api/analytics/unit-issue-type-matrix",
+        "/api/analytics/geography",
+        "/api/analytics/status-backlog",
     ],
 )
 def test_analytics_routes_require_authentication(path):
@@ -144,3 +150,94 @@ def test_analytics_empty_repository_returns_stable_payloads(settings, monkeypatc
         "page_size": 25,
         "total_pages": 0,
     }
+
+
+def test_analytics_daily_trend_route_returns_stable_contract(analytics_api):
+    client, repository = analytics_api
+    seed_classified_records(
+        repository,
+        db_path=repository.db_path,
+        entries=[{"issue_code": "A", "issue_date": "2026-08-15", "labels": []}],
+    )
+
+    response = client.get("/api/analytics/trends/daily?from=2026-08-01&to=2026-08-31")
+
+    assert response.status_code == 200
+    assert response.json()["items"] == [{"date": "2026-08-15", "issue_count": 1}]
+
+
+def test_analytics_issue_types_route_returns_stable_contract(analytics_api):
+    client, repository = analytics_api
+    seed_classified_records(
+        repository,
+        db_path=repository.db_path,
+        entries=[{"issue_code": "A", "raw_data": {"Loại vấn đề": "Vấn đề khác"}}],
+    )
+
+    response = client.get("/api/analytics/issue-types")
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["label"] == "Vấn đề khác"
+
+
+def test_analytics_duplicate_details_route_validates_pagination(analytics_api):
+    client, repository = analytics_api
+    seed_classified_records(
+        repository,
+        db_path=repository.db_path,
+        entries=[
+            {"issue_code": "A", "content": "Đèn lỗi"},
+            {"issue_code": "B", "content": " đèn  lỗi "},
+        ],
+    )
+
+    response = client.get("/api/analytics/duplicates?page=1&page_size=10")
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["duplicate_rows"] == 1
+    assert client.get("/api/analytics/duplicates?page=0").status_code == 422
+
+
+def test_analytics_unit_issue_type_matrix_route(analytics_api):
+    client, repository = analytics_api
+    seed_classified_records(
+        repository,
+        db_path=repository.db_path,
+        entries=[{"issue_code": "A", "unit_name": "North", "raw_data": {"Loại vấn đề": "Báo lỗi"}}],
+    )
+
+    response = client.get("/api/analytics/unit-issue-type-matrix")
+
+    assert response.status_code == 200
+    assert response.json()["rows"][0]["counts"] == {"Báo lỗi": 1}
+
+
+def test_analytics_geography_route_and_filters(analytics_api):
+    client, repository = analytics_api
+    seed_classified_records(
+        repository,
+        db_path=repository.db_path,
+        entries=[{"issue_code": "A", "raw_data": {"Tỉnh/TP": "Hà Nội", "Quận/huyện": "Hoàng Mai"}}],
+    )
+
+    response = client.get("/api/analytics/geography?province=Hà%20Nội&district=Hoàng%20Mai")
+
+    assert response.status_code == 200
+    assert response.json()["provinces"][0]["label"] == "Hà Nội"
+    assert (
+        client.get("/api/analytics/overview?province=Hà%20Nội").json()["total_issues"]["value"] == 1
+    )
+
+
+def test_analytics_status_backlog_route(analytics_api):
+    client, repository = analytics_api
+    seed_classified_records(
+        repository,
+        db_path=repository.db_path,
+        entries=[{"issue_code": "A", "issue_date": "2026-08-31", "business_status": "Chờ xử lý"}],
+    )
+
+    response = client.get("/api/analytics/status-backlog")
+
+    assert response.status_code == 200
+    assert response.json()["backlog_count"] == 1

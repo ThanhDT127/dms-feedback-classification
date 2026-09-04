@@ -370,9 +370,12 @@ def test_analytics_page_supports_safe_issue_drilldown_filters_and_pagination():
     ]:
         assert expected in analytics_js
 
-    assert {"applyIssueFilters", "clearIssueFilters", "changeIssuePage", "showIssueDetail"} <= _page_exports(
-        analytics_js
-    )
+    assert {
+        "applyIssueFilters",
+        "clearIssueFilters",
+        "changeIssuePage",
+        "showIssueDetail",
+    } <= _page_exports(analytics_js)
 
 
 def test_analytics_page_uses_chart_helpers_and_cleans_up_its_charts():
@@ -387,3 +390,75 @@ def test_analytics_page_uses_chart_helpers_and_cleans_up_its_charts():
         "available === false",
     ]:
         assert expected in analytics_js
+
+
+def test_analytics_page_renders_and_cleans_up_daily_trend():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "function getAnalyticsDailyTrend(params = {})" in api_js
+    assert "/analytics/trends/daily" in api_js
+    assert "API.getAnalyticsDailyTrend" in analytics_js
+    assert "Charts.createLineChart('analytics-daily-trend-chart'" in analytics_js
+    assert "Charts.destroy('analytics-daily-trend-chart')" in analytics_js
+
+
+def test_analytics_page_renders_issue_type_distribution():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "function getAnalyticsIssueTypes(params = {})" in api_js
+    assert "/analytics/issue-types" in api_js
+    assert "API.getAnalyticsIssueTypes" in analytics_js
+    assert "analytics-issue-types-chart" in analytics_js
+    assert "Charts.destroy('analytics-issue-types-chart')" in analytics_js
+
+
+def test_analytics_page_renders_paginated_duplicate_details():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "function getAnalyticsDuplicates(params = {})" in api_js
+    assert "/analytics/duplicates" in api_js
+    assert "API.getAnalyticsDuplicates" in analytics_js
+    assert "analytics-duplicates" in analytics_js
+    assert "AnalyticsPage.changeDuplicatePage(-1)" in analytics_js
+    assert "AnalyticsPage.changeDuplicatePage(1)" in analytics_js
+    assert "changeDuplicatePage" in _page_exports(analytics_js)
+
+
+def test_analytics_page_renders_unit_issue_type_heatmap():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "function getAnalyticsUnitIssueTypeMatrix(params = {})" in api_js
+    assert "/analytics/unit-issue-type-matrix" in api_js
+    assert "API.getAnalyticsUnitIssueTypeMatrix" in analytics_js
+    assert "analytics-unit-issue-type-matrix" in analytics_js
+    assert "analytics-heat-cell" in analytics_js
+
+
+def test_analytics_page_renders_geography_and_global_filters():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "function getAnalyticsGeography(params = {})" in api_js
+    assert "/analytics/geography" in api_js
+    assert "textField('analytics-province'" in analytics_js
+    assert "textField('analytics-district'" in analytics_js
+    assert "API.getAnalyticsGeography" in analytics_js
+    assert "analytics-provinces-chart" in analytics_js
+    assert "province: _state.filters.province" in analytics_js
+    assert "district: _state.filters.district" in analytics_js
+
+
+def test_analytics_page_renders_status_and_backlog():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "function getAnalyticsStatusBacklog(params = {})" in api_js
+    assert "/analytics/status-backlog" in api_js
+    assert "API.getAnalyticsStatusBacklog" in analytics_js
+    assert "analytics-status-chart" in analytics_js
+    assert "Tuổi tồn đọng" in analytics_js
+    assert "Charts.destroy('analytics-status-chart')" in analytics_js

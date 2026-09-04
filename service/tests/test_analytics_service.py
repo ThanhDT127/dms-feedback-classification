@@ -323,3 +323,156 @@ def test_empty_state_has_stable_unavailable_metrics(repo):
     assert service.groups(AnalyticsFilter())["items"] == []
     assert service.products(AnalyticsFilter())["items"] == []
     assert service.data_quality(AnalyticsFilter())["total_records"] == 0
+
+
+def test_daily_trend_counts_distinct_issue_codes_in_date_order(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {"issue_code": "A", "issue_date": "2026-08-02", "labels": []},
+            {"issue_code": "A", "issue_date": "2026-08-02", "labels": []},
+            {"issue_code": "B", "issue_date": "2026-08-01", "labels": []},
+            {"issue_code": "C", "issue_date": None, "labels": []},
+        ],
+    )
+
+    body = FeedbackAnalyticsService(repo).daily_trend(AnalyticsFilter())
+
+    assert body == {
+        "items": [
+            {"date": "2026-08-01", "issue_count": 1},
+            {"date": "2026-08-02", "issue_count": 1},
+        ],
+        "total_issues": 3,
+        "excluded_missing_date": 1,
+    }
+
+
+def test_issue_types_count_distinct_codes_from_raw_business_field(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {"issue_code": "A", "raw_data": {"Loại vấn đề": "Yêu cầu khách hàng"}},
+            {"issue_code": "A", "raw_data": {"Loại vấn đề": "Yêu cầu khách hàng"}},
+            {"issue_code": "B", "raw_data": {"Loại vấn đề": "Vấn đề khác"}},
+            {"issue_code": "C", "raw_data": {}},
+        ],
+    )
+
+    body = FeedbackAnalyticsService(repo).issue_types(AnalyticsFilter())
+
+    assert body["items"] == [
+        {"label": "Chưa xác định", "issue_count": 1, "percentage": 33.33},
+        {"label": "Vấn đề khác", "issue_count": 1, "percentage": 33.33},
+        {"label": "Yêu cầu khách hàng", "issue_count": 1, "percentage": 33.33},
+    ]
+    assert body["total_issues"] == 3
+
+
+def test_duplicate_details_groups_content_and_paginates(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {"issue_code": "A", "content": " Đèn  lỗi ", "unit_name": "North"},
+            {"issue_code": "B", "content": "đèn lỗi", "unit_name": "South"},
+            {"issue_code": "C", "content": "Đèn lỗi", "unit_name": "North"},
+            {"issue_code": "D", "content": "Nội dung riêng", "unit_name": "North"},
+        ],
+    )
+
+    body = FeedbackAnalyticsService(repo).duplicate_details(AnalyticsFilter(), page=1, page_size=10)
+
+    assert body["total"] == 1
+    assert body["total_pages"] == 1
+    assert body["items"] == [
+        {
+            "content": "Đèn lỗi",
+            "record_count": 3,
+            "duplicate_rows": 2,
+            "issue_count": 3,
+            "issue_codes": ["A", "B", "C"],
+            "units": ["North", "South"],
+        }
+    ]
+
+
+def test_unit_issue_type_matrix_counts_distinct_issue_codes(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {"issue_code": "A", "unit_name": "North", "raw_data": {"Loại vấn đề": "Báo lỗi"}},
+            {"issue_code": "A", "unit_name": "North", "raw_data": {"Loại vấn đề": "Báo lỗi"}},
+            {"issue_code": "B", "unit_name": "North", "raw_data": {"Loại vấn đề": "Cải tiến"}},
+            {"issue_code": "C", "unit_name": "South", "raw_data": {"Loại vấn đề": "Báo lỗi"}},
+        ],
+    )
+
+    body = FeedbackAnalyticsService(repo).unit_issue_type_matrix(AnalyticsFilter())
+
+    assert body["units"] == ["North", "South"]
+    assert body["issue_types"] == ["Báo lỗi", "Cải tiến"]
+    assert body["rows"] == [
+        {"unit": "North", "total": 2, "counts": {"Báo lỗi": 1, "Cải tiến": 1}},
+        {"unit": "South", "total": 1, "counts": {"Báo lỗi": 1, "Cải tiến": 0}},
+    ]
+
+
+def test_geography_distribution_and_global_filter_use_raw_fields(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {"issue_code": "A", "raw_data": {"Tỉnh/TP": "Hà Nội", "Quận/huyện": "Hoàng Mai"}},
+            {"issue_code": "A", "raw_data": {"Tỉnh/TP": "Hà Nội", "Quận/huyện": "Hoàng Mai"}},
+            {"issue_code": "B", "raw_data": {"Tỉnh/TP": "Hà Nội", "Quận/huyện": "Hà Đông"}},
+            {"issue_code": "C", "raw_data": {"Tỉnh/TP": "Quảng Ninh", "Quận/huyện": "Hạ Long"}},
+        ],
+    )
+    service = FeedbackAnalyticsService(repo)
+
+    body = service.geography(AnalyticsFilter())
+    filtered = service.overview(AnalyticsFilter(province="Hà Nội", district="Hoàng Mai"))
+
+    assert body["provinces"] == [
+        {"label": "Hà Nội", "issue_count": 2, "percentage": 66.67},
+        {"label": "Quảng Ninh", "issue_count": 1, "percentage": 33.33},
+    ]
+    assert {item["label"] for item in body["districts"]} == {"Hoàng Mai", "Hà Đông", "Hạ Long"}
+    assert filtered["total_issues"]["value"] == 1
+
+
+def test_status_backlog_reports_distribution_and_age_buckets(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {"issue_code": "A", "issue_date": "2026-08-31", "business_status": "Đã xử lý"},
+            {"issue_code": "A", "issue_date": "2026-08-30", "business_status": "Chờ xử lý"},
+            {"issue_code": "B", "issue_date": "2026-08-31", "business_status": "Chờ xử lý"},
+            {"issue_code": "C", "issue_date": "2026-08-25", "business_status": "Chờ xử lý"},
+            {"issue_code": "D", "issue_date": "2026-07-01", "business_status": None},
+        ],
+    )
+
+    body = FeedbackAnalyticsService(repo).status_backlog(AnalyticsFilter())
+
+    assert body["statuses"] == [
+        {"label": "Chờ xử lý", "issue_count": 2, "percentage": 50.0},
+        {"label": "Chưa xác định", "issue_count": 1, "percentage": 25.0},
+        {"label": "Đã xử lý", "issue_count": 1, "percentage": 25.0},
+    ]
+    assert body["processed_count"] == 1
+    assert body["backlog_count"] == 3
+    assert body["backlog_rate"] == 75.0
+    assert body["age_as_of"] == "2026-08-31"
+    assert body["age_buckets"] == [
+        {"label": "0–2 ngày", "issue_count": 1},
+        {"label": "3–7 ngày", "issue_count": 1},
+        {"label": "8–30 ngày", "issue_count": 0},
+        {"label": "31+ ngày", "issue_count": 1},
+        {"label": "Thiếu ngày", "issue_count": 0},
+    ]
