@@ -29,9 +29,7 @@ def test_reader_keeps_source_rows_aliases_and_null_metadata(tmp_path: Path):
 def test_reader_normalizes_duplicate_content_without_inventing_metadata(tmp_path: Path):
     """Normalization must preserve missing business metadata as null values."""
     input_path = tmp_path / "feedback.xlsx"
-    pd.DataFrame({"Nội dung phản hồi": ["  Lỗi   ĐÈN "]}).to_excel(
-        input_path, index=False
-    )
+    pd.DataFrame({"Nội dung phản hồi": ["  Lỗi   ĐÈN "]}).to_excel(input_path, index=False)
 
     record = read_feedback_workbook(input_path).records[0]
 

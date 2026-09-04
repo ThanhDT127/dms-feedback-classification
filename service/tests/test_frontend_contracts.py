@@ -110,6 +110,43 @@ def test_file_manager_non_admin_controls_are_role_gated():
     assert "if (!isAdminRole())" in files_js
 
 
+def test_file_manager_existing_input_ingest_contract():
+    files_js = _read("js/pages/files.js")
+    api_js = _read("js/api.js")
+
+    assert "function ingestInputFile(filename)" in api_js
+    assert "Đưa vào phân tích" in files_js
+    assert "ingestInputFile" in _page_exports(files_js)
+    assert "_activeFolder === 'input'" in files_js
+    assert "source === 'local_cache'" in files_js
+    assert "Phân loại luôn" not in files_js
+    assert "result.ingest_error" in files_js
+    assert "đã tải lên nhưng chưa đưa được vào phân tích" in files_js
+
+
+def test_analytics_distinguishes_ingested_rows_without_ai_classification():
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "Nhãn phân loại do AI" in analytics_js
+    assert "Kết quả phân loại" in analytics_js
+    assert "if (item.classification_state === 'pending') return 'Chưa có nhãn';" in analytics_js
+    assert "classificationDetailLabel(item)" in analytics_js
+    assert (
+        "return classificationLabel(item) === 'Chưa có nhãn' ? 'Trạng thái nhãn' : 'Nhãn phân loại do AI';"
+        in analytics_js
+    )
+    assert "classification_state === 'pending'" in analytics_js
+    assert "dữ liệu Excel đã đưa vào phân tích" in analytics_js
+
+
+def test_managed_file_analytics_assets_have_updated_cache_versions():
+    index_html = _read("index.html")
+
+    assert "js/api.js?v=1.0.6" in index_html
+    assert "js/pages/analytics.js?v=1.0.3" in index_html
+    assert "js/pages/files.js?v=1.0.4" in index_html
+
+
 def test_password_controls_contract():
     password_js = _read("js/components/password.js")
     login_js = _read("js/pages/login.js")
@@ -460,5 +497,5 @@ def test_analytics_page_renders_status_and_backlog():
     assert "/analytics/status-backlog" in api_js
     assert "API.getAnalyticsStatusBacklog" in analytics_js
     assert "analytics-status-chart" in analytics_js
-    assert "Tuổi tồn đọng" in analytics_js
+    assert "Thời gian tồn đọng" in analytics_js
     assert "Charts.destroy('analytics-status-chart')" in analytics_js

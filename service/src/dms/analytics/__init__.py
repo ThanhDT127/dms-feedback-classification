@@ -1,5 +1,6 @@
 """Shared feedback analytics foundations."""
 
+from .ingest import ManagedWorkbookIngestResult, ingest_managed_workbook
 from .input_reader import read_feedback_workbook, sha256_file
 from .models import (
     AnalyticsFilter,
@@ -16,7 +17,9 @@ __all__ = [
     "FeedbackInputRecord",
     "FeedbackAnalyticsRepository",
     "FeedbackAnalyticsService",
+    "ManagedWorkbookIngestResult",
     "ParsedFeedbackWorkbook",
+    "ingest_managed_workbook",
     "read_feedback_workbook",
     "sha256_file",
 ]

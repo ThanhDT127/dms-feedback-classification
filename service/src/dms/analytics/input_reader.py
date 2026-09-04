@@ -58,8 +58,7 @@ def _score_textiness(values: list[object]) -> float:
         return -1.0
     lengths = [len(value) for value in text_values]
     return float(
-        (np.mean(lengths) if lengths else 0)
-        * 0.7
+        (np.mean(lengths) if lengths else 0) * 0.7
         + np.mean([1.0 if " " in value else 0.0 for value in text_values]) * 20
         + np.mean([0.0 if _is_numeric_like(value) else 1.0 for value in text_values]) * 30
     )
@@ -74,7 +73,9 @@ def _detect_header_and_textcol_with_row(
     for row_idx in range(n_scan):
         for col_idx, value in enumerate(raw_df.iloc[row_idx, :].tolist()):
             canonical = _canon_lower(value)
-            if any(alias in canonical and len(canonical) <= len(alias) + 20 for alias in TEXT_ALIASES):
+            if any(
+                alias in canonical and len(canonical) <= len(alias) + 20 for alias in TEXT_ALIASES
+            ):
                 best_row_idx, best_col_idx = row_idx, col_idx
                 break
         if best_row_idx is not None:
@@ -88,7 +89,11 @@ def _detect_header_and_textcol_with_row(
         dataframe = raw_df.iloc[best_row_idx + 1 :, :].copy()
         dataframe.columns = header_values
         text_column = next(
-            (column for column in dataframe.columns if any(alias in _canon_lower(column) for alias in TEXT_ALIASES)),
+            (
+                column
+                for column in dataframe.columns
+                if any(alias in _canon_lower(column) for alias in TEXT_ALIASES)
+            ),
             dataframe.columns[best_col_idx],
         )
         return dataframe.reset_index(drop=True), text_column, best_row_idx
@@ -97,7 +102,9 @@ def _detect_header_and_textcol_with_row(
     dataframe.columns = [f"col_{index}" for index in range(dataframe.shape[1])]
     scores = {
         index: -1.0
-        if all((str(value).strip() == "" or pd.isna(value)) for value in dataframe.iloc[:n_scan, index])
+        if all(
+            (str(value).strip() == "" or pd.isna(value)) for value in dataframe.iloc[:n_scan, index]
+        )
         else _score_textiness(dataframe.iloc[:n_scan, index].tolist())
         for index in range(dataframe.shape[1])
     }
@@ -105,7 +112,9 @@ def _detect_header_and_textcol_with_row(
     return dataframe.copy(), dataframe.columns[best_index], None
 
 
-def detect_header_and_textcol(raw_df: pd.DataFrame, scan_rows: int = 10) -> tuple[pd.DataFrame, str]:
+def detect_header_and_textcol(
+    raw_df: pd.DataFrame, scan_rows: int = 10
+) -> tuple[pd.DataFrame, str]:
     """Auto-detect the header row and main text column."""
     dataframe, text_column, _ = _detect_header_and_textcol_with_row(raw_df, scan_rows)
     return dataframe, text_column
@@ -114,7 +123,11 @@ def detect_header_and_textcol(raw_df: pd.DataFrame, scan_rows: int = 10) -> tupl
 def _find_metadata_columns(columns: list[str]) -> dict[str, str | None]:
     return {
         field: next(
-            (column for column in columns if any(_canon_lower(alias) == _canon_lower(column) for alias in aliases)),
+            (
+                column
+                for column in columns
+                if any(_canon_lower(alias) == _canon_lower(column) for alias in aliases)
+            ),
             None,
         )
         for field, aliases in METADATA_ALIASES.items()
@@ -137,8 +150,7 @@ def read_feedback_workbook(input_path: Path) -> ParsedFeedbackWorkbook:
     records = []
     for source_row_number, (_, row) in zip(source_row_numbers, dataframe.iterrows(), strict=True):
         raw_data = {
-            str(column): None if pd.isna(value) else str(value)
-            for column, value in row.items()
+            str(column): None if pd.isna(value) else str(value) for column, value in row.items()
         }
         content = normalize_text(row[text_column]) or ""
         metadata = {

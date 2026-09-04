@@ -21,7 +21,7 @@ window.AnalyticsPage = (() => {
     app.innerHTML = `
       <div class="page-header">
         <h2>📊 Phân tích phản hồi</h2>
-        <p>Chỉ số nghiệp vụ từ dữ liệu phản hồi đã được phân loại</p>
+        <p>Chỉ số nghiệp vụ từ dữ liệu Excel đã đưa vào phân tích; kết quả AI được hiển thị khi đã phân loại.</p>
       </div>
 
       <section class="card analytics-filter-card" aria-label="Bộ lọc thời gian phân tích">
@@ -95,7 +95,7 @@ window.AnalyticsPage = (() => {
         <div class="analytics-issue-filter-grid" aria-label="Bộ lọc chi tiết vấn đề">
           ${textField('analytics-issue-source', 'Nguồn', _state.issueFilters.source)}
           ${textField('analytics-issue-unit', 'Đơn vị', _state.issueFilters.unit)}
-          ${textField('analytics-issue-label', 'Nhãn', _state.issueFilters.label)}
+          ${textField('analytics-issue-label', 'Kết quả phân loại', _state.issueFilters.label)}
           ${textField('analytics-issue-product', 'Sản phẩm', _state.issueFilters.product)}
           ${textField('analytics-issue-status', 'Trạng thái', _state.issueFilters.status)}
           <div class="analytics-filter-actions"><button class="btn btn-primary btn-sm" type="button" onclick="AnalyticsPage.applyIssueFilters()">Lọc</button><button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.clearIssueFilters()">Bỏ lọc</button></div>
@@ -340,8 +340,8 @@ window.AnalyticsPage = (() => {
     const metrics = [
       ['total_issues', 'Tổng số vấn đề', '📌', 'blue', false],
       ['processed_issues', 'Vấn đề đã xử lý', '✅', 'green', false],
-      ['label_coverage', 'Tỷ lệ phủ nhãn', '🏷️', 'purple', true],
-      ['multi_label_rate', 'Phản hồi đa nhãn', '🔖', 'amber', true],
+      ['label_coverage', 'Tỷ lệ phủ Nhãn phân loại do AI', '🏷️', 'purple', true],
+      ['multi_label_rate', 'Phản hồi đa nhãn do AI', '🔖', 'amber', true],
       ['sentiment_coverage', 'Hoàn thiện cảm xúc', '😊', 'orange', true],
       ['product_coverage', 'Nhận diện sản phẩm', '📦', 'blue', true],
       ['duplicate_issue_rate', 'Tỷ lệ vấn đề trùng', '♻️', 'red', true],
@@ -429,7 +429,7 @@ window.AnalyticsPage = (() => {
     const statuses = data?.statuses || [];
     if (!statuses.length) return renderEmpty(element, 'Chưa có dữ liệu trạng thái xử lý.');
     const ageBuckets = data?.age_buckets || [];
-    element.innerHTML = `<div class="analytics-status-layout"><div><div class="analytics-chart-wrap"><canvas id="analytics-status-chart"></canvas></div></div><div><div class="analytics-backlog-summary"><div><strong>${formatNumber(data.processed_count)}</strong><span>Đã xử lý</span></div><div><strong>${formatNumber(data.backlog_count)}</strong><span>Tồn đọng (${formatPercent(data.backlog_rate)})</span></div></div><h4>Tuổi tồn đọng</h4><p class="analytics-panel-note">Tính đến ${escHtml(data.age_as_of || 'chưa có ngày tham chiếu')}</p><div class="analytics-age-grid">${ageBuckets.map(item => `<div><span>${escHtml(item.label)}</span><strong>${formatNumber(item.issue_count)}</strong></div>`).join('')}</div></div></div>`;
+    element.innerHTML = `<div class="analytics-status-layout"><div><div class="analytics-chart-wrap"><canvas id="analytics-status-chart"></canvas></div></div><div><div class="analytics-backlog-summary"><div><strong>${formatNumber(data.processed_count)}</strong><span>Đã xử lý</span></div><div><strong>${formatNumber(data.backlog_count)}</strong><span>Tồn đọng (${formatPercent(data.backlog_rate)})</span></div></div><h4>Thời gian tồn đọng</h4><p class="analytics-panel-note">Theo ngày ghi nhận, tính đến ${escHtml(data.age_as_of || 'chưa có ngày tham chiếu')}</p><div class="analytics-age-grid">${ageBuckets.map(item => `<div><span>${escHtml(item.label)}</span><strong>${formatNumber(item.issue_count)}</strong></div>`).join('')}</div></div></div>`;
     Charts.createDoughnutChart('analytics-status-chart', statuses.map(item => item.label), statuses.map(item => item.issue_count));
   }
 
@@ -458,13 +458,22 @@ window.AnalyticsPage = (() => {
   function renderIssues(element, data) {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Không có vấn đề nào trong khoảng thời gian và bộ lọc đã chọn.');
-    element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Danh sách chi tiết vấn đề"><thead><tr><th>Mã vấn đề</th><th>Ngày</th><th>Nguồn</th><th>Đơn vị</th><th>Trạng thái</th><th>Nhãn</th><th>Sản phẩm</th><th>Nội dung</th><th>Chi tiết</th></tr></thead><tbody>${items.map((item, index) => `<tr><td>${escHtml(item.issue_code || '—')}</td><td>${escHtml(item.issue_date || '—')}</td><td>${escHtml(item.source || 'Chưa xác định')}</td><td>${escHtml(item.unit_name || 'Chưa xác định')}</td><td>${escHtml(item.business_status || '—')}</td><td class="wrap">${escHtml((item.labels || []).join(', ') || '—')}</td><td>${escHtml(item.product || 'Chưa xác định')}</td><td class="wrap">${escHtml(item.content || '—')}</td><td><button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.showIssueDetail(${index})">Xem</button></td></tr>`).join('')}</tbody></table></div><div class="analytics-pagination"><span class="analytics-panel-note">Hiển thị ${formatNumber(items.length)} / ${formatNumber(data.total)} vấn đề.</span><div><button class="btn btn-ghost btn-sm" type="button" ${data.page <= 1 ? 'disabled' : ''} onclick="AnalyticsPage.changeIssuePage(-1)" aria-label="Trang vấn đề trước">← Trước</button><span class="analytics-page-number">Trang ${formatNumber(data.page)} / ${formatNumber(data.total_pages || 1)}</span><button class="btn btn-ghost btn-sm" type="button" ${data.page >= data.total_pages ? 'disabled' : ''} onclick="AnalyticsPage.changeIssuePage(1)" aria-label="Trang vấn đề tiếp theo">Tiếp →</button></div></div>`;
+    element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Danh sách chi tiết vấn đề"><thead><tr><th>Mã vấn đề</th><th>Ngày</th><th>Nguồn</th><th>Đơn vị</th><th>Trạng thái</th><th>Kết quả phân loại</th><th>Sản phẩm</th><th>Nội dung</th><th>Chi tiết</th></tr></thead><tbody>${items.map((item, index) => `<tr><td>${escHtml(item.issue_code || '—')}</td><td>${escHtml(item.issue_date || '—')}</td><td>${escHtml(item.source || 'Chưa xác định')}</td><td>${escHtml(item.unit_name || 'Chưa xác định')}</td><td>${escHtml(item.business_status || '—')}</td><td class="wrap">${escHtml(classificationLabel(item))}</td><td>${escHtml(item.classification_state === 'pending' ? 'Chưa phân loại' : item.product || 'Chưa xác định')}</td><td class="wrap">${escHtml(item.content || '—')}</td><td><button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.showIssueDetail(${index})">Xem</button></td></tr>`).join('')}</tbody></table></div><div class="analytics-pagination"><span class="analytics-panel-note">Hiển thị ${formatNumber(items.length)} / ${formatNumber(data.total)} vấn đề.</span><div><button class="btn btn-ghost btn-sm" type="button" ${data.page <= 1 ? 'disabled' : ''} onclick="AnalyticsPage.changeIssuePage(-1)" aria-label="Trang vấn đề trước">← Trước</button><span class="analytics-page-number">Trang ${formatNumber(data.page)} / ${formatNumber(data.total_pages || 1)}</span><button class="btn btn-ghost btn-sm" type="button" ${data.page >= data.total_pages ? 'disabled' : ''} onclick="AnalyticsPage.changeIssuePage(1)" aria-label="Trang vấn đề tiếp theo">Tiếp →</button></div></div>`;
+  }
+
+  function classificationLabel(item) {
+    if (item.classification_state === 'pending') return 'Chưa có nhãn';
+    return (item.labels || []).join(', ') || 'Chưa có nhãn';
+  }
+
+  function classificationDetailLabel(item) {
+    return classificationLabel(item) === 'Chưa có nhãn' ? 'Trạng thái nhãn' : 'Nhãn phân loại do AI';
   }
 
   function showIssueDetail(index) {
     const item = _state.issues?.items?.[index];
     if (!item || !window.App?.showModal) return;
-    App.showModal(`<div class="analytics-detail-modal"><div class="card-header"><span class="card-title">Chi tiết vấn đề</span><button class="btn btn-ghost btn-sm" type="button" onclick="App.closeModal()">Đóng</button></div><dl class="analytics-detail-list">${detailRow('Mã vấn đề', item.issue_code)}${detailRow('Ngày', item.issue_date)}${detailRow('Nguồn', item.source)}${detailRow('Đơn vị', item.unit_name)}${detailRow('Trạng thái', item.business_status)}${detailRow('Nhãn', (item.labels || []).join(', '))}${detailRow('Sản phẩm', item.product)}${detailRow('File nguồn', item.source_file_name)}${detailRow('Dòng Excel', item.source_row_number)}${detailRow('Job', item.job_id)}${detailRow('Trạng thái phân loại', item.classification_state)}${detailRow('Nội dung', item.content)}</dl></div>`);
+    App.showModal(`<div class="analytics-detail-modal"><div class="card-header"><span class="card-title">Chi tiết vấn đề</span><button class="btn btn-ghost btn-sm" type="button" onclick="App.closeModal()">Đóng</button></div><dl class="analytics-detail-list">${detailRow('Mã vấn đề', item.issue_code)}${detailRow('Ngày', item.issue_date)}${detailRow('Nguồn', item.source)}${detailRow('Đơn vị', item.unit_name)}${detailRow('Trạng thái', item.business_status)}${detailRow(classificationDetailLabel(item), classificationLabel(item))}${detailRow('Sản phẩm', item.classification_state === 'pending' ? 'Chưa phân loại' : item.product)}${detailRow('File nguồn', item.source_file_name)}${detailRow('Dòng Excel', item.source_row_number)}${detailRow('Job', item.job_id)}${detailRow('Trạng thái phân loại', item.classification_state)}${detailRow('Nội dung', item.content)}</dl></div>`);
   }
 
   function detailRow(label, value) {
