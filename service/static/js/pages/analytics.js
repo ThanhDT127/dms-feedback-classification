@@ -6,8 +6,8 @@ window.AnalyticsPage = (() => {
   const DEFAULT_PAGE_SIZE = 25;
   let _cache = null;
   const _state = {
-    filters: { from: '', to: '', compare_from: '', compare_to: '', province: '', district: '', unit: '' },
-    filterOptions: { provinces: [], districts: [], units: [] },
+    filters: { from: '', to: '', compare_from: '', compare_to: '', district: '', unit: '' },
+    filterOptions: { districts: [], units: [] },
     issueFilters: { source: '', unit: '', label: '', product: '', status: '' },
     issuePage: 1,
     duplicatePage: 1,
@@ -47,9 +47,8 @@ window.AnalyticsPage = (() => {
           ${dateField('analytics-date-to', 'Đến ngày', _state.filters.to)}
           ${dateField('analytics-compare-from', 'So sánh từ ngày', _state.filters.compare_from)}
           ${dateField('analytics-compare-to', 'So sánh đến ngày', _state.filters.compare_to)}
-          ${selectField('analytics-province', 'Tỉnh/TP', _state.filters.province, _state.filterOptions.provinces, 'AnalyticsPage.onProvinceChange()')}
-          ${selectField('analytics-district', 'Quận/huyện', _state.filters.district, _state.filterOptions.districts, 'AnalyticsPage.onDistrictChange()')}
-          ${selectField('analytics-unit', 'Đơn vị', _state.filters.unit, _state.filterOptions.units)}
+          ${selectField('analytics-unit', 'Đơn vị', _state.filters.unit, _state.filterOptions.units, 'AnalyticsPage.onUnitChange()')}
+          ${selectField('analytics-district', 'Quận/huyện', _state.filters.district, _state.filterOptions.districts)}
           <div class="analytics-filter-actions">
             <button class="btn btn-primary btn-sm" type="button" onclick="AnalyticsPage.applyFilters()">Áp dụng</button>
             <button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.resetFilters()">Đặt lại</button>
@@ -159,7 +158,6 @@ window.AnalyticsPage = (() => {
       to: document.getElementById('analytics-date-to')?.value || '',
       compare_from: document.getElementById('analytics-compare-from')?.value || '',
       compare_to: document.getElementById('analytics-compare-to')?.value || '',
-      province: document.getElementById('analytics-province')?.value.trim() || '',
       district: document.getElementById('analytics-district')?.value.trim() || '',
       unit: document.getElementById('analytics-unit')?.value.trim() || '',
     };
@@ -187,13 +185,12 @@ window.AnalyticsPage = (() => {
   }
 
   function resetFilters() {
-    _state.filters = { from: '', to: '', compare_from: '', compare_to: '', province: '', district: '', unit: '' };
+    _state.filters = { from: '', to: '', compare_from: '', compare_to: '', district: '', unit: '' };
     const inputIds = {
       from: 'analytics-date-from',
       to: 'analytics-date-to',
       compare_from: 'analytics-compare-from',
       compare_to: 'analytics-compare-to',
-      province: 'analytics-province',
       district: 'analytics-district',
       unit: 'analytics-unit',
     };
@@ -209,19 +206,10 @@ window.AnalyticsPage = (() => {
     refresh(true);
   }
 
-  async function onProvinceChange() {
-    _state.filters.province = document.getElementById('analytics-province')?.value || '';
+  async function onUnitChange() {
+    _state.filters.unit = document.getElementById('analytics-unit')?.value || '';
     _state.filters.district = '';
-    _state.filters.unit = '';
     resetSelect('analytics-district');
-    resetSelect('analytics-unit');
-    await loadFilterOptions();
-  }
-
-  async function onDistrictChange() {
-    _state.filters.district = document.getElementById('analytics-district')?.value || '';
-    _state.filters.unit = '';
-    resetSelect('analytics-unit');
     await loadFilterOptions();
   }
 
@@ -239,18 +227,15 @@ window.AnalyticsPage = (() => {
       const options = await API.getAnalyticsFilterOptions({
         from: _state.filters.from || undefined,
         to: _state.filters.to || undefined,
-        province: _state.filters.province || undefined,
-        district: _state.filters.district || undefined,
+        unit: _state.filters.unit || undefined,
       });
       if (optionsRequestId !== _state.optionsRequestId) return;
       _state.filterOptions = {
-        provinces: options?.provinces || [],
         districts: options?.districts || [],
         units: options?.units || [],
       };
-      updateSelect('analytics-province', _state.filterOptions.provinces, _state.filters.province);
-      updateSelect('analytics-district', _state.filterOptions.districts, _state.filters.district);
       updateSelect('analytics-unit', _state.filterOptions.units, _state.filters.unit);
+      updateSelect('analytics-district', _state.filterOptions.districts, _state.filters.district);
     } catch (error) {
       console.warn('Không thể tải lựa chọn bộ lọc analytics:', error.message);
     }
@@ -318,7 +303,6 @@ window.AnalyticsPage = (() => {
     return {
       from: _state.filters.from || undefined,
       to: _state.filters.to || undefined,
-      province: _state.filters.province || undefined,
       district: _state.filters.district || undefined,
       unit: _state.filters.unit || undefined,
     };
@@ -650,5 +634,5 @@ window.AnalyticsPage = (() => {
     Charts.destroy('analytics-units-chart');
   }
 
-  return { render, destroy, applyFilters, resetFilters, refresh, onProvinceChange, onDistrictChange, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, filterIssuesByUnit };
+  return { render, destroy, applyFilters, resetFilters, refresh, onUnitChange, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, filterIssuesByUnit };
 })();

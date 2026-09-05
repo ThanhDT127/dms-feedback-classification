@@ -80,17 +80,10 @@ class FeedbackAnalyticsService:
             AnalyticsFilter(
                 date_from=analytics_filter.date_from,
                 date_to=analytics_filter.date_to,
-                province=analytics_filter.province,
+                unit_name=analytics_filter.unit_name,
             )
         )
-        unit_rows = self._rows(
-            AnalyticsFilter(
-                date_from=analytics_filter.date_from,
-                date_to=analytics_filter.date_to,
-                province=analytics_filter.province,
-                district=analytics_filter.district,
-            )
-        )
+        unit_rows = province_rows
 
         def values(rows: list[dict[str, Any]], *aliases: str) -> list[str]:
             return sorted(

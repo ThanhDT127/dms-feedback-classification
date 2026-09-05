@@ -261,10 +261,7 @@ def test_analytics_filter_options_follow_geography_and_unit_scope(analytics_api)
     )
 
     all_options = client.get("/api/analytics/filter-options")
-    hanoi_options = client.get("/api/analytics/filter-options?province=Hà%20Nội")
-    district_options = client.get(
-        "/api/analytics/filter-options?province=Hà%20Nội&district=Hoàng%20Mai"
-    )
+    unit_options = client.get("/api/analytics/filter-options?unit=Đơn%20vị%20A")
     filtered_overview = client.get("/api/analytics/overview?unit=Đơn%20vị%20A")
 
     assert all_options.status_code == 200
@@ -273,9 +270,8 @@ def test_analytics_filter_options_follow_geography_and_unit_scope(analytics_api)
         "districts": ["Hà Đông", "Hạ Long", "Hoàng Mai"],
         "units": ["Đơn vị A", "Đơn vị B", "Đơn vị C"],
     }
-    assert hanoi_options.json()["districts"] == ["Hà Đông", "Hoàng Mai"]
-    assert hanoi_options.json()["units"] == ["Đơn vị A", "Đơn vị B"]
-    assert district_options.json()["units"] == ["Đơn vị A"]
+    assert unit_options.json()["districts"] == ["Hoàng Mai"]
+    assert unit_options.json()["units"] == ["Đơn vị A", "Đơn vị B", "Đơn vị C"]
     assert filtered_overview.json()["total_issues"]["value"] == 1
 
 

@@ -144,7 +144,7 @@ def test_managed_file_analytics_assets_have_updated_cache_versions():
 
     assert "css/style.css?v=1.0.8" in index_html
     assert "js/api.js?v=1.0.7" in index_html
-    assert "js/pages/analytics.js?v=1.0.5" in index_html
+    assert "js/pages/analytics.js?v=1.0.6" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
 
@@ -495,7 +495,7 @@ def test_analytics_page_renders_unit_issue_type_heatmap():
     assert "analytics-heat-cell" in analytics_js
 
 
-def test_analytics_page_renders_cascading_global_filter_dropdowns():
+def test_analytics_page_renders_unit_before_cascading_district_filter():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
     sidebar_js = _read("js/components/sidebar.js")
@@ -504,24 +504,26 @@ def test_analytics_page_renders_cascading_global_filter_dropdowns():
     assert "function getAnalyticsGeography(params = {})" in api_js
     assert "function getAnalyticsFilterOptions(params = {})" in api_js
     assert "/analytics/filter-options" in api_js
-    assert "selectField('analytics-province'" in analytics_js
-    assert "selectField('analytics-district'" in analytics_js
     assert "selectField('analytics-unit'" in analytics_js
-    assert "AnalyticsPage.onProvinceChange()" in analytics_js
-    assert "AnalyticsPage.onDistrictChange()" in analytics_js
+    assert "selectField('analytics-district'" in analytics_js
+    assert "selectField('analytics-province'" not in analytics_js
+    assert "getElementById('analytics-province')" not in analytics_js
+    assert "onProvinceChange" not in analytics_js
+    assert analytics_js.index("selectField('analytics-unit'") < analytics_js.index(
+        "selectField('analytics-district'"
+    )
+    assert "AnalyticsPage.onUnitChange()" in analytics_js
     assert "resetSelect('analytics-district')" in analytics_js
-    assert "resetSelect('analytics-unit')" in analytics_js
     assert "API.getAnalyticsFilterOptions" in analytics_js
     assert "const optionsRequestId = ++_state.optionsRequestId" in analytics_js
     assert "if (optionsRequestId !== _state.optionsRequestId) return" in analytics_js
     assert "API.getAnalyticsGeography" in analytics_js
     assert "analytics-provinces-chart" in analytics_js
-    assert "province: _state.filters.province" in analytics_js
     assert "district: _state.filters.district" in analytics_js
     assert "unit: _state.filters.unit" in analytics_js
     assert "unit: globalParams.unit || _state.issueFilters.unit" in analytics_js
     assert "escAttr(option)" in analytics_js
-    assert {"onProvinceChange", "onDistrictChange"} <= _page_exports(analytics_js)
+    assert "onUnitChange" in _page_exports(analytics_js)
     assert sidebar_js.index("{ id: 'analytics'") < sidebar_js.index("{ id: 'classify'")
     assert "const DEFAULT_PAGE = 'analytics';" in app_js
 
