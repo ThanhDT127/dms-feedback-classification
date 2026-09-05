@@ -144,7 +144,7 @@ def test_managed_file_analytics_assets_have_updated_cache_versions():
 
     assert "css/style.css?v=1.0.8" in index_html
     assert "js/api.js?v=1.0.7" in index_html
-    assert "js/pages/analytics.js?v=1.0.8" in index_html
+    assert "js/pages/analytics.js?v=1.0.9" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
 
@@ -541,13 +541,15 @@ def test_analytics_page_renders_unit_before_cascading_district_filter():
     assert "const DEFAULT_PAGE = 'analytics';" in app_js
 
 
-def test_analytics_page_renders_status_and_backlog():
+def test_analytics_page_does_not_render_status_and_backlog():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
 
     assert "function getAnalyticsStatusBacklog(params = {})" in api_js
     assert "/analytics/status-backlog" in api_js
-    assert "API.getAnalyticsStatusBacklog" in analytics_js
-    assert "analytics-status-chart" in analytics_js
-    assert "Thời gian tồn đọng" in analytics_js
-    assert "Charts.destroy('analytics-status-chart')" in analytics_js
+    assert "API.getAnalyticsStatusBacklog" not in analytics_js
+    assert "analytics-status-backlog" not in analytics_js
+    assert "analytics-status-chart" not in analytics_js
+    assert "Trạng thái xử lý" not in analytics_js
+    assert "Thời gian tồn đọng" not in analytics_js
+    assert "renderStatusBacklog" not in analytics_js

@@ -76,11 +76,6 @@ window.AnalyticsPage = (() => {
         ${panel('analytics-product-title', '📦 Sản phẩm & chất lượng', 'analytics-products')}
       </div>
 
-      <section class="card" aria-labelledby="analytics-status-title">
-        <div class="card-header"><span id="analytics-status-title" class="card-title">⏳ Trạng thái xử lý & tồn đọng</span></div>
-        <div id="analytics-status-backlog" class="analytics-panel-body">${renderPanelLoading()}</div>
-      </section>
-
       <section class="card" aria-labelledby="analytics-geography-title">
         <div class="card-header"><span id="analytics-geography-title" class="card-title">🗺️ Phân bổ địa lý</span></div>
         <div id="analytics-geography" class="analytics-panel-body">${renderPanelLoading()}</div>
@@ -312,7 +307,6 @@ window.AnalyticsPage = (() => {
     renderResult(results.issueTypes, renderIssueTypes, 'analytics-issue-types');
     renderResult(results.unitIssueTypeMatrix, renderUnitIssueTypeMatrix, 'analytics-unit-issue-type-matrix');
     renderResult(results.geography, renderGeography, 'analytics-geography');
-    renderResult(results.statusBacklog, renderStatusBacklog, 'analytics-status-backlog');
     renderResult(results.duplicates, (element, data) => { _state.duplicates = data; renderDuplicates(element, data); }, 'analytics-duplicates');
     renderResult(results.sources, renderSources, 'analytics-sources');
     renderResult(results.units, renderUnits, 'analytics-units');
@@ -339,7 +333,6 @@ window.AnalyticsPage = (() => {
       issueTypes: API.getAnalyticsIssueTypes(globalQueryParams()),
       unitIssueTypeMatrix: API.getAnalyticsUnitIssueTypeMatrix(globalQueryParams()),
       geography: API.getAnalyticsGeography(globalQueryParams()),
-      statusBacklog: API.getAnalyticsStatusBacklog(globalQueryParams()),
       duplicates: API.getAnalyticsDuplicates(duplicateQueryParams()),
       sources: API.getAnalyticsSources(globalQueryParams()),
       units: API.getAnalyticsUnits(globalQueryParams()),
@@ -511,14 +504,6 @@ window.AnalyticsPage = (() => {
     element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Phân bổ phản hồi theo sản phẩm"><thead><tr><th>Sản phẩm</th><th>Vấn đề</th><th>Báo lỗi</th><th>Báo CL tốt</th><th>Y/c cải tiến</th><th>Đề xuất SPM</th></tr></thead><tbody>${items.map(item => `<tr><td>${escHtml(item.label)}</td><td>${formatNumber(item.issue_count)} (${formatPercent(item.percentage)})</td><td>${formatNumber(item.quality_labels?.['Báo lỗi'])}</td><td>${formatNumber(item.quality_labels?.['Báo CL tốt'])}</td><td>${formatNumber(item.quality_labels?.['Y/c cải tiến'])}</td><td>${formatNumber(item.quality_labels?.['Đề xuất SPM'])}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
-  function renderStatusBacklog(element, data) {
-    const statuses = data?.statuses || [];
-    if (!statuses.length) return renderEmpty(element, 'Chưa có dữ liệu trạng thái xử lý.');
-    const ageBuckets = data?.age_buckets || [];
-    element.innerHTML = `<div class="analytics-status-layout"><div><div class="analytics-chart-wrap"><canvas id="analytics-status-chart"></canvas></div></div><div><div class="analytics-backlog-summary"><div><strong>${formatNumber(data.processed_count)}</strong><span>Đã xử lý</span></div><div><strong>${formatNumber(data.backlog_count)}</strong><span>Tồn đọng (${formatPercent(data.backlog_rate)})</span></div></div><h4>Thời gian tồn đọng</h4><p class="analytics-panel-note">Theo ngày ghi nhận, tính đến ${escHtml(data.age_as_of || 'chưa có ngày tham chiếu')}</p><div class="analytics-age-grid">${ageBuckets.map(item => `<div><span>${escHtml(item.label)}</span><strong>${formatNumber(item.issue_count)}</strong></div>`).join('')}</div></div></div>`;
-    Charts.createDoughnutChart('analytics-status-chart', statuses.map(item => item.label), statuses.map(item => item.issue_count));
-  }
-
   function renderGeography(element, data) {
     const provinces = (data?.provinces || []).slice(0, 10);
     const districts = (data?.districts || []).slice(0, 10);
@@ -600,7 +585,6 @@ window.AnalyticsPage = (() => {
     if (app) app.classList.remove('page-container-wide');
     Charts.destroy('analytics-daily-trend-chart');
     Charts.destroy('analytics-issue-types-chart');
-    Charts.destroy('analytics-status-chart');
     Charts.destroy('analytics-provinces-chart');
     Charts.destroy('analytics-sources-chart');
     Charts.destroy('analytics-units-chart');
