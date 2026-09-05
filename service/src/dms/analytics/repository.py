@@ -23,6 +23,8 @@ class FeedbackAnalyticsRepository:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
         self._lock = threading.RLock()
+        self._cached_analytics_rows: list[dict] | None = None
+        self._cache_timestamp: float = 0.0
         self._init_db()
 
     def _conn(self) -> sqlite3.Connection:
@@ -338,6 +340,7 @@ class FeedbackAnalyticsRepository:
                         (now, source_file_key),
                     )
             conn.commit()
+        self._cached_analytics_rows = None
 
     def apply_batch_results(
         self,
@@ -447,6 +450,7 @@ class FeedbackAnalyticsRepository:
                         ],
                     )
             conn.commit()
+        self._cached_analytics_rows = None
 
     def mark_job_unfinished_failed(self, job_id: str) -> None:
         """Mark the job's pending snapshots and matching current rows as failed."""
@@ -470,6 +474,7 @@ class FeedbackAnalyticsRepository:
                 (_FAILED, now, job_id, _PENDING),
             )
             conn.commit()
+        self._cached_analytics_rows = None
 
     def fetch_current_records(self, *, row: int | None = None) -> list[dict]:
         where = "WHERE source_row_number = ?" if row is not None else ""
@@ -481,7 +486,17 @@ class FeedbackAnalyticsRepository:
         return [dict(item) for item in rows]
 
     def fetch_analytics_rows(self) -> list[dict]:
-        """Return current records with their current label memberships."""
+        """Return current records with their current label memberships (cached with TTL)."""
+        import time
+
+        with self._lock:
+            now_mono = time.monotonic()
+            if (
+                self._cached_analytics_rows is not None
+                and (now_mono - self._cache_timestamp) < 60.0
+            ):
+                return self._cached_analytics_rows
+
         with self._lock, self._conn() as conn:
             records = conn.execute("SELECT * FROM feedback_records ORDER BY feedback_id").fetchall()
             labels = conn.execute(
@@ -497,13 +512,17 @@ class FeedbackAnalyticsRepository:
             labels_by_feedback.setdefault(int(label["feedback_id"]), []).append(
                 {"label": str(label["label"]), "major_group": label["major_group"]}
             )
-        return [
+        result = [
             {
                 **dict(record),
                 "labels": labels_by_feedback.get(int(record["feedback_id"]), []),
             }
             for record in records
         ]
+        with self._lock:
+            self._cached_analytics_rows = result
+            self._cache_timestamp = time.monotonic()
+        return result
 
     def fetch_versions(self, *, job_id: str | None = None, row: int | None = None) -> list[dict]:
         conditions: list[str] = []

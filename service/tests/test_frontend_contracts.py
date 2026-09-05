@@ -361,7 +361,7 @@ def test_analytics_page_is_a_separate_authenticated_spa_route():
 
     assert "js/pages/analytics.js" in index_html
     assert "analytics:  { module: () => window.AnalyticsPage" in app_js
-    assert "{ id: 'analytics', icon: '📊', label: 'Phân tích phản hồi' }" in sidebar_js
+    assert "{ id: 'analytics', icon: '📊', label: 'Dashboard' }" in sidebar_js
     assert "window.AnalyticsPage" in analytics_js
     assert "API.getAnalyticsOverview" in analytics_js
     assert "fetch(" not in analytics_js

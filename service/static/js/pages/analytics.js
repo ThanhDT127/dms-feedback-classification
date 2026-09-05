@@ -4,6 +4,7 @@
 
 window.AnalyticsPage = (() => {
   const DEFAULT_PAGE_SIZE = 25;
+  let _cache = null;
   const _state = {
     filters: { from: '', to: '', compare_from: '', compare_to: '', province: '', district: '' },
     issueFilters: { source: '', unit: '', label: '', product: '', status: '' },
@@ -15,12 +16,21 @@ window.AnalyticsPage = (() => {
     requestId: 0,
   };
 
+  function getFilterKey() {
+    return JSON.stringify({
+      filters: _state.filters,
+      issueFilters: _state.issueFilters,
+      issuePage: _state.issuePage,
+      duplicatePage: _state.duplicatePage,
+    });
+  }
+
   function render() {
     const app = document.getElementById('app');
     if (!app) return;
     app.innerHTML = `
       <div class="page-header">
-        <h2>📊 Phân tích phản hồi</h2>
+        <h2>📊 Dashboard</h2>
         <p>Chỉ số nghiệp vụ từ dữ liệu Excel đã đưa vào phân tích; kết quả AI được hiển thị khi đã phân loại.</p>
       </div>
 
@@ -103,7 +113,14 @@ window.AnalyticsPage = (() => {
         <div id="analytics-issues" class="analytics-panel-body">${renderPanelLoading()}</div>
       </section>
     `;
-    refresh();
+    const filterKey = getFilterKey();
+    if (_cache && _cache.key === filterKey) {
+      renderAllPanels(_cache.results);
+      const status = document.getElementById('analytics-page-status');
+      if (status) status.textContent = 'Dữ liệu phân tích đã được tải từ bộ nhớ đệm.';
+      return;
+    }
+    refresh(false);
   }
 
   function panel(titleId, title, bodyId) {
@@ -153,7 +170,8 @@ window.AnalyticsPage = (() => {
     _state.filters = filters;
     _state.issuePage = 1;
     _state.duplicatePage = 1;
-    refresh();
+    _cache = null;
+    refresh(true);
   }
 
   function resetFilters() {
@@ -173,7 +191,8 @@ window.AnalyticsPage = (() => {
     _state.issuePage = 1;
     _state.duplicatePage = 1;
     setFilterError(null);
-    refresh();
+    _cache = null;
+    refresh(true);
   }
 
   function setFilterError(message) {
@@ -244,7 +263,31 @@ window.AnalyticsPage = (() => {
     return { ...globalQueryParams(), page: _state.duplicatePage, page_size: DEFAULT_PAGE_SIZE };
   }
 
-  async function refresh() {
+  function renderAllPanels(results) {
+    renderResult(results.overview, renderOverview, 'analytics-overview');
+    renderResult(results.dailyTrend, renderDailyTrend, 'analytics-daily-trend');
+    renderResult(results.issueTypes, renderIssueTypes, 'analytics-issue-types');
+    renderResult(results.unitIssueTypeMatrix, renderUnitIssueTypeMatrix, 'analytics-unit-issue-type-matrix');
+    renderResult(results.geography, renderGeography, 'analytics-geography');
+    renderResult(results.statusBacklog, renderStatusBacklog, 'analytics-status-backlog');
+    renderResult(results.duplicates, (element, data) => { _state.duplicates = data; renderDuplicates(element, data); }, 'analytics-duplicates');
+    renderResult(results.sources, renderSources, 'analytics-sources');
+    renderResult(results.units, renderUnits, 'analytics-units');
+    renderResult(results.groups, renderGroups, 'analytics-groups');
+    renderResult(results.products, renderProducts, 'analytics-products');
+    renderResult(results.dataQuality, renderDataQuality, 'analytics-data-quality');
+    renderResult(results.issues, (element, data) => { _state.issues = data; renderIssues(element, data); }, 'analytics-issues');
+  }
+
+  async function refresh(force = true) {
+    const filterKey = getFilterKey();
+    if (!force && _cache && _cache.key === filterKey) {
+      renderAllPanels(_cache.results);
+      const status = document.getElementById('analytics-page-status');
+      if (status) status.textContent = 'Dữ liệu phân tích đã được tải từ bộ nhớ đệm.';
+      return;
+    }
+
     const requestId = ++_state.requestId;
     const status = document.getElementById('analytics-page-status');
     if (status) status.textContent = 'Đang cập nhật dữ liệu phân tích...';
@@ -268,19 +311,8 @@ window.AnalyticsPage = (() => {
     const settled = await Promise.allSettled(entries.map(([, request]) => request));
     if (requestId !== _state.requestId) return;
     const results = Object.fromEntries(entries.map(([key], index) => [key, settled[index]]));
-    renderResult(results.overview, renderOverview, 'analytics-overview');
-    renderResult(results.dailyTrend, renderDailyTrend, 'analytics-daily-trend');
-    renderResult(results.issueTypes, renderIssueTypes, 'analytics-issue-types');
-    renderResult(results.unitIssueTypeMatrix, renderUnitIssueTypeMatrix, 'analytics-unit-issue-type-matrix');
-    renderResult(results.geography, renderGeography, 'analytics-geography');
-    renderResult(results.statusBacklog, renderStatusBacklog, 'analytics-status-backlog');
-    renderResult(results.duplicates, (element, data) => { _state.duplicates = data; renderDuplicates(element, data); }, 'analytics-duplicates');
-    renderResult(results.sources, renderSources, 'analytics-sources');
-    renderResult(results.units, renderUnits, 'analytics-units');
-    renderResult(results.groups, renderGroups, 'analytics-groups');
-    renderResult(results.products, renderProducts, 'analytics-products');
-    renderResult(results.dataQuality, renderDataQuality, 'analytics-data-quality');
-    renderResult(results.issues, (element, data) => { _state.issues = data; renderIssues(element, data); }, 'analytics-issues');
+    _cache = { key: filterKey, results };
+    renderAllPanels(results);
     const failures = settled.filter(result => result.status === 'rejected').length;
     if (status) {
       status.textContent = failures ? `Không thể tải ${failures} phần dữ liệu. Các phần khác vẫn hiển thị.` : 'Dữ liệu phân tích đã được cập nhật.';
@@ -297,6 +329,10 @@ window.AnalyticsPage = (() => {
       const data = await API.getAnalyticsIssues(issueQueryParams());
       if (requestId !== _state.requestId) return;
       _state.issues = data;
+      if (_cache?.results) {
+        _cache.results.issues = { status: 'fulfilled', value: data };
+        _cache.key = getFilterKey();
+      }
       renderIssues(element, data);
     } catch (error) {
       if (requestId !== _state.requestId) return;
@@ -311,6 +347,10 @@ window.AnalyticsPage = (() => {
     try {
       const data = await API.getAnalyticsDuplicates(duplicateQueryParams());
       _state.duplicates = data;
+      if (_cache?.results) {
+        _cache.results.duplicates = { status: 'fulfilled', value: data };
+        _cache.key = getFilterKey();
+      }
       renderDuplicates(element, data);
     } catch (error) {
       renderFailure(element, error, 'Không thể tải nội dung trùng');
@@ -505,8 +545,6 @@ window.AnalyticsPage = (() => {
 
   function destroy() {
     _state.requestId += 1;
-    _state.issues = null;
-    _state.duplicates = null;
     Charts.destroy('analytics-daily-trend-chart');
     Charts.destroy('analytics-issue-types-chart');
     Charts.destroy('analytics-status-chart');

@@ -12,8 +12,8 @@ window.DashboardPage = (() => {
     const app = document.getElementById('app');
     app.innerHTML = `
       <div class="page-header">
-        <h2>📊 Tổng quan</h2>
-        <p>Theo dõi hoạt động phân loại phản hồi khách hàng</p>
+        <h2>📊 Tiến trình Job</h2>
+        <p>Theo dõi hoạt động và tiến trình xử lý phân loại phản hồi</p>
       </div>
 
       <!-- Stat Cards -->
@@ -91,6 +91,12 @@ window.DashboardPage = (() => {
         </div>
       </div>
     `;
+
+    if (_metricsData) {
+      renderStats(_metricsData);
+      renderActivity(_metricsData);
+      if (_healthData) renderSystemStatus(_healthData, _metricsData);
+    }
 
     loadData();
     startRefresh();
