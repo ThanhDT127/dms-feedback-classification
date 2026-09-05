@@ -191,6 +191,7 @@ window.API = (() => {
   function getFileTree()         { return get('/files/tree'); }
   function getFilesSeen()        { return get('/files/seen'); }
   function uploadFile(formData)  { return upload('/files/upload', formData); }
+  function ingestInputFile(filename) { return post(`/files/input/${encodeURIComponent(filename)}/ingest`, null); }
   function logout(opts = {})     { return post('/auth/logout', null, opts); }
   function classifyText(data)    { return post('/classify/text', data); }
   function classifyFile(formData){ return upload('/classify/file', formData); }
@@ -224,6 +225,29 @@ window.API = (() => {
     return post('/metrics/reset-failed', body);
   }
   function getMetricsByUser() { return get('/metrics/by-user'); }
+
+  function buildAnalyticsQuery(params = {}) {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') query.set(key, String(value));
+    });
+    const text = query.toString();
+    return text ? `?${text}` : '';
+  }
+
+  function getAnalyticsOverview(params = {}) { return get(`/analytics/overview${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsDailyTrend(params = {}) { return get(`/analytics/trends/daily${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsIssueTypes(params = {}) { return get(`/analytics/issue-types${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsDuplicates(params = {}) { return get(`/analytics/duplicates${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsUnitIssueTypeMatrix(params = {}) { return get(`/analytics/unit-issue-type-matrix${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsGeography(params = {}) { return get(`/analytics/geography${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsStatusBacklog(params = {}) { return get(`/analytics/status-backlog${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsSources(params = {}) { return get(`/analytics/sources${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsUnits(params = {}) { return get(`/analytics/units${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsGroups(params = {}) { return get(`/analytics/groups${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsProducts(params = {}) { return get(`/analytics/products${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsIssues(params = {}) { return get(`/analytics/issues${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsDataQuality(params = {}) { return get(`/analytics/data-quality${buildAnalyticsQuery(params)}`); }
 
   function setTokens(access, refresh) {
     _accessToken = access;
@@ -282,12 +306,14 @@ window.API = (() => {
     setTokens, getAccessToken, clearTokens, refreshToken,
     getHealth, getMetrics, getMetricsDaily,
     getFiles, getFilePreview, getFileTree, getFilesSeen,
-    uploadFile, classifyText, classifyFile, getJobs, getJobMetrics, cancelJob, retryJob,
+    uploadFile, ingestInputFile, classifyText, classifyFile, getJobs, getJobMetrics, cancelJob, retryJob,
     getSettings, putSettings, getSecret, getPrompt, getModels, testConnection,
     getLabels, getKeywords, getBrands, getLogs,
     syncKeywordsToSP, syncProductsToSP, syncSharePoint, uploadJobToSharePoint,
     getUsageMetrics, getUsagePricing,
     resetFailedFiles, getMetricsByUser,
+    getAnalyticsOverview, getAnalyticsDailyTrend, getAnalyticsIssueTypes, getAnalyticsDuplicates, getAnalyticsUnitIssueTypeMatrix, getAnalyticsGeography, getAnalyticsStatusBacklog, getAnalyticsSources, getAnalyticsUnits, getAnalyticsGroups,
+    getAnalyticsProducts, getAnalyticsIssues, getAnalyticsDataQuality,
     logout
   };
 })();

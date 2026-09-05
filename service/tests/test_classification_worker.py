@@ -3,6 +3,9 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+import pandas as pd
+
+from dms.analytics.repository import FeedbackAnalyticsRepository
 from dms.classification_jobs import (
     JOB_STATUS_CANCELLED,
     JOB_STATUS_COMPLETED,
@@ -43,7 +46,7 @@ def _settings(tmp_path: Path, **overrides) -> Settings:
 
 def _create_job(store: ClassificationJobStore, tmp_path: Path, job_id: str = "job") -> dict:
     input_path = tmp_path / f"{job_id}.xlsx"
-    input_path.write_bytes(b"fake-xlsx")
+    pd.DataFrame({"Nội dung phản hồi": ["Đèn lỗi"]}).to_excel(input_path, index=False)
     return store.create_job(
         job_id=job_id,
         owner_username="alice",
@@ -76,7 +79,23 @@ class SuccessfulRunner:
     ):
         if progress_callback:
             progress_callback(
-                done=1, total=1, new_results=[{"text": "done"}], step=3, step_status="done"
+                done=1,
+                total=1,
+                new_results=[
+                    {
+                        "source_row_number": 2,
+                        "text": "done",
+                        "product": "",
+                        "product_line": "",
+                        "model": "",
+                        "bm25_score": 0,
+                        "sentiment": "",
+                        "labels": [],
+                        "brand": "",
+                    }
+                ],
+                step=3,
+                step_status="done",
             )
         Path(output_path).write_bytes(b"output")
         Path(ckpt_path).parent.mkdir(parents=True, exist_ok=True)
@@ -137,6 +156,25 @@ class CancellingRunner:
         raise AssertionError("expected cancellation")
 
 
+class PendingResultRunner:
+    def run_pipeline(
+        self,
+        input_path,
+        output_path,
+        ckpt_path,
+        progress_callback=None,
+        cancellation_check=None,
+        job_id=None,
+    ):
+        Path(output_path).write_bytes(b"output")
+        return {
+            "total_rows": 1,
+            "processed_rows": 0,
+            "output_path": str(output_path),
+            "duration_seconds": 0.1,
+        }
+
+
 def _manager(settings: Settings, store: ClassificationJobStore, runner):
     return ClassificationWorkerManager(
         settings=settings,
@@ -161,6 +199,116 @@ def test_worker_processes_upload_queue_to_completion(tmp_path: Path):
     assert job["rows_done"] == 1
     assert job["total_rows"] == 1
     assert job["results"][0]["text"] == "done"
+
+
+def test_worker_persists_input_then_batch_results(tmp_path: Path):
+    settings = _settings(tmp_path)
+    db_path = tmp_path / "jobs.db"
+    store = ClassificationJobStore(db_path)
+    input_path = tmp_path / "complete.xlsx"
+    pd.DataFrame({"Nội dung phản hồi": ["Đèn lỗi"]}).to_excel(input_path, index=False)
+    store.create_job(
+        job_id="complete",
+        owner_username="alice",
+        owner_role="user",
+        filename="complete.xlsx",
+        mode="single",
+        input_path=input_path,
+        output_path=tmp_path / "complete_out.xlsx",
+    )
+    repo = FeedbackAnalyticsRepository(db_path)
+    manager = ClassificationWorkerManager(
+        settings=settings,
+        job_store=store,
+        runner_factory=lambda: SuccessfulRunner(),
+        sharepoint_factory=lambda: None,
+        analytics_repository=repo,
+    )
+
+    manager.start()
+    try:
+        _wait_for_status(store, "complete", JOB_STATUS_COMPLETED)
+    finally:
+        manager.stop()
+
+    assert repo.fetch_current_records()[0]["classification_state"] == "completed"
+
+
+def test_worker_marks_unfinished_analytics_rows_failed_when_pipeline_fails(tmp_path: Path):
+    settings = _settings(tmp_path, classification_retry_count=0)
+    db_path = tmp_path / "jobs.db"
+    store = ClassificationJobStore(db_path)
+    _create_job(store, tmp_path, "failed")
+    repo = FeedbackAnalyticsRepository(db_path)
+    manager = ClassificationWorkerManager(
+        settings=settings,
+        job_store=store,
+        runner_factory=lambda: FlakyRunner(failures=1),
+        sharepoint_factory=lambda: None,
+        analytics_repository=repo,
+    )
+
+    manager.start()
+    try:
+        _wait_for_status(store, "failed", JOB_STATUS_ERROR)
+    finally:
+        manager.stop()
+
+    assert repo.fetch_current_records()[0]["classification_state"] == "failed"
+    assert repo.fetch_versions(job_id="failed")[0]["classification_state"] == "failed"
+
+
+def test_worker_marks_analytics_rows_failed_when_runner_is_unavailable(tmp_path: Path):
+    settings = _settings(tmp_path)
+    db_path = tmp_path / "jobs.db"
+    store = ClassificationJobStore(db_path)
+    _create_job(store, tmp_path, "unavailable")
+    repo = FeedbackAnalyticsRepository(db_path)
+    manager = ClassificationWorkerManager(
+        settings=settings,
+        job_store=store,
+        runner_factory=lambda: None,
+        sharepoint_factory=lambda: None,
+        analytics_repository=repo,
+    )
+
+    manager.start()
+    try:
+        _wait_for_status(store, "unavailable", JOB_STATUS_ERROR)
+    finally:
+        manager.stop()
+
+    assert repo.fetch_current_records()[0]["classification_state"] == "failed"
+
+
+def test_worker_finalizes_pending_analytics_when_cancelled_during_output_upload(tmp_path: Path):
+    settings = _settings(tmp_path, upload_input_to_sharepoint=False)
+    db_path = tmp_path / "jobs.db"
+    store = ClassificationJobStore(db_path)
+    _create_job(store, tmp_path, "cancel-upload")
+    repo = FeedbackAnalyticsRepository(db_path)
+
+    class CancellingSharePoint:
+        def upload_file(self, *args, **kwargs):
+            store.cancel_job("cancel-upload")
+            return {"webUrl": "https://example.invalid/output"}
+
+    manager = ClassificationWorkerManager(
+        settings=settings,
+        job_store=store,
+        runner_factory=lambda: PendingResultRunner(),
+        sharepoint_factory=lambda: CancellingSharePoint(),
+        analytics_repository=repo,
+    )
+
+    manager.start()
+    try:
+        _wait_for_status(store, "cancel-upload", JOB_STATUS_CANCELLED)
+    finally:
+        manager.stop()
+
+    assert repo.fetch_current_records()[0]["classification_state"] == "failed"
+    assert repo.fetch_versions(job_id="cancel-upload")[0]["classification_state"] == "failed"
 
 
 def test_worker_retries_recoverable_failure_and_preserves_checkpoint(tmp_path: Path):

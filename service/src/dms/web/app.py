@@ -16,6 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
 from ..settings import SERVICE_DIR
+from .api.analytics_api import router as analytics_router
 from .api.auth_api import router as auth_router
 from .api.auth_api import user_router
 from .api.classify import router as classify_router
@@ -233,6 +234,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(user_router)
     app.include_router(metrics_router)
+    app.include_router(analytics_router)
     app.include_router(files_router)
     app.include_router(classify_router)
     app.include_router(settings_router)

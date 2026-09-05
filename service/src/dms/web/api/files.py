@@ -13,10 +13,16 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFi
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+from ...analytics import FeedbackAnalyticsRepository, ingest_managed_workbook
 from ...exceptions import SharePointError
 from ...settings import get_settings
 from ...time_utils import utc_from_timestamp
-from ..deps import get_admin_user, get_current_user, get_sharepoint_client
+from ..deps import (
+    get_admin_user,
+    get_current_user,
+    get_feedback_analytics_repository,
+    get_sharepoint_client,
+)
 
 logger = logging.getLogger("dms-web")
 
@@ -120,7 +126,13 @@ async def get_seen_files(user: dict = Depends(get_current_user)):
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile, admin: dict = Depends(get_admin_user)):
+async def upload_file(
+    file: UploadFile,
+    admin: dict = Depends(get_admin_user),
+    analytics_repository: FeedbackAnalyticsRepository | None = Depends(
+        get_feedback_analytics_repository
+    ),
+):
     """Upload file .xlsx vào thư mục work/input/."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="Thiếu tên file")
@@ -178,10 +190,23 @@ async def upload_file(file: UploadFile, admin: dict = Depends(get_admin_user)):
             detail="Lỗi lưu file. Vui lòng thử lại.",
         ) from exc
 
+    ingested_rows = 0
+    ingest_error = None
+    try:
+        if analytics_repository is None:
+            raise RuntimeError("Kho dữ liệu analytics chưa sẵn sàng")
+        ingest_result = ingest_managed_workbook(analytics_repository, dest)
+        ingested_rows = ingest_result.persisted_rows
+    except Exception:
+        ingest_error = "Không thể đưa file vào phân tích"
+        logger.exception("Không thể đưa file %s vào analytics", dest.name)
+
     return {
         "filename": dest.name,
         "size": len(content),
         "message": f"Đã upload thành công: {dest.name}",
+        "ingested_rows": ingested_rows,
+        "ingest_error": ingest_error,
     }
 
 
@@ -310,6 +335,41 @@ async def sync_sharepoint(admin: dict = Depends(get_admin_user)):
         "synced_downloaded": downloads,
         "synced_uploaded": uploads,
         "message": f"Đồng bộ SharePoint hoàn tất! Tải về {downloads} file đầu vào mới, tải lên {uploads} file kết quả mới.",
+    }
+
+
+@router.post("/input/{filename}/ingest")
+async def ingest_existing_input_file(
+    filename: str,
+    admin: dict = Depends(get_admin_user),
+    analytics_repository: FeedbackAnalyticsRepository | None = Depends(
+        get_feedback_analytics_repository
+    ),
+):
+    """Đưa một file Excel local đã có trong thư mục Đầu vào vào analytics."""
+    input_dir = _work_dir() / "input"
+    input_path = _validate_safe_path(input_dir, filename)
+    if input_path.suffix.lower() != ".xlsx":
+        raise HTTPException(status_code=400, detail="Chỉ chấp nhận file .xlsx")
+    if not input_path.is_file():
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy file: {filename}")
+    if analytics_repository is None:
+        raise HTTPException(status_code=503, detail="Kho dữ liệu analytics chưa sẵn sàng")
+
+    try:
+        result = ingest_managed_workbook(analytics_repository, input_path)
+    except Exception as exc:
+        logger.exception("Không thể đưa file %s vào analytics", input_path.name)
+        raise HTTPException(
+            status_code=422,
+            detail="Không thể đưa file vào phân tích",
+        ) from exc
+
+    return {
+        "filename": result.source_file_name,
+        "ingested_rows": result.persisted_rows,
+        "source_file_key": result.source_file_key,
+        "message": f"Đã đưa {result.persisted_rows} dòng vào phân tích",
     }
 
 

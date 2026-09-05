@@ -19,6 +19,7 @@ window.App = (() => {
   const PAGES = {
     login:     { module: () => window.LoginPage,     title: 'Đăng nhập' },
     dashboard: { module: () => window.DashboardPage, title: 'Tổng quan' },
+    analytics:  { module: () => window.AnalyticsPage, title: 'Phân tích phản hồi' },
     files:     { module: () => window.FilesPage,     title: 'Quản lý file' },
     classify:  { module: () => window.ClassifyPage,  title: 'Phân loại' },
     settings:  { module: () => window.SettingsPage,  title: 'Cài đặt' },

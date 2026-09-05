@@ -78,6 +78,19 @@ def get_classification_job_store():
     return _get_or_create("classification_job_store", _factory)
 
 
+def get_feedback_analytics_repository():
+    """Return a singleton FeedbackAnalyticsRepository for the job database."""
+    from ..analytics import FeedbackAnalyticsRepository
+
+    def _factory():
+        settings = get_settings()
+        if settings is None:
+            return None
+        return FeedbackAnalyticsRepository(settings.classification_jobs_db_path)
+
+    return _get_or_create("feedback_analytics_repository", _factory)
+
+
 def get_classification_worker_manager():
     """Return the in-process classification worker manager."""
     from ..classification_worker import build_default_worker_manager

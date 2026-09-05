@@ -178,6 +178,28 @@ def test_classification_job_store_atomic_claim_prevents_duplicates(tmp_path: Pat
     assert store.get_job("queued", include_results=False)["status"] == JOB_STATUS_RUNNING
 
 
+def test_classification_job_store_does_not_claim_analytics_ingest_jobs(tmp_path: Path):
+    store = ClassificationJobStore(tmp_path / "jobs.db")
+    store.create_job(
+        job_id="analytics-ingest",
+        owner_username="system_analytics_ingest",
+        owner_role="admin",
+        filename="feedback.xlsx",
+        mode="analytics_ingest",
+        input_path=tmp_path / "feedback.xlsx",
+        output_path=tmp_path / "feedback.xlsx",
+    )
+
+    claimed = store.claim_next_job(
+        worker_id="worker",
+        global_running_limit=4,
+        per_user_running_limit=4,
+    )
+
+    assert claimed is None
+    assert store.get_job("analytics-ingest", include_results=False)["status"] == JOB_STATUS_QUEUED
+
+
 def test_classification_job_store_claim_respects_capacity_and_user_limit(tmp_path: Path):
     store = ClassificationJobStore(tmp_path / "jobs.db")
     for job_id, owner in [("a1", "alice"), ("a2", "alice"), ("b1", "bob")]:

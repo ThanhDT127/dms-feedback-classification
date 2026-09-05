@@ -110,6 +110,43 @@ def test_file_manager_non_admin_controls_are_role_gated():
     assert "if (!isAdminRole())" in files_js
 
 
+def test_file_manager_existing_input_ingest_contract():
+    files_js = _read("js/pages/files.js")
+    api_js = _read("js/api.js")
+
+    assert "function ingestInputFile(filename)" in api_js
+    assert "Đưa vào phân tích" in files_js
+    assert "ingestInputFile" in _page_exports(files_js)
+    assert "_activeFolder === 'input'" in files_js
+    assert "source === 'local_cache'" in files_js
+    assert "Phân loại luôn" not in files_js
+    assert "result.ingest_error" in files_js
+    assert "đã tải lên nhưng chưa đưa được vào phân tích" in files_js
+
+
+def test_analytics_distinguishes_ingested_rows_without_ai_classification():
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "Nhãn phân loại do AI" in analytics_js
+    assert "Kết quả phân loại" in analytics_js
+    assert "if (item.classification_state === 'pending') return 'Chưa có nhãn';" in analytics_js
+    assert "classificationDetailLabel(item)" in analytics_js
+    assert (
+        "return classificationLabel(item) === 'Chưa có nhãn' ? 'Trạng thái nhãn' : 'Nhãn phân loại do AI';"
+        in analytics_js
+    )
+    assert "classification_state === 'pending'" in analytics_js
+    assert "dữ liệu Excel đã đưa vào phân tích" in analytics_js
+
+
+def test_managed_file_analytics_assets_have_updated_cache_versions():
+    index_html = _read("index.html")
+
+    assert "js/api.js?v=1.0.6" in index_html
+    assert "js/pages/analytics.js?v=1.0.3" in index_html
+    assert "js/pages/files.js?v=1.0.4" in index_html
+
+
 def test_password_controls_contract():
     password_js = _read("js/components/password.js")
     login_js = _read("js/pages/login.js")
@@ -285,3 +322,180 @@ def test_admin_job_operations_exports_and_api_contract():
     assert "function retryJob(jobId)" in api_js
     assert "/classify/jobs/metrics" in api_js
     assert "/retry" in api_js
+
+
+def test_analytics_api_client_has_authenticated_query_wrappers():
+    api_js = _read("js/api.js")
+
+    for expected in [
+        "function getAnalyticsOverview(params = {})",
+        "function getAnalyticsSources(params = {})",
+        "function getAnalyticsUnits(params = {})",
+        "function getAnalyticsGroups(params = {})",
+        "function getAnalyticsProducts(params = {})",
+        "function getAnalyticsIssues(params = {})",
+        "function getAnalyticsDataQuality(params = {})",
+        "buildAnalyticsQuery",
+        "/analytics/overview",
+        "/analytics/issues",
+    ]:
+        assert expected in api_js
+
+    for exported in [
+        "getAnalyticsOverview",
+        "getAnalyticsSources",
+        "getAnalyticsUnits",
+        "getAnalyticsGroups",
+        "getAnalyticsProducts",
+        "getAnalyticsIssues",
+        "getAnalyticsDataQuality",
+    ]:
+        assert exported in _page_exports(api_js)
+
+
+def test_analytics_page_is_a_separate_authenticated_spa_route():
+    index_html = _read("index.html")
+    app_js = _read("js/app.js")
+    sidebar_js = _read("js/components/sidebar.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "js/pages/analytics.js" in index_html
+    assert "analytics:  { module: () => window.AnalyticsPage" in app_js
+    assert "{ id: 'analytics', icon: '📊', label: 'Phân tích phản hồi' }" in sidebar_js
+    assert "window.AnalyticsPage" in analytics_js
+    assert "API.getAnalyticsOverview" in analytics_js
+    assert "fetch(" not in analytics_js
+    assert "XMLHttpRequest" not in analytics_js
+    assert {"render", "destroy", "applyFilters", "resetFilters", "refresh"} <= _page_exports(
+        analytics_js
+    )
+
+
+def test_analytics_page_exposes_accessible_global_date_filters():
+    analytics_js = _read("js/pages/analytics.js")
+
+    for expected in [
+        "dateField('analytics-date-from'",
+        "dateField('analytics-date-to'",
+        "dateField('analytics-compare-from'",
+        "dateField('analytics-compare-to'",
+        'aria-label="Bộ lọc thời gian phân tích"',
+        "AnalyticsPage.applyFilters()",
+        "AnalyticsPage.resetFilters()",
+        "AnalyticsPage.refresh()",
+    ]:
+        assert expected in analytics_js
+
+
+def test_analytics_page_supports_safe_issue_drilldown_filters_and_pagination():
+    analytics_js = _read("js/pages/analytics.js")
+
+    for expected in [
+        "textField('analytics-issue-source'",
+        "textField('analytics-issue-unit'",
+        "textField('analytics-issue-label'",
+        "textField('analytics-issue-product'",
+        "textField('analytics-issue-status'",
+        "API.getAnalyticsIssues",
+        "page_size: DEFAULT_PAGE_SIZE",
+        "AnalyticsPage.changeIssuePage(-1)",
+        "AnalyticsPage.changeIssuePage(1)",
+        "AnalyticsPage.showIssueDetail",
+        "App.showModal",
+        "analytics-date-from",
+        "analytics-compare-to",
+    ]:
+        assert expected in analytics_js
+
+    assert {
+        "applyIssueFilters",
+        "clearIssueFilters",
+        "changeIssuePage",
+        "showIssueDetail",
+    } <= _page_exports(analytics_js)
+
+
+def test_analytics_page_uses_chart_helpers_and_cleans_up_its_charts():
+    analytics_js = _read("js/pages/analytics.js")
+
+    for expected in [
+        "Charts.createBarChart('analytics-sources-chart'",
+        "Charts.createDoughnutChart('analytics-units-chart'",
+        "Charts.destroy('analytics-sources-chart')",
+        "Charts.destroy('analytics-units-chart')",
+        "Chưa gán cảm xúc",
+        "available === false",
+    ]:
+        assert expected in analytics_js
+
+
+def test_analytics_page_renders_and_cleans_up_daily_trend():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "function getAnalyticsDailyTrend(params = {})" in api_js
+    assert "/analytics/trends/daily" in api_js
+    assert "API.getAnalyticsDailyTrend" in analytics_js
+    assert "Charts.createLineChart('analytics-daily-trend-chart'" in analytics_js
+    assert "Charts.destroy('analytics-daily-trend-chart')" in analytics_js
+
+
+def test_analytics_page_renders_issue_type_distribution():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "function getAnalyticsIssueTypes(params = {})" in api_js
+    assert "/analytics/issue-types" in api_js
+    assert "API.getAnalyticsIssueTypes" in analytics_js
+    assert "analytics-issue-types-chart" in analytics_js
+    assert "Charts.destroy('analytics-issue-types-chart')" in analytics_js
+
+
+def test_analytics_page_renders_paginated_duplicate_details():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "function getAnalyticsDuplicates(params = {})" in api_js
+    assert "/analytics/duplicates" in api_js
+    assert "API.getAnalyticsDuplicates" in analytics_js
+    assert "analytics-duplicates" in analytics_js
+    assert "AnalyticsPage.changeDuplicatePage(-1)" in analytics_js
+    assert "AnalyticsPage.changeDuplicatePage(1)" in analytics_js
+    assert "changeDuplicatePage" in _page_exports(analytics_js)
+
+
+def test_analytics_page_renders_unit_issue_type_heatmap():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "function getAnalyticsUnitIssueTypeMatrix(params = {})" in api_js
+    assert "/analytics/unit-issue-type-matrix" in api_js
+    assert "API.getAnalyticsUnitIssueTypeMatrix" in analytics_js
+    assert "analytics-unit-issue-type-matrix" in analytics_js
+    assert "analytics-heat-cell" in analytics_js
+
+
+def test_analytics_page_renders_geography_and_global_filters():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "function getAnalyticsGeography(params = {})" in api_js
+    assert "/analytics/geography" in api_js
+    assert "textField('analytics-province'" in analytics_js
+    assert "textField('analytics-district'" in analytics_js
+    assert "API.getAnalyticsGeography" in analytics_js
+    assert "analytics-provinces-chart" in analytics_js
+    assert "province: _state.filters.province" in analytics_js
+    assert "district: _state.filters.district" in analytics_js
+
+
+def test_analytics_page_renders_status_and_backlog():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "function getAnalyticsStatusBacklog(params = {})" in api_js
+    assert "/analytics/status-backlog" in api_js
+    assert "API.getAnalyticsStatusBacklog" in analytics_js
+    assert "analytics-status-chart" in analytics_js
+    assert "Thời gian tồn đọng" in analytics_js
+    assert "Charts.destroy('analytics-status-chart')" in analytics_js

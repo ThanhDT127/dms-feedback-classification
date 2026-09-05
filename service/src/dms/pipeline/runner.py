@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 from openpyxl.utils import get_column_letter
-from unidecode import unidecode
 
+from ..analytics.input_reader import TEXT_ALIASES as TEXT_ALIASES  # noqa: F401
+from ..analytics.input_reader import _canon_lower as _canon_lower  # noqa: F401
+from ..analytics.input_reader import (
+    detect_header_and_textcol as detect_header_and_textcol,  # noqa: F401
+)
+from ..analytics.input_reader import read_feedback_workbook
 from ..exceptions import PipelineCancelled, PipelineError
 from ..gemini_client import GeminiClient
 from ..metrics import MetricsCollector
@@ -26,93 +29,6 @@ from .issue_classifier import MINOR_ORDER, IssueClassifier
 from .rag_product import RAGProductMatcher
 
 logger = logging.getLogger("dms-watcher")
-
-TEXT_ALIASES = [
-    "nội dung",
-    "noi dung",
-    "nội dung vấn đề",
-    "noi dung van de",
-    "nội dung phản hồi",
-    "noi dung phan hoi",
-]
-
-
-def _canon_lower(s: str) -> str:
-    return re.sub(r"\s+", " ", unidecode(str(s or "")).lower().strip())
-
-
-def _is_numeric_like(x) -> bool:
-    if x is None:
-        return True
-    s = str(x).strip()
-    if not s:
-        return True
-    return bool(re.fullmatch(r"[\d\-\./:, ]+", s))
-
-
-def _score_textiness(vals) -> float:
-    vals = [str(v) for v in vals if str(v).strip()]
-    if not vals:
-        return -1.0
-    lens = [len(v) for v in vals]
-    mean_len = np.mean(lens) if lens else 0
-    has_space = np.mean([1.0 if " " in v else 0.0 for v in vals])
-    non_num = np.mean([0.0 if _is_numeric_like(v) else 1.0 for v in vals])
-    return float(mean_len * 0.7 + has_space * 20 + non_num * 30)
-
-
-def detect_header_and_textcol(raw_df: pd.DataFrame, scan_rows: int = 10):
-    """Auto-detect the header row and main text column."""
-    n_scan = min(scan_rows, len(raw_df))
-    best_row_idx, best_col_idx = None, None
-
-    for row_idx in range(n_scan):
-        row_vals = raw_df.iloc[row_idx, :].tolist()
-        for col_idx, value in enumerate(row_vals):
-            cval = _canon_lower(value)
-            for alias in TEXT_ALIASES:
-                if alias in cval and len(cval) <= len(alias) + 20:
-                    best_row_idx, best_col_idx = row_idx, col_idx
-                    break
-            if best_row_idx is not None:
-                break
-        if best_row_idx is not None:
-            break
-
-    if best_row_idx is not None:
-        header_vals = [
-            str(x).strip() if str(x).strip() else f"col_{i}"
-            for i, x in enumerate(raw_df.iloc[best_row_idx, :].tolist())
-        ]
-        df_fixed = raw_df.iloc[best_row_idx + 1 :, :].copy()
-        df_fixed.columns = header_vals
-        text_col_name = next(
-            (
-                col
-                for col in df_fixed.columns
-                if any(alias in _canon_lower(col) for alias in TEXT_ALIASES)
-            ),
-            None,
-        )
-        if (
-            text_col_name is None
-            and best_col_idx is not None
-            and best_col_idx < len(df_fixed.columns)
-        ):
-            text_col_name = df_fixed.columns[best_col_idx]
-        return df_fixed.reset_index(drop=True), text_col_name
-
-    tmp = raw_df.copy().reset_index(drop=True)
-    tmp.columns = [f"col_{i}" for i in range(tmp.shape[1])]
-    scores = {}
-    for idx in range(tmp.shape[1]):
-        col_vals = tmp.iloc[:n_scan, idx].tolist()
-        if all((str(v).strip() == "" or pd.isna(v)) for v in col_vals):
-            scores[idx] = -1.0
-        else:
-            scores[idx] = _score_textiness(col_vals)
-    best_idx = max(scores, key=lambda idx: scores[idx]) if scores else 0
-    return tmp.copy(), tmp.columns[best_idx]
 
 
 class PipelineRunner:
@@ -211,13 +127,8 @@ class PipelineRunner:
         t_start = time.time()
 
         logger.info("Reading input file: %s", input_path)
-        raw = pd.read_excel(input_path, header=None, dtype=str)
-        df_all, text_col = detect_header_and_textcol(raw, scan_rows=10)
-        if not text_col:
-            df_all = pd.read_excel(input_path)
-            text_col = next((c for c in df_all.columns if "nội dung" in _canon_lower(c)), None)
-        if not text_col:
-            raise PipelineError(f"Cannot find text column in {input_path}")
+        parsed_input = read_feedback_workbook(input_path)
+        df_all, text_col = parsed_input.dataframe, parsed_input.text_column
 
         insert_pos = list(df_all.columns).index(text_col)
         for idx, col in enumerate(["Sản phẩm", "Dòng SP", "Model", "Lớp", "Điểm"]):
@@ -470,6 +381,7 @@ class PipelineRunner:
 
                     new_results_batch.append(
                         {
+                            "source_row_number": parsed_input.source_row_numbers[i + idx_in_batch],
                             "text": batch[idx_in_batch],
                             "product": best_cat,
                             "product_line": best_line,

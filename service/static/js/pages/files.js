@@ -77,6 +77,16 @@ window.FilesPage = (() => {
     );
   }
 
+  async function ingestInputFile(filename) {
+    if (!isAdminRole() || _activeFolder !== 'input' || !filename) return;
+    try {
+      const result = await API.ingestInputFile(filename);
+      Toast.success(result.message || `Đã đưa ${result.ingested_rows || 0} dòng vào phân tích`);
+    } catch (e) {
+      Toast.error('Không thể đưa file vào phân tích: ' + e.message);
+    }
+  }
+
   function isEditableConfigAsset(filename) {
     const lower = String(filename || '').toLowerCase();
     return lower === 'kw_map.json'
@@ -371,6 +381,9 @@ window.FilesPage = (() => {
     const editBtn = canEditAsset
       ? `<button class="btn btn-ghost btn-sm" title="Chỉnh sửa cấu hình" onclick="FilesPage.editKeywordAsset('${escAttr(name)}')">✏️</button>`
       : '';
+    const ingestBtn = isAdminRole() && _activeFolder === 'input' && source === 'local_cache'
+      ? `<button class="btn btn-ghost btn-sm" title="Đưa vào phân tích" aria-label="Đưa vào phân tích" onclick="FilesPage.ingestInputFile('${escAttr(name)}')">📊</button>`
+      : '';
 
     const isSelected = _selectedFiles.has(name);
     const isExpanded = _expandedRows.has(name);
@@ -399,6 +412,7 @@ window.FilesPage = (() => {
           <div style="display:flex;gap:4px;align-items:center;">
             <button class="btn btn-ghost btn-sm" title="Xem" onclick="FilesPage.preview('${escAttr(name)}')">👁️</button>
             ${editBtn}
+            ${ingestBtn}
             ${downloadBtn}
             ${cloudBtn}
           </div>
@@ -994,19 +1008,26 @@ window.FilesPage = (() => {
 
     let successCount = 0;
     let failCount = 0;
+    let ingestFailCount = 0;
 
     for (let i = 0; i < files.length; i++) {
       const formData = new FormData();
       formData.append('file', files[i]);
       try {
-        await uploadWithProgress(formData, (pct) => {
+        const result = await uploadWithProgress(formData, (pct) => {
           const bar = document.getElementById(`upload-bar-${i}`);
           const pctEl = document.getElementById(`upload-pct-${i}`);
           if (bar) bar.style.width = pct + '%';
           if (pctEl) pctEl.textContent = pct + '%';
         });
         const item = document.getElementById(`upload-item-${i}`);
-        if (item) { item.classList.add('success'); item.querySelector('.progress-pct').textContent = '✅'; }
+        if (result.ingest_error) {
+          ingestFailCount++;
+          if (item) { item.classList.add('error'); item.querySelector('.progress-pct').textContent = '⚠️'; }
+        } else if (item) {
+          item.classList.add('success');
+          item.querySelector('.progress-pct').textContent = '✅';
+        }
         successCount++;
       } catch (e) {
         const item = document.getElementById(`upload-item-${i}`);
@@ -1020,6 +1041,8 @@ window.FilesPage = (() => {
       document.getElementById('upload-progress-overlay')?.remove();
       if (failCount > 0) {
         Toast.error(`Tải ${successCount}/${files.length} file thành công, ${failCount} thất bại`);
+      } else if (ingestFailCount > 0) {
+        Toast.error(`${successCount} file đã tải lên nhưng chưa đưa được vào phân tích: ${ingestFailCount} file`);
       } else {
         Toast.success(`Đã tải ${successCount} file thành công`);
       }
@@ -1387,7 +1410,7 @@ window.FilesPage = (() => {
 
   return {
     render, destroy, switchFolder, loadFiles, preview, closePreview, previewTemplate,
-    downloadTemplate, downloadFile,
+    downloadTemplate, downloadFile, ingestInputFile,
     refresh, handleUpload, syncSharePoint,
     applyPendingData,
     toggleFileSelection, toggleSelectAll, selectAllFiles, clearSelection, bulkDelete, bulkDeleteSharePoint,

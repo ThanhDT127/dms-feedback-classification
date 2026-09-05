@@ -10,8 +10,15 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from .analytics import (
+    BatchClassificationResult,
+    FeedbackAnalyticsRepository,
+    read_feedback_workbook,
+    sha256_file,
+)
 from .classification_jobs import JOB_STATUS_CANCELLED, ClassificationJobStore
 from .exceptions import PipelineCancelled
+from .pipeline.issue_classifier import get_label_config_snapshot
 from .settings import Settings
 
 logger = logging.getLogger("dms-web")
@@ -49,11 +56,13 @@ class ClassificationWorkerManager:
         job_store: ClassificationJobStore,
         runner_factory: RunnerFactory,
         sharepoint_factory: SharePointFactory,
+        analytics_repository: FeedbackAnalyticsRepository | None = None,
     ) -> None:
         self.settings = settings
         self.job_store = job_store
         self.runner_factory = runner_factory
         self.sharepoint_factory = sharepoint_factory
+        self.analytics_repository = analytics_repository
         self.worker_id = f"classify-worker-{uuid.uuid4().hex[:8]}"
         self._stop_event = threading.Event()
         self._threads: list[threading.Thread] = []
@@ -138,8 +147,20 @@ class ClassificationWorkerManager:
                 )
                 return
 
+            if self.analytics_repository is not None:
+                parsed_input = read_feedback_workbook(input_path)
+                self.analytics_repository.persist_input_snapshot(
+                    job_id=job_id,
+                    source_file_key=f"sha256:{sha256_file(input_path)}",
+                    source_file_name=job["filename"],
+                    records=parsed_input.records,
+                    deactivate_absent=False,
+                )
+
             runner = self.runner_factory()
             if runner is None:
+                if self.analytics_repository is not None:
+                    self.analytics_repository.mark_job_unfinished_failed(job_id)
                 self.job_store.fail_job(job_id, "PipelineRunner is not ready. Check configuration.")
                 return
 
@@ -163,6 +184,26 @@ class ClassificationWorkerManager:
                     step_status=step_status,
                 )
                 if new_results and not cancellation_check():
+                    if self.analytics_repository is not None:
+                        batch_results = [
+                            BatchClassificationResult(
+                                source_row_number=int(item["source_row_number"]),
+                                text=str(item.get("text", "")),
+                                product=item.get("product") or None,
+                                product_line=item.get("product_line") or None,
+                                model=item.get("model") or None,
+                                bm25_score=item.get("bm25_score"),
+                                sentiment=item.get("sentiment") or None,
+                                labels=list(item.get("labels", [])),
+                                brand=item.get("brand") or None,
+                            )
+                            for item in new_results
+                        ]
+                        self.analytics_repository.apply_batch_results(
+                            job_id=job_id,
+                            results=batch_results,
+                            minor_to_major=get_label_config_snapshot()["minor_to_major"],
+                        )
                     self.job_store.append_results(job_id, new_results)
 
             result = runner.run_pipeline(
@@ -175,14 +216,20 @@ class ClassificationWorkerManager:
             )
 
             if cancellation_check():
+                if self.analytics_repository is not None:
+                    self.analytics_repository.mark_job_unfinished_failed(job_id)
                 self.job_store.mark_cancelled(job_id, "Job đã được yêu cầu hủy.")
                 return
 
             sp_uploaded, sp_folder, sp_web_url = self._upload_output(job, output_path)
             latest = self.job_store.get_job(job_id, include_results=False)
             if latest and latest.get("status") == JOB_STATUS_CANCELLED:
+                if self.analytics_repository is not None:
+                    self.analytics_repository.mark_job_unfinished_failed(job_id)
                 return
             if latest and latest.get("cancellation_requested"):
+                if self.analytics_repository is not None:
+                    self.analytics_repository.mark_job_unfinished_failed(job_id)
                 self.job_store.mark_cancelled(job_id, "Job đã được yêu cầu hủy.")
                 return
 
@@ -197,9 +244,13 @@ class ClassificationWorkerManager:
                 sp_web_url=sp_web_url,
             )
         except PipelineCancelled:
+            if self.analytics_repository is not None:
+                self.analytics_repository.mark_job_unfinished_failed(job_id)
             self.job_store.mark_cancelled(job_id, "Job đã được hủy ở ranh giới batch an toàn.")
         except Exception as exc:
             logger.error("Classification job %s failed: %s", job_id, exc, exc_info=True)
+            if self.analytics_repository is not None:
+                self.analytics_repository.mark_job_unfinished_failed(job_id)
             if cancellation_check():
                 self.job_store.mark_cancelled(job_id, "Job đã được hủy sau khi worker nhận lỗi.")
                 return
@@ -271,7 +322,8 @@ def build_default_worker_manager() -> ClassificationWorkerManager | None:
 
     settings = deps.get_settings()
     job_store = deps.get_classification_job_store()
-    if settings is None or job_store is None:
+    analytics_repository = deps.get_feedback_analytics_repository()
+    if settings is None or job_store is None or analytics_repository is None:
         return None
     settings.ensure_runtime_dirs()
     return ClassificationWorkerManager(
@@ -279,6 +331,7 @@ def build_default_worker_manager() -> ClassificationWorkerManager | None:
         job_store=job_store,
         runner_factory=deps.get_pipeline_runner,
         sharepoint_factory=deps.get_sharepoint_client,
+        analytics_repository=analytics_repository,
     )
 
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import time
+from io import BytesIO
 from pathlib import Path
 
+import pandas as pd
 from fastapi.testclient import TestClient
 
 from dms.jwt_utils import create_token
@@ -33,14 +35,14 @@ class FakeRunner:
             progress_callback(
                 done=1,
                 total=2,
-                new_results=[{"text": "alpha", "labels": ["Bao loi"]}],
+                new_results=[{"source_row_number": 2, "text": "alpha", "labels": ["Bao loi"]}],
                 step=3,
                 step_status="running",
             )
             progress_callback(
                 done=2,
                 total=2,
-                new_results=[{"text": "beta", "labels": ["Bao hanh"]}],
+                new_results=[{"source_row_number": 3, "text": "beta", "labels": ["Bao hanh"]}],
                 step=3,
                 step_status="done",
             )
@@ -75,9 +77,7 @@ def _settings(tmp_path: Path, **overrides) -> Settings:
         "classification_worker_heartbeat_seconds": 0.01,
     }
     values.update(overrides)
-    return Settings(
-        **values,
-    )
+    return Settings(**values)
 
 
 def _client(tmp_path: Path, monkeypatch, user: dict = ALICE, **settings_overrides) -> TestClient:
@@ -87,7 +87,6 @@ def _client(tmp_path: Path, monkeypatch, user: dict = ALICE, **settings_override
     monkeypatch.setattr(deps, "get_pipeline_runner", lambda: FakeRunner())
     monkeypatch.setattr(deps, "get_sharepoint_client", lambda: None)
     monkeypatch.setattr(deps, "get_user_store", lambda: FakeUserStore())
-    # Redirect WORK_DIR to tmp_path so output files don't pollute the real work/output/
     monkeypatch.setattr(classify_module, "WORK_DIR", tmp_path / "work")
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: user
@@ -103,6 +102,12 @@ def _wait_for_completed(client: TestClient, job_id: str) -> dict:
     raise AssertionError("job did not complete")
 
 
+def _feedback_workbook_bytes() -> bytes:
+    buffer = BytesIO()
+    pd.DataFrame({"Nội dung phản hồi": ["alpha", "beta"]}).to_excel(buffer, index=False)
+    return buffer.getvalue()
+
+
 def test_classify_file_creates_durable_owner_scoped_job(tmp_path: Path, monkeypatch):
     client = _client(tmp_path, monkeypatch, ALICE)
 
@@ -111,7 +116,7 @@ def test_classify_file_creates_durable_owner_scoped_job(tmp_path: Path, monkeypa
         files={
             "file": (
                 "feedback.xlsx",
-                b"fake",
+                _feedback_workbook_bytes(),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         },
@@ -148,7 +153,7 @@ def test_classification_job_survives_dependency_reset(tmp_path: Path, monkeypatc
         files={
             "file": (
                 "feedback.xlsx",
-                b"fake",
+                _feedback_workbook_bytes(),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         },
@@ -202,7 +207,7 @@ def test_admin_metrics_cancel_and_retry_authorization(tmp_path: Path, monkeypatc
     output_path = tmp_path / "work" / "output" / "retry_out.xlsx"
     input_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    input_path.write_bytes(b"fake-xlsx")
+    input_path.write_bytes(_feedback_workbook_bytes())
 
     store.create_job(
         job_id="retry-job",

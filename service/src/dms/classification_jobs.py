@@ -298,7 +298,9 @@ class ClassificationJobStore:
                 """
                 SELECT *
                 FROM classification_jobs
-                WHERE status = ? AND COALESCE(cancellation_requested, 0) = 0
+                WHERE status = ?
+                  AND mode != 'analytics_ingest'
+                  AND COALESCE(cancellation_requested, 0) = 0
                 ORDER BY queued_at ASC, created_at ASC
                 """,
                 (JOB_STATUS_QUEUED,),
