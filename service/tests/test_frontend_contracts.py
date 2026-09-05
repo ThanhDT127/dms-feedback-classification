@@ -142,8 +142,9 @@ def test_analytics_distinguishes_ingested_rows_without_ai_classification():
 def test_managed_file_analytics_assets_have_updated_cache_versions():
     index_html = _read("index.html")
 
-    assert "js/api.js?v=1.0.6" in index_html
-    assert "js/pages/analytics.js?v=1.0.3" in index_html
+    assert "css/style.css?v=1.0.8" in index_html
+    assert "js/api.js?v=1.0.7" in index_html
+    assert "js/pages/analytics.js?v=1.0.5" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
 
@@ -429,6 +430,25 @@ def test_analytics_page_uses_chart_helpers_and_cleans_up_its_charts():
         assert expected in analytics_js
 
 
+def test_analytics_dashboard_is_wide_and_keeps_only_actionable_score_cards():
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+
+    assert "app.classList.add('page-container-wide')" in analytics_js
+    assert "app.classList.remove('page-container-wide')" in analytics_js
+    assert ".page-container.page-container-wide" in style_css
+    assert "max-width: none" in style_css
+    assert "processed_issues" not in analytics_js
+    assert "label_coverage" not in analytics_js
+    assert "multi_label_rate" not in analytics_js
+    assert "renderMetricSkeletons(5)" in analytics_js
+    assert "function metricInsight(key, metric)" in analytics_js
+    assert "Đã có cảm xúc" in analytics_js
+    assert "Đã nhận diện sản phẩm" in analytics_js
+    assert "mã vấn đề có nội dung trùng" in analytics_js
+    assert "Chưa có nhãn đối chứng do con người xác nhận." in analytics_js
+
+
 def test_analytics_page_renders_and_cleans_up_daily_trend():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
@@ -475,18 +495,35 @@ def test_analytics_page_renders_unit_issue_type_heatmap():
     assert "analytics-heat-cell" in analytics_js
 
 
-def test_analytics_page_renders_geography_and_global_filters():
+def test_analytics_page_renders_cascading_global_filter_dropdowns():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
+    sidebar_js = _read("js/components/sidebar.js")
+    app_js = _read("js/app.js")
 
     assert "function getAnalyticsGeography(params = {})" in api_js
-    assert "/analytics/geography" in api_js
-    assert "textField('analytics-province'" in analytics_js
-    assert "textField('analytics-district'" in analytics_js
+    assert "function getAnalyticsFilterOptions(params = {})" in api_js
+    assert "/analytics/filter-options" in api_js
+    assert "selectField('analytics-province'" in analytics_js
+    assert "selectField('analytics-district'" in analytics_js
+    assert "selectField('analytics-unit'" in analytics_js
+    assert "AnalyticsPage.onProvinceChange()" in analytics_js
+    assert "AnalyticsPage.onDistrictChange()" in analytics_js
+    assert "resetSelect('analytics-district')" in analytics_js
+    assert "resetSelect('analytics-unit')" in analytics_js
+    assert "API.getAnalyticsFilterOptions" in analytics_js
+    assert "const optionsRequestId = ++_state.optionsRequestId" in analytics_js
+    assert "if (optionsRequestId !== _state.optionsRequestId) return" in analytics_js
     assert "API.getAnalyticsGeography" in analytics_js
     assert "analytics-provinces-chart" in analytics_js
     assert "province: _state.filters.province" in analytics_js
     assert "district: _state.filters.district" in analytics_js
+    assert "unit: _state.filters.unit" in analytics_js
+    assert "unit: globalParams.unit || _state.issueFilters.unit" in analytics_js
+    assert "escAttr(option)" in analytics_js
+    assert {"onProvinceChange", "onDistrictChange"} <= _page_exports(analytics_js)
+    assert sidebar_js.index("{ id: 'analytics'") < sidebar_js.index("{ id: 'classify'")
+    assert "const DEFAULT_PAGE = 'analytics';" in app_js
 
 
 def test_analytics_page_renders_status_and_backlog():

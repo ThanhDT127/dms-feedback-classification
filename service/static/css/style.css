@@ -574,6 +574,11 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
   animation: fadeIn 0.3s ease;
 }
 
+.page-container.page-container-wide {
+  width: 100%;
+  max-width: none;
+}
+
 /* ============================================================
    COMPONENTS
    ============================================================ */

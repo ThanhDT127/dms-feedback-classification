@@ -46,6 +46,7 @@ def analytics_filter_dependency(
     compare_to: str | None = Query(None),
     province: str | None = Query(None),
     district: str | None = Query(None),
+    unit_name: str | None = Query(None, alias="unit"),
 ) -> AnalyticsFilter:
     """Parse complete inclusive ISO date ranges and geography filters."""
     date_from, date_to = _validate_range(date_from, date_to)
@@ -57,6 +58,7 @@ def analytics_filter_dependency(
         compare_to=compare_to,
         province=province.strip() if province and province.strip() else None,
         district=district.strip() if district and district.strip() else None,
+        unit_name=unit_name.strip() if unit_name and unit_name.strip() else None,
     )
 
 
@@ -123,6 +125,14 @@ def geography(
     analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
 ):
     return _service().geography(analytics_filter)
+
+
+@router.get("/filter-options")
+def filter_options(
+    user: _CURRENT_USER,
+    analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
+):
+    return _service().filter_options(analytics_filter)
 
 
 @router.get("/status-backlog")

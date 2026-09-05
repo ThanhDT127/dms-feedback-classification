@@ -35,6 +35,7 @@ def analytics_api(settings, monkeypatch):
         "/api/analytics/unit-issue-type-matrix",
         "/api/analytics/geography",
         "/api/analytics/status-backlog",
+        "/api/analytics/filter-options",
     ],
 )
 def test_analytics_routes_require_authentication(path):
@@ -227,6 +228,55 @@ def test_analytics_geography_route_and_filters(analytics_api):
     assert (
         client.get("/api/analytics/overview?province=Hà%20Nội").json()["total_issues"]["value"] == 1
     )
+
+
+def test_analytics_filter_options_follow_geography_and_unit_scope(analytics_api):
+    client, repository = analytics_api
+    seed_classified_records(
+        repository,
+        db_path=repository.db_path,
+        entries=[
+            {
+                "issue_code": "A",
+                "unit_name": "Đơn vị A",
+                "raw_data": {"Tỉnh/TP": "Hà Nội", "Quận/huyện": "Hoàng Mai"},
+            },
+            {
+                "issue_code": "B",
+                "unit_name": "Đơn vị B",
+                "raw_data": {"Tỉnh/TP": "Hà Nội", "Quận/huyện": "Hà Đông"},
+            },
+            {
+                "issue_code": "C",
+                "unit_name": "Đơn vị C",
+                "raw_data": {"Tỉnh/TP": "Quảng Ninh", "Quận/huyện": "Hạ Long"},
+            },
+            {"issue_code": "D", "unit_name": None, "raw_data": {}},
+            {
+                "issue_code": "E",
+                "unit_name": "Chưa xác định",
+                "raw_data": {"Tỉnh/TP": "Chưa xác định", "Quận/huyện": "Chưa xác định"},
+            },
+        ],
+    )
+
+    all_options = client.get("/api/analytics/filter-options")
+    hanoi_options = client.get("/api/analytics/filter-options?province=Hà%20Nội")
+    district_options = client.get(
+        "/api/analytics/filter-options?province=Hà%20Nội&district=Hoàng%20Mai"
+    )
+    filtered_overview = client.get("/api/analytics/overview?unit=Đơn%20vị%20A")
+
+    assert all_options.status_code == 200
+    assert all_options.json() == {
+        "provinces": ["Hà Nội", "Quảng Ninh"],
+        "districts": ["Hà Đông", "Hạ Long", "Hoàng Mai"],
+        "units": ["Đơn vị A", "Đơn vị B", "Đơn vị C"],
+    }
+    assert hanoi_options.json()["districts"] == ["Hà Đông", "Hoàng Mai"]
+    assert hanoi_options.json()["units"] == ["Đơn vị A", "Đơn vị B"]
+    assert district_options.json()["units"] == ["Đơn vị A"]
+    assert filtered_overview.json()["total_issues"]["value"] == 1
 
 
 def test_analytics_status_backlog_route(analytics_api):

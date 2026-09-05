@@ -241,6 +241,7 @@ window.API = (() => {
   function getAnalyticsDuplicates(params = {}) { return get(`/analytics/duplicates${buildAnalyticsQuery(params)}`); }
   function getAnalyticsUnitIssueTypeMatrix(params = {}) { return get(`/analytics/unit-issue-type-matrix${buildAnalyticsQuery(params)}`); }
   function getAnalyticsGeography(params = {}) { return get(`/analytics/geography${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsFilterOptions(params = {}) { return get(`/analytics/filter-options${buildAnalyticsQuery(params)}`); }
   function getAnalyticsStatusBacklog(params = {}) { return get(`/analytics/status-backlog${buildAnalyticsQuery(params)}`); }
   function getAnalyticsSources(params = {}) { return get(`/analytics/sources${buildAnalyticsQuery(params)}`); }
   function getAnalyticsUnits(params = {}) { return get(`/analytics/units${buildAnalyticsQuery(params)}`); }
@@ -312,7 +313,7 @@ window.API = (() => {
     syncKeywordsToSP, syncProductsToSP, syncSharePoint, uploadJobToSharePoint,
     getUsageMetrics, getUsagePricing,
     resetFailedFiles, getMetricsByUser,
-    getAnalyticsOverview, getAnalyticsDailyTrend, getAnalyticsIssueTypes, getAnalyticsDuplicates, getAnalyticsUnitIssueTypeMatrix, getAnalyticsGeography, getAnalyticsStatusBacklog, getAnalyticsSources, getAnalyticsUnits, getAnalyticsGroups,
+    getAnalyticsOverview, getAnalyticsDailyTrend, getAnalyticsIssueTypes, getAnalyticsDuplicates, getAnalyticsUnitIssueTypeMatrix, getAnalyticsGeography, getAnalyticsFilterOptions, getAnalyticsStatusBacklog, getAnalyticsSources, getAnalyticsUnits, getAnalyticsGroups,
     getAnalyticsProducts, getAnalyticsIssues, getAnalyticsDataQuality,
     logout
   };

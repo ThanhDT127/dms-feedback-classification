@@ -6,7 +6,8 @@ window.AnalyticsPage = (() => {
   const DEFAULT_PAGE_SIZE = 25;
   let _cache = null;
   const _state = {
-    filters: { from: '', to: '', compare_from: '', compare_to: '', province: '', district: '' },
+    filters: { from: '', to: '', compare_from: '', compare_to: '', province: '', district: '', unit: '' },
+    filterOptions: { provinces: [], districts: [], units: [] },
     issueFilters: { source: '', unit: '', label: '', product: '', status: '' },
     issuePage: 1,
     duplicatePage: 1,
@@ -14,6 +15,7 @@ window.AnalyticsPage = (() => {
     duplicates: null,
     units: [],
     requestId: 0,
+    optionsRequestId: 0,
   };
 
   function getFilterKey() {
@@ -28,6 +30,7 @@ window.AnalyticsPage = (() => {
   function render() {
     const app = document.getElementById('app');
     if (!app) return;
+    app.classList.add('page-container-wide');
     app.innerHTML = `
       <div class="page-header">
         <h2>📊 Dashboard</h2>
@@ -44,8 +47,9 @@ window.AnalyticsPage = (() => {
           ${dateField('analytics-date-to', 'Đến ngày', _state.filters.to)}
           ${dateField('analytics-compare-from', 'So sánh từ ngày', _state.filters.compare_from)}
           ${dateField('analytics-compare-to', 'So sánh đến ngày', _state.filters.compare_to)}
-          ${textField('analytics-province', 'Tỉnh/TP', _state.filters.province)}
-          ${textField('analytics-district', 'Quận/huyện', _state.filters.district)}
+          ${selectField('analytics-province', 'Tỉnh/TP', _state.filters.province, _state.filterOptions.provinces, 'AnalyticsPage.onProvinceChange()')}
+          ${selectField('analytics-district', 'Quận/huyện', _state.filters.district, _state.filterOptions.districts, 'AnalyticsPage.onDistrictChange()')}
+          ${selectField('analytics-unit', 'Đơn vị', _state.filters.unit, _state.filterOptions.units)}
           <div class="analytics-filter-actions">
             <button class="btn btn-primary btn-sm" type="button" onclick="AnalyticsPage.applyFilters()">Áp dụng</button>
             <button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.resetFilters()">Đặt lại</button>
@@ -59,7 +63,7 @@ window.AnalyticsPage = (() => {
 
       <section aria-labelledby="analytics-overview-title">
         <div class="section-heading"><h3 id="analytics-overview-title">Tổng quan</h3><span class="text-muted">KPI tính theo Mã vấn đề khác rỗng</span></div>
-        <div id="analytics-overview" class="stat-grid">${renderMetricSkeletons(8)}</div>
+        <div id="analytics-overview" class="stat-grid">${renderMetricSkeletons(5)}</div>
       </section>
 
       <section class="card" aria-labelledby="analytics-daily-title">
@@ -113,6 +117,7 @@ window.AnalyticsPage = (() => {
         <div id="analytics-issues" class="analytics-panel-body">${renderPanelLoading()}</div>
       </section>
     `;
+    loadFilterOptions();
     const filterKey = getFilterKey();
     if (_cache && _cache.key === filterKey) {
       renderAllPanels(_cache.results);
@@ -135,6 +140,11 @@ window.AnalyticsPage = (() => {
     return `<label class="analytics-field" for="${id}"><span>${label}</span><input id="${id}" class="form-input" value="${escHtml(value)}"></label>`;
   }
 
+  function selectField(id, label, value, options, changeHandler = '') {
+    const onchange = changeHandler ? ` onchange="${changeHandler}"` : '';
+    return `<label class="analytics-field" for="${id}"><span>${label}</span><select id="${id}" class="form-input"${onchange}><option value="">Tất cả</option>${(options || []).map(option => `<option value="${escAttr(option)}"${option === value ? ' selected' : ''}>${escHtml(option)}</option>`).join('')}</select></label>`;
+  }
+
   function renderMetricSkeletons(count) {
     return Array(count).fill(0).map((_, index) => `<div class="stat-card animate-in animate-in-delay-${(index % 5) + 1}"><div class="skeleton skeleton-text xs" style="margin-bottom:12px;"></div><div class="skeleton skeleton-text short" style="height:28px;margin-bottom:8px;"></div><div class="skeleton skeleton-text xs"></div></div>`).join('');
   }
@@ -151,6 +161,7 @@ window.AnalyticsPage = (() => {
       compare_to: document.getElementById('analytics-compare-to')?.value || '',
       province: document.getElementById('analytics-province')?.value.trim() || '',
       district: document.getElementById('analytics-district')?.value.trim() || '',
+      unit: document.getElementById('analytics-unit')?.value.trim() || '',
     };
   }
 
@@ -171,11 +182,12 @@ window.AnalyticsPage = (() => {
     _state.issuePage = 1;
     _state.duplicatePage = 1;
     _cache = null;
+    loadFilterOptions();
     refresh(true);
   }
 
   function resetFilters() {
-    _state.filters = { from: '', to: '', compare_from: '', compare_to: '', province: '', district: '' };
+    _state.filters = { from: '', to: '', compare_from: '', compare_to: '', province: '', district: '', unit: '' };
     const inputIds = {
       from: 'analytics-date-from',
       to: 'analytics-date-to',
@@ -183,6 +195,7 @@ window.AnalyticsPage = (() => {
       compare_to: 'analytics-compare-to',
       province: 'analytics-province',
       district: 'analytics-district',
+      unit: 'analytics-unit',
     };
     Object.entries(inputIds).forEach(([key, id]) => {
       const input = document.getElementById(id);
@@ -192,7 +205,62 @@ window.AnalyticsPage = (() => {
     _state.duplicatePage = 1;
     setFilterError(null);
     _cache = null;
+    loadFilterOptions();
     refresh(true);
+  }
+
+  async function onProvinceChange() {
+    _state.filters.province = document.getElementById('analytics-province')?.value || '';
+    _state.filters.district = '';
+    _state.filters.unit = '';
+    resetSelect('analytics-district');
+    resetSelect('analytics-unit');
+    await loadFilterOptions();
+  }
+
+  async function onDistrictChange() {
+    _state.filters.district = document.getElementById('analytics-district')?.value || '';
+    _state.filters.unit = '';
+    resetSelect('analytics-unit');
+    await loadFilterOptions();
+  }
+
+  function resetSelect(id) {
+    const select = document.getElementById(id);
+    if (!select) return;
+    select.innerHTML = '<option value="">Tất cả</option>';
+    select.value = '';
+    select.disabled = true;
+  }
+
+  async function loadFilterOptions() {
+    const optionsRequestId = ++_state.optionsRequestId;
+    try {
+      const options = await API.getAnalyticsFilterOptions({
+        from: _state.filters.from || undefined,
+        to: _state.filters.to || undefined,
+        province: _state.filters.province || undefined,
+        district: _state.filters.district || undefined,
+      });
+      if (optionsRequestId !== _state.optionsRequestId) return;
+      _state.filterOptions = {
+        provinces: options?.provinces || [],
+        districts: options?.districts || [],
+        units: options?.units || [],
+      };
+      updateSelect('analytics-province', _state.filterOptions.provinces, _state.filters.province);
+      updateSelect('analytics-district', _state.filterOptions.districts, _state.filters.district);
+      updateSelect('analytics-unit', _state.filterOptions.units, _state.filters.unit);
+    } catch (error) {
+      console.warn('Không thể tải lựa chọn bộ lọc analytics:', error.message);
+    }
+  }
+
+  function updateSelect(id, options, value) {
+    const select = document.getElementById(id);
+    if (!select) return;
+    select.innerHTML = `<option value="">Tất cả</option>${options.map(option => `<option value="${escAttr(option)}"${option === value ? ' selected' : ''}>${escHtml(option)}</option>`).join('')}`;
+    select.disabled = false;
   }
 
   function setFilterError(message) {
@@ -252,11 +320,13 @@ window.AnalyticsPage = (() => {
       to: _state.filters.to || undefined,
       province: _state.filters.province || undefined,
       district: _state.filters.district || undefined,
+      unit: _state.filters.unit || undefined,
     };
   }
 
   function issueQueryParams() {
-    return { ...globalQueryParams(), ..._state.issueFilters, page: _state.issuePage, page_size: DEFAULT_PAGE_SIZE };
+    const globalParams = globalQueryParams();
+    return { ...globalParams, ..._state.issueFilters, unit: globalParams.unit || _state.issueFilters.unit, page: _state.issuePage, page_size: DEFAULT_PAGE_SIZE };
   }
 
   function duplicateQueryParams() {
@@ -379,9 +449,6 @@ window.AnalyticsPage = (() => {
   function renderOverview(element, data) {
     const metrics = [
       ['total_issues', 'Tổng số vấn đề', '📌', 'blue', false],
-      ['processed_issues', 'Vấn đề đã xử lý', '✅', 'green', false],
-      ['label_coverage', 'Tỷ lệ phủ Nhãn phân loại do AI', '🏷️', 'purple', true],
-      ['multi_label_rate', 'Phản hồi đa nhãn do AI', '🔖', 'amber', true],
       ['sentiment_coverage', 'Hoàn thiện cảm xúc', '😊', 'orange', true],
       ['product_coverage', 'Nhận diện sản phẩm', '📦', 'blue', true],
       ['duplicate_issue_rate', 'Tỷ lệ vấn đề trùng', '♻️', 'red', true],
@@ -390,10 +457,33 @@ window.AnalyticsPage = (() => {
     element.innerHTML = metrics.map(([key, label, icon, color, percent]) => {
       const metric = data?.[key] || {};
       const unavailable = metric.available === false;
-      const hint = unavailable ? metric.reason || 'Chỉ số chưa khả dụng.' : metricHint(metric);
+      const hint = metricInsight(key, metric);
       return `<div class="stat-card ${color} animate-in" title="${escHtml(hint)}"><div class="stat-card-top"><div><div class="stat-card-value">${escHtml(unavailable ? '—' : formatMetricValue(metric.value, percent))}</div><div class="stat-card-label">${escHtml(label)}</div></div><div class="stat-card-icon">${icon}</div></div><div class="analytics-metric-hint">${escHtml(hint)}</div>${key === 'total_issues' ? renderComparison(metric.comparison) : ''}</div>`;
     }).join('');
   }
+
+  function metricInsight(key, metric) {
+    const denominator = Number(metric?.denominator || 0);
+    if (metric?.available === false) {
+      if (key === 'model_accuracy') return 'Chưa có nhãn đối chứng do con người xác nhận.';
+      return metric?.reason || 'Chỉ số chưa khả dụng.';
+    }
+    if (key === 'total_issues') {
+      const excluded = Number(metric?.excluded_missing_issue_code || 0);
+      return excluded ? `Đã loại trừ ${formatNumber(excluded)} dòng thiếu Mã vấn đề.` : 'Toàn bộ vấn đề trong phạm vi bộ lọc hiện tại.';
+    }
+    if (key === 'sentiment_coverage') {
+      return `Đã có cảm xúc cho ${formatNumber(metric?.numerator)} / ${formatNumber(denominator)} vấn đề.`;
+    }
+    if (key === 'product_coverage') {
+      return `Đã nhận diện sản phẩm cho ${formatNumber(metric?.numerator)} / ${formatNumber(denominator)} vấn đề.`;
+    }
+    if (key === 'duplicate_issue_rate') {
+      return `${formatNumber(metric?.duplicate_issue_codes)} mã vấn đề có nội dung trùng.`;
+    }
+    return metricHint(metric);
+  }
+
 
   function renderComparison(comparison) {
     if (!comparison) return '';
@@ -543,8 +633,15 @@ window.AnalyticsPage = (() => {
     return element.innerHTML;
   }
 
+  function escAttr(value) {
+    return escHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   function destroy() {
     _state.requestId += 1;
+    _state.optionsRequestId += 1;
+    const app = document.getElementById('app');
+    if (app) app.classList.remove('page-container-wide');
     Charts.destroy('analytics-daily-trend-chart');
     Charts.destroy('analytics-issue-types-chart');
     Charts.destroy('analytics-status-chart');
@@ -553,5 +650,5 @@ window.AnalyticsPage = (() => {
     Charts.destroy('analytics-units-chart');
   }
 
-  return { render, destroy, applyFilters, resetFilters, refresh, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, filterIssuesByUnit };
+  return { render, destroy, applyFilters, resetFilters, refresh, onProvinceChange, onDistrictChange, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, filterIssuesByUnit };
 })();

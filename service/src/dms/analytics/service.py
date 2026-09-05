@@ -61,7 +61,63 @@ class FeedbackAnalyticsService:
                     analytics_filter.district,
                 )
             ]
+        if analytics_filter.unit_name:
+            rows = [
+                row
+                for row in rows
+                if self._matches(row.get("unit_name"), analytics_filter.unit_name)
+            ]
         return rows
+
+    def filter_options(self, analytics_filter: AnalyticsFilter) -> dict[str, list[str]]:
+        """Return real dropdown values constrained by upstream selections."""
+        date_scope = AnalyticsFilter(
+            date_from=analytics_filter.date_from,
+            date_to=analytics_filter.date_to,
+        )
+        province_rows = self._rows(date_scope)
+        district_rows = self._rows(
+            AnalyticsFilter(
+                date_from=analytics_filter.date_from,
+                date_to=analytics_filter.date_to,
+                province=analytics_filter.province,
+            )
+        )
+        unit_rows = self._rows(
+            AnalyticsFilter(
+                date_from=analytics_filter.date_from,
+                date_to=analytics_filter.date_to,
+                province=analytics_filter.province,
+                district=analytics_filter.district,
+            )
+        )
+
+        def values(rows: list[dict[str, Any]], *aliases: str) -> list[str]:
+            return sorted(
+                {
+                    value
+                    for row in rows
+                    if (value := self._raw_value(row, *aliases)) is not None
+                    and _canon_lower(value) != _canon_lower(_UNKNOWN)
+                },
+                key=_canon_lower,
+            )
+
+        return {
+            "provinces": values(province_rows, "Tỉnh/TP", "Tinh/TP", "Tỉnh thành", "Tinh thanh"),
+            "districts": values(
+                district_rows, "Quận/huyện", "Quan/huyen", "Quận huyện", "Quan huyen"
+            ),
+            "units": sorted(
+                {
+                    unit
+                    for row in unit_rows
+                    if (unit := str(row.get("unit_name") or "").strip())
+                    and _canon_lower(unit) != _canon_lower(_UNKNOWN)
+                },
+                key=_canon_lower,
+            ),
+        }
 
     def _issue_codes(self, rows: list[dict[str, Any]]) -> set[str]:
         return {code for row in rows if (code := self._issue_code(row)) is not None}
@@ -96,18 +152,22 @@ class FeedbackAnalyticsService:
         unavailable_reason: str = "No issue codes are available for this metric.",
     ) -> dict[str, Any]:
         if denominator == 0:
-            return cls._metric(
+            metric = cls._metric(
                 value=None,
                 denominator=0,
                 excluded_missing_issue_code=excluded_missing_issue_code,
                 available=False,
                 reason=unavailable_reason,
             )
-        return cls._metric(
+            metric["numerator"] = numerator
+            return metric
+        metric = cls._metric(
             value=round(numerator * 100 / denominator, 2),
             denominator=denominator,
             excluded_missing_issue_code=excluded_missing_issue_code,
         )
+        metric["numerator"] = numerator
+        return metric
 
     @classmethod
     def _issue_count_metric(
@@ -168,6 +228,7 @@ class FeedbackAnalyticsService:
                 date_to=analytics_filter.compare_to,
                 province=analytics_filter.province,
                 district=analytics_filter.district,
+                unit_name=analytics_filter.unit_name,
             )
         )
         comparison_value = len(self._issue_codes(comparison_rows))

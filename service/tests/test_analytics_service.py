@@ -51,6 +51,8 @@ def test_overview_uses_distinct_issue_codes_and_reports_missing_code_exclusions(
     assert body["label_coverage"]["available"] is True
     assert body["label_coverage"]["value"] == 100.0
     assert body["multi_label_rate"]["value"] == 100.0
+    assert body["sentiment_coverage"]["numerator"] == 1
+    assert body["product_coverage"]["numerator"] == 0
     assert body["total_issues"]["excluded_missing_issue_code"] == 1
     assert body["model_accuracy"] == {
         "available": False,
