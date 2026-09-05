@@ -22,6 +22,7 @@ from ..deps import (
     get_current_user,
     get_feedback_analytics_repository,
     get_sharepoint_client,
+    get_sharepoint_sync_service,
 )
 
 logger = logging.getLogger("dms-web")
@@ -239,70 +240,31 @@ async def get_template(user: dict = Depends(get_current_user)):
 
 
 @router.post("/sync")
+@router.post("/sync-sharepoint")
 async def sync_sharepoint(admin: dict = Depends(get_admin_user)):
-    """Đồng bộ thủ công hai chiều: tải về Input mới và đẩy lên Output mới."""
+    """Đồng bộ thủ công hai chiều: tải về Input & Output mới từ SharePoint, nạp vào Dashboard và đẩy lên Output mới."""
     sp_client = get_sharepoint_client()
     settings = get_settings()
-    if sp_client is None:
+    sync_service = get_sharepoint_sync_service()
+
+    if sp_client is None or settings is None or sync_service is None:
         raise HTTPException(
             status_code=503,
-            detail="Không thể kết nối SharePoint (chưa cấu hình Azure credentials)",
+            detail="Không thể kết nối SharePoint (chưa cấu hình Azure credentials hoặc database)",
         )
 
-    downloads = 0
-    uploads = 0
-
-    # Đọc seen_files.json để đối chiếu tránh tải lại file đã xử lý xong
-    seen_data = {}
-    seen_path = settings.work_dir / "seen_files.json"
-    if seen_path.is_file():
-        try:
-            seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
-        except Exception as exc:
-            logger.warning("Lỗi đọc seen_files.json trong sync endpoint: %s", exc)
-
-    # 1. Tải về file Input mới
+    # 1. Chạy tải và nạp toàn diện bằng SharePointSyncService
     try:
-        sp_input_items = sp_client.list_folder_items(settings.sp_input_folder)
-        local_input_dir = settings.work_dir / "input"
-        local_input_dir.mkdir(parents=True, exist_ok=True)
-
-        for item in sp_input_items:
-            if "folder" in item:
-                continue
-            name = item.get("name", "")
-            if not name.lower().endswith(".xlsx"):
-                continue
-
-            # Kiểm tra xem file đã từng được xử lý chưa (dựa theo ID hoặc tên)
-            item_id = item.get("id")
-            if item_id and item_id in seen_data:
-                status = seen_data[item_id].get("status")
-                if status in ("done", "failed"):
-                    continue
-
-            # Fallback đối chiếu theo tên file
-            already_processed = False
-            for _fid, s_info in seen_data.items():
-                if s_info.get("name") == name and s_info.get("status") in ("done", "failed"):
-                    already_processed = True
-                    break
-            if already_processed:
-                continue
-
-            local_path = local_input_dir / name
-            if not local_path.exists():
-                logger.info("Manual Sync: Downloading new input file %s", name)
-                sp_client.download_file(item["id"], local_path)
-                downloads += 1
+        stats = sync_service.sync_and_ingest()
     except Exception as exc:
-        logger.error("Lỗi đồng bộ Input từ SharePoint: %s", exc)
+        logger.error("Lỗi đồng bộ SharePoint: %s", exc)
         raise HTTPException(
             status_code=502,
-            detail=f"Lỗi tải file từ SharePoint: {exc}",
+            detail=f"Lỗi đồng bộ SharePoint: {exc}",
         ) from exc
 
-    # 2. Đẩy lên file Output mới
+    # 2. Đẩy lên file Output mới nếu có file local chưa có trên SharePoint
+    uploads = 0
     try:
         local_output_dir = settings.work_dir / "output"
         if local_output_dir.is_dir():
@@ -313,28 +275,28 @@ async def sync_sharepoint(admin: dict = Depends(get_admin_user)):
                 if path.is_file() and path.suffix.lower() == ".xlsx":
                     file_size = path.stat().st_size
                     if file_size < 1024:
-                        logger.warning(
-                            "Skipping small file %s (%dB) — likely not a valid xlsx",
-                            path.name,
-                            file_size,
-                        )
                         continue
                     if path.name not in sp_output_names:
                         logger.info("Manual Sync: Uploading completed output file %s", path.name)
                         sp_client.upload_file(path, settings.sp_output_folder)
                         uploads += 1
     except Exception as exc:
-        logger.error("Lỗi đồng bộ Output lên SharePoint: %s", exc)
-        raise HTTPException(
-            status_code=502,
-            detail=f"Lỗi đẩy file lên SharePoint: {exc}",
-        ) from exc
+        logger.warning("Lỗi đẩy Output mới lên SharePoint: %s", exc)
 
     return {
         "success": True,
-        "synced_downloaded": downloads,
+        "synced_downloaded": stats.downloaded_inputs + stats.downloaded_outputs,
+        "downloaded_inputs": stats.downloaded_inputs,
+        "downloaded_outputs": stats.downloaded_outputs,
+        "ingested_files": stats.ingested_files,
+        "classified_files": stats.classified_files,
+        "total_records": stats.total_records,
         "synced_uploaded": uploads,
-        "message": f"Đồng bộ SharePoint hoàn tất! Tải về {downloads} file đầu vào mới, tải lên {uploads} file kết quả mới.",
+        "message": (
+            f"Đồng bộ SharePoint hoàn tất! Tải về {stats.downloaded_inputs} input mới, "
+            f"{stats.downloaded_outputs} output mới. Đã nạp {stats.ingested_files} file "
+            f"với {stats.total_records} bản ghi vào Dashboard."
+        ),
     }
 
 

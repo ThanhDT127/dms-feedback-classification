@@ -334,3 +334,27 @@ def get_sharepoint_client():
             return None
 
     return _get_or_create("sharepoint_client", _factory)
+
+
+def get_sharepoint_sync_service():
+    """Return a SharePointSyncService, or None if SharePoint or analytics repo is unavailable."""
+
+    def _factory():
+        sp_client = get_sharepoint_client()
+        settings = get_settings()
+        analytics_repo = get_feedback_analytics_repository()
+        if sp_client is None or settings is None or analytics_repo is None:
+            return None
+        try:
+            from ..sharepoint_sync import SharePointSyncService
+
+            return SharePointSyncService(
+                sp_client=sp_client,
+                settings=settings,
+                analytics_repo=analytics_repo,
+            )
+        except Exception as exc:
+            logger.warning("Không thể khởi tạo SharePointSyncService: %s", exc)
+            return None
+
+    return _get_or_create("sharepoint_sync_service", _factory)
