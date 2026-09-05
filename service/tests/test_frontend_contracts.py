@@ -144,7 +144,7 @@ def test_managed_file_analytics_assets_have_updated_cache_versions():
 
     assert "css/style.css?v=1.0.8" in index_html
     assert "js/api.js?v=1.0.7" in index_html
-    assert "js/pages/analytics.js?v=1.0.7" in index_html
+    assert "js/pages/analytics.js?v=1.0.8" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
 
@@ -367,6 +367,10 @@ def test_analytics_page_is_a_separate_authenticated_spa_route():
     assert "API.getAnalyticsOverview" in analytics_js
     assert "fetch(" not in analytics_js
     assert "XMLHttpRequest" not in analytics_js
+    assert "Chất lượng dữ liệu" not in analytics_js
+    assert "analytics-data-quality" not in analytics_js
+    assert "renderDataQuality" not in analytics_js
+    assert "API.getAnalyticsDataQuality" not in analytics_js
     assert {"render", "destroy", "applyFilters", "resetFilters", "refresh"} <= _page_exports(
         analytics_js
     )

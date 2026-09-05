@@ -76,11 +76,6 @@ window.AnalyticsPage = (() => {
         ${panel('analytics-product-title', '📦 Sản phẩm & chất lượng', 'analytics-products')}
       </div>
 
-      <section class="card" aria-labelledby="analytics-quality-title">
-        <div class="card-header"><span id="analytics-quality-title" class="card-title">🔎 Chất lượng dữ liệu</span></div>
-        <div id="analytics-data-quality" class="analytics-panel-body">${renderPanelLoading()}</div>
-      </section>
-
       <section class="card" aria-labelledby="analytics-status-title">
         <div class="card-header"><span id="analytics-status-title" class="card-title">⏳ Trạng thái xử lý & tồn đọng</span></div>
         <div id="analytics-status-backlog" class="analytics-panel-body">${renderPanelLoading()}</div>
@@ -323,7 +318,6 @@ window.AnalyticsPage = (() => {
     renderResult(results.units, renderUnits, 'analytics-units');
     renderResult(results.groups, renderGroups, 'analytics-groups');
     renderResult(results.products, renderProducts, 'analytics-products');
-    renderResult(results.dataQuality, renderDataQuality, 'analytics-data-quality');
     renderResult(results.issues, (element, data) => { _state.issues = data; renderIssues(element, data); }, 'analytics-issues');
   }
 
@@ -351,7 +345,6 @@ window.AnalyticsPage = (() => {
       units: API.getAnalyticsUnits(globalQueryParams()),
       groups: API.getAnalyticsGroups(globalQueryParams()),
       products: API.getAnalyticsProducts(globalQueryParams()),
-      dataQuality: API.getAnalyticsDataQuality(globalQueryParams()),
       issues: API.getAnalyticsIssues(issueQueryParams()),
     };
     const entries = Object.entries(requests);
@@ -516,13 +509,6 @@ window.AnalyticsPage = (() => {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Chưa có dữ liệu sản phẩm.');
     element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Phân bổ phản hồi theo sản phẩm"><thead><tr><th>Sản phẩm</th><th>Vấn đề</th><th>Báo lỗi</th><th>Báo CL tốt</th><th>Y/c cải tiến</th><th>Đề xuất SPM</th></tr></thead><tbody>${items.map(item => `<tr><td>${escHtml(item.label)}</td><td>${formatNumber(item.issue_count)} (${formatPercent(item.percentage)})</td><td>${formatNumber(item.quality_labels?.['Báo lỗi'])}</td><td>${formatNumber(item.quality_labels?.['Báo CL tốt'])}</td><td>${formatNumber(item.quality_labels?.['Y/c cải tiến'])}</td><td>${formatNumber(item.quality_labels?.['Đề xuất SPM'])}</td></tr>`).join('')}</tbody></table></div>`;
-  }
-
-  function renderDataQuality(element, data) {
-    const labels = { issue_code: 'Mã vấn đề', source: 'Nguồn', unit_name: 'Đơn vị', business_status: 'Trạng thái', issue_date: 'Ngày ghi nhận' };
-    const rows = Object.entries(data?.fields || {});
-    if (!rows.length) return renderEmpty(element, 'Chưa có dữ liệu chất lượng.');
-    element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Chất lượng dữ liệu phản hồi"><thead><tr><th>Trường</th><th>Có dữ liệu</th><th>Thiếu</th><th>Không hợp lệ</th></tr></thead><tbody>${rows.map(([field, counts]) => `<tr><td>${escHtml(labels[field] || field)}</td><td>${formatNumber(counts.present)}</td><td>${formatNumber(counts.missing)}</td><td>${formatNumber(counts.invalid)}</td></tr>`).join('')}</tbody></table></div>`;
   }
 
   function renderStatusBacklog(element, data) {
