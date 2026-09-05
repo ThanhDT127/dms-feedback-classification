@@ -130,8 +130,25 @@ class FeedbackAnalyticsService:
 
     @staticmethod
     def _raw_value(row: dict[str, Any], *aliases: str) -> str | None:
-        raw_data = json.loads(row["raw_data_json"])
-        normalized = {_canon_lower(key): value for key, value in raw_data.items()}
+        raw = row.get("_parsed_raw")
+        if raw is None:
+            try:
+                raw = json.loads(row["raw_data_json"])
+            except Exception:
+                raw = {}
+            row["_parsed_raw"] = raw
+
+        # Fast path: direct key match
+        for alias in aliases:
+            v = raw.get(alias)
+            if v is not None and str(v).strip():
+                return str(v).strip()
+
+        # Fallback: canonical key match
+        normalized = row.get("_normalized_raw")
+        if normalized is None:
+            normalized = {_canon_lower(key): value for key, value in raw.items()}
+            row["_normalized_raw"] = normalized
         for alias in aliases:
             value = str(normalized.get(_canon_lower(alias)) or "").strip()
             if value:

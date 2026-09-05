@@ -166,6 +166,30 @@ def _stop_classification_worker() -> None:
         worker_manager.stop()
 
 
+async def _sync_sharepoint_in_background() -> None:
+    from . import deps
+
+    sync_service = deps.get_sharepoint_sync_service()
+    if sync_service is None:
+        logger.info("SharePoint sync service not configured; skipping background startup sync")
+        return
+
+    try:
+        logger.info("Bắt đầu tự động tải và đồng bộ dữ liệu thực tế từ SharePoint...")
+        stats = await asyncio.to_thread(sync_service.sync_and_ingest)
+        logger.info(
+            "Hoàn tất tự động đồng bộ SharePoint: %d input (%d mới), %d output (%d mới), %d nạp vào dashboard, %d bản ghi",
+            stats.downloaded_inputs + stats.skipped_inputs,
+            stats.downloaded_inputs,
+            stats.downloaded_outputs + stats.skipped_outputs,
+            stats.downloaded_outputs,
+            stats.ingested_files,
+            stats.total_records,
+        )
+    except Exception as exc:
+        logger.warning("Lỗi tự động đồng bộ SharePoint khi khởi động: %s", exc)
+
+
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
 
@@ -182,10 +206,19 @@ def create_app() -> FastAPI:
         except Exception as exc:
             logger.warning("Classification worker could not start: %s", exc)
 
+        # Tự động tải file và ingest dữ liệu thực tế từ SharePoint trong nền
+        app.state.sharepoint_sync_task = asyncio.create_task(_sync_sharepoint_in_background())
+
         logger.info("DMS Web UI sẵn sàng tại http://0.0.0.0:8501")
         try:
             yield
         finally:
+            sync_task = getattr(app.state, "sharepoint_sync_task", None)
+            if sync_task is not None and not sync_task.done():
+                sync_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await sync_task
+
             cleanup_task = getattr(app.state, "token_blacklist_cleanup_task", None)
             if cleanup_task is not None:
                 cleanup_task.cancel()

@@ -25,6 +25,10 @@ class TestFileEnhancements:
 
         app = create_app()
         apply_auth_overrides(app)
+        repository = FeedbackAnalyticsRepository(tmp_path / "classification_jobs.db")
+        app.dependency_overrides[files_module.get_feedback_analytics_repository] = lambda: (
+            repository
+        )
         return TestClient(app, raise_server_exceptions=True)
 
     def test_get_template(self, client) -> None:

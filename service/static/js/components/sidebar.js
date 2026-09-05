@@ -4,10 +4,10 @@
 
 window.Sidebar = (() => {
   const NAV_ITEMS = [
+    { id: 'analytics', icon: '📊', label: 'Dashboard' },
     { id: 'classify',  icon: '⚡', label: 'Phân loại' },
     { id: 'files',     icon: '📂', label: 'Quản lý file' },
-    { id: 'dashboard', icon: '📊', label: 'Tổng quan' },
-    { id: 'analytics', icon: '📊', label: 'Phân tích phản hồi' },
+    { id: 'dashboard', icon: '📋', label: 'Tiến trình Job' },
     { id: 'metrics',   icon: '📈', label: 'Thống kê' },
     { id: 'pipeline',  icon: '🔬', label: 'Pipeline' },
     { id: 'qa',        icon: '📖', label: 'Hướng dẫn' },

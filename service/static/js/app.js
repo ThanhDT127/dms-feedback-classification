@@ -18,17 +18,17 @@ window.App = (() => {
   /* ---- Page Registry ---- */
   const PAGES = {
     login:     { module: () => window.LoginPage,     title: 'Đăng nhập' },
-    dashboard: { module: () => window.DashboardPage, title: 'Tổng quan' },
-    analytics:  { module: () => window.AnalyticsPage, title: 'Phân tích phản hồi' },
-    files:     { module: () => window.FilesPage,     title: 'Quản lý file' },
+    analytics:  { module: () => window.AnalyticsPage, title: 'Dashboard' },
     classify:  { module: () => window.ClassifyPage,  title: 'Phân loại' },
+    files:     { module: () => window.FilesPage,     title: 'Quản lý file' },
+    dashboard: { module: () => window.DashboardPage, title: 'Tiến trình Job' },
     settings:  { module: () => window.SettingsPage,  title: 'Cài đặt' },
     pipeline:  { module: () => window.PipelinePage,  title: 'Pipeline' },
     metrics:   { module: () => window.MetricsPage,   title: 'Thống kê' },
     qa:        { module: () => window.QAPage,        title: 'Hướng dẫn sử dụng' },
   };
 
-  const DEFAULT_PAGE = 'dashboard';
+  const DEFAULT_PAGE = 'analytics';
 
   /* ---- Router ---- */
   function getHash() {
@@ -94,33 +94,21 @@ window.App = (() => {
     // Close mobile sidebar
     closeSidebar();
 
-    // Transition: fade out, render, fade in
+    // Render immediately without artificial delay
     const app = document.getElementById('app');
     if (!app) return;
 
-    app.style.opacity = '0';
-    app.style.transform = 'translateY(8px)';
-
-    setTimeout(() => {
-      const mod = def.module();
-      if (mod && typeof mod.render === 'function') {
-        mod.render();
-      } else {
-        app.innerHTML = `
-          <div class="empty-state" style="padding:80px 20px;">
-            <div class="empty-state-icon">🚧</div>
-            <p class="empty-state-text">Trang đang được xây dựng</p>
-          </div>
-        `;
-      }
-
-      // Fade in
-      requestAnimationFrame(() => {
-        app.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-        app.style.opacity = '1';
-        app.style.transform = 'translateY(0)';
-      });
-    }, 150);
+    const mod = def.module();
+    if (mod && typeof mod.render === 'function') {
+      mod.render();
+    } else {
+      app.innerHTML = `
+        <div class="empty-state" style="padding:80px 20px;">
+          <div class="empty-state-icon">🚧</div>
+          <p class="empty-state-text">Trang đang được xây dựng</p>
+        </div>
+      `;
+    }
   }
 
   /* ---- Sidebar toggle (mobile) ---- */
