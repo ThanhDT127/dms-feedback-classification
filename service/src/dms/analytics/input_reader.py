@@ -167,7 +167,7 @@ def read_feedback_workbook(input_path: Path) -> ParsedFeedbackWorkbook:
                 issue_date=_parse_issue_date(row[metadata_columns["issue_date"]])
                 if metadata_columns["issue_date"] is not None
                 else None,
-                source=metadata["source"],
+                source=metadata["source"] or "DMS",
                 unit_name=metadata["unit_name"],
                 business_status=metadata["business_status"],
             )

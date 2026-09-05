@@ -144,7 +144,7 @@ def test_managed_file_analytics_assets_have_updated_cache_versions():
 
     assert "css/style.css?v=1.0.8" in index_html
     assert "js/api.js?v=1.0.7" in index_html
-    assert "js/pages/analytics.js?v=1.0.6" in index_html
+    assert "js/pages/analytics.js?v=1.0.7" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
 
@@ -378,14 +378,16 @@ def test_analytics_page_exposes_accessible_global_date_filters():
     for expected in [
         "dateField('analytics-date-from'",
         "dateField('analytics-date-to'",
-        "dateField('analytics-compare-from'",
-        "dateField('analytics-compare-to'",
         'aria-label="Bộ lọc thời gian phân tích"',
         "AnalyticsPage.applyFilters()",
         "AnalyticsPage.resetFilters()",
         "AnalyticsPage.refresh()",
     ]:
         assert expected in analytics_js
+    assert "dateField('analytics-compare-from'" not in analytics_js
+    assert "dateField('analytics-compare-to'" not in analytics_js
+    assert "So sánh từ ngày" not in analytics_js
+    assert "So sánh đến ngày" not in analytics_js
 
 
 def test_analytics_page_supports_safe_issue_drilldown_filters_and_pagination():
@@ -404,7 +406,6 @@ def test_analytics_page_supports_safe_issue_drilldown_filters_and_pagination():
         "AnalyticsPage.showIssueDetail",
         "App.showModal",
         "analytics-date-from",
-        "analytics-compare-to",
     ]:
         assert expected in analytics_js
 
@@ -426,8 +427,16 @@ def test_analytics_page_uses_chart_helpers_and_cleans_up_its_charts():
         "Charts.destroy('analytics-units-chart')",
         "Chưa gán cảm xúc",
         "available === false",
+        'aria-label="Nhóm vấn đề và cảm xúc"',
+        "<th>Nhóm vấn đề</th>",
+        "<th>Tích cực</th>",
+        "<th>Tiêu cực</th>",
+        "<th>Trung lập</th>",
+        "<th>Chưa gán cảm xúc</th>",
     ]:
         assert expected in analytics_js
+    groups_fn = analytics_js.split("function renderGroups")[1].split("function renderProducts")[0]
+    assert "analytics-distribution-row" not in groups_fn
 
 
 def test_analytics_dashboard_is_wide_and_keeps_only_actionable_score_cards():

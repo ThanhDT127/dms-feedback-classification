@@ -22,7 +22,8 @@ def test_reader_keeps_source_rows_aliases_and_null_metadata(tmp_path: Path):
     assert parsed.source_row_numbers == [3, 4]
     assert parsed.records[0].issue_code == "MA-1"
     assert parsed.records[0].issue_date == "2026-08-15"
-    assert parsed.records[1].source is None
+    assert parsed.records[0].source == "CRM"
+    assert parsed.records[1].source == "DMS"
     assert parsed.records[1].content == "Cần catalogue"
 
 
@@ -35,4 +36,4 @@ def test_reader_normalizes_duplicate_content_without_inventing_metadata(tmp_path
 
     assert record.normalized_content == "lỗi đèn"
     assert record.issue_code is None
-    assert record.source is None
+    assert record.source == "DMS"

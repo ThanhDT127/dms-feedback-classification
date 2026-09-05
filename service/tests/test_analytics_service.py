@@ -96,7 +96,7 @@ def test_sources_units_products_and_duplicates_have_documented_buckets(repo):
     overview = service.overview(AnalyticsFilter())
 
     assert sources["membership_count"] == 2
-    assert any(item["label"] == "Chưa xác định" for item in sources["items"])
+    assert any(item["label"] == "DMS" for item in sources["items"])
     assert units["items"] == [{"label": "North", "issue_count": 2, "percentage": 100.0}]
     assert any(item["quality_labels"]["Báo lỗi"] == 1 for item in products["items"])
     assert overview["duplicate_record_rate"]["value"] == 100.0

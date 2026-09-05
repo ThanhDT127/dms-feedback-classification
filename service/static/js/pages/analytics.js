@@ -6,7 +6,7 @@ window.AnalyticsPage = (() => {
   const DEFAULT_PAGE_SIZE = 25;
   let _cache = null;
   const _state = {
-    filters: { from: '', to: '', compare_from: '', compare_to: '', district: '', unit: '' },
+    filters: { from: '', to: '', district: '', unit: '' },
     filterOptions: { districts: [], units: [] },
     issueFilters: { source: '', unit: '', label: '', product: '', status: '' },
     issuePage: 1,
@@ -45,8 +45,6 @@ window.AnalyticsPage = (() => {
         <div class="analytics-filter-grid">
           ${dateField('analytics-date-from', 'Từ ngày', _state.filters.from)}
           ${dateField('analytics-date-to', 'Đến ngày', _state.filters.to)}
-          ${dateField('analytics-compare-from', 'So sánh từ ngày', _state.filters.compare_from)}
-          ${dateField('analytics-compare-to', 'So sánh đến ngày', _state.filters.compare_to)}
           ${selectField('analytics-unit', 'Đơn vị', _state.filters.unit, _state.filterOptions.units, 'AnalyticsPage.onUnitChange()')}
           ${selectField('analytics-district', 'Quận/huyện', _state.filters.district, _state.filterOptions.districts)}
           <div class="analytics-filter-actions">
@@ -156,15 +154,13 @@ window.AnalyticsPage = (() => {
     return {
       from: document.getElementById('analytics-date-from')?.value || '',
       to: document.getElementById('analytics-date-to')?.value || '',
-      compare_from: document.getElementById('analytics-compare-from')?.value || '',
-      compare_to: document.getElementById('analytics-compare-to')?.value || '',
       district: document.getElementById('analytics-district')?.value.trim() || '',
       unit: document.getElementById('analytics-unit')?.value.trim() || '',
     };
   }
 
   function validateRanges(filters) {
-    for (const [from, to, label] of [[filters.from, filters.to, 'Khoảng thời gian chính'], [filters.compare_from, filters.compare_to, 'Khoảng thời gian so sánh']]) {
+    for (const [from, to, label] of [[filters.from, filters.to, 'Khoảng thời gian chính']]) {
       if (Boolean(from) !== Boolean(to)) return `${label} cần có đủ ngày bắt đầu và kết thúc.`;
       if (from && from > to) return `${label} có ngày kết thúc trước ngày bắt đầu.`;
     }
@@ -185,12 +181,10 @@ window.AnalyticsPage = (() => {
   }
 
   function resetFilters() {
-    _state.filters = { from: '', to: '', compare_from: '', compare_to: '', district: '', unit: '' };
+    _state.filters = { from: '', to: '', district: '', unit: '' };
     const inputIds = {
       from: 'analytics-date-from',
       to: 'analytics-date-to',
-      compare_from: 'analytics-compare-from',
-      compare_to: 'analytics-compare-to',
       district: 'analytics-district',
       unit: 'analytics-unit',
     };
@@ -345,9 +339,8 @@ window.AnalyticsPage = (() => {
     const requestId = ++_state.requestId;
     const status = document.getElementById('analytics-page-status');
     if (status) status.textContent = 'Đang cập nhật dữ liệu phân tích...';
-    const overviewParams = { ...globalQueryParams(), compare_from: _state.filters.compare_from || undefined, compare_to: _state.filters.compare_to || undefined };
     const requests = {
-      overview: API.getAnalyticsOverview(overviewParams),
+      overview: API.getAnalyticsOverview(globalQueryParams()),
       dailyTrend: API.getAnalyticsDailyTrend(globalQueryParams()),
       issueTypes: API.getAnalyticsIssueTypes(globalQueryParams()),
       unitIssueTypeMatrix: API.getAnalyticsUnitIssueTypeMatrix(globalQueryParams()),
@@ -442,7 +435,7 @@ window.AnalyticsPage = (() => {
       const metric = data?.[key] || {};
       const unavailable = metric.available === false;
       const hint = metricInsight(key, metric);
-      return `<div class="stat-card ${color} animate-in" title="${escHtml(hint)}"><div class="stat-card-top"><div><div class="stat-card-value">${escHtml(unavailable ? '—' : formatMetricValue(metric.value, percent))}</div><div class="stat-card-label">${escHtml(label)}</div></div><div class="stat-card-icon">${icon}</div></div><div class="analytics-metric-hint">${escHtml(hint)}</div>${key === 'total_issues' ? renderComparison(metric.comparison) : ''}</div>`;
+      return `<div class="stat-card ${color} animate-in" title="${escHtml(hint)}"><div class="stat-card-top"><div><div class="stat-card-value">${escHtml(unavailable ? '—' : formatMetricValue(metric.value, percent))}</div><div class="stat-card-label">${escHtml(label)}</div></div><div class="stat-card-icon">${icon}</div></div><div class="analytics-metric-hint">${escHtml(hint)}</div></div>`;
     }).join('');
   }
 
@@ -468,13 +461,6 @@ window.AnalyticsPage = (() => {
     return metricHint(metric);
   }
 
-
-  function renderComparison(comparison) {
-    if (!comparison) return '';
-    if (!comparison.available) return `<div class="analytics-metric-hint">${escHtml(comparison.reason || 'Không thể so sánh kỳ.')}</div>`;
-    const direction = comparison.direction === 'up' ? 'up' : comparison.direction === 'down' ? 'down' : 'unchanged';
-    return `<div class="stat-card-delta ${direction}">${comparison.change_percent > 0 ? '+' : ''}${formatPercent(comparison.change_percent)} so với kỳ so sánh</div>`;
-  }
 
   function renderDailyTrend(element, data) {
     const items = data?.items || [];
@@ -518,12 +504,12 @@ window.AnalyticsPage = (() => {
   function renderGroups(element, data) {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Chưa có nhóm vấn đề được phân loại.');
-    element.innerHTML = `<div class="analytics-distribution" role="list">${items.map(item => {
-      const known = Object.values(item.sentiment_counts || {}).reduce((sum, value) => sum + Number(value || 0), 0);
+    element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Nhóm vấn đề và cảm xúc"><thead><tr><th>Nhóm vấn đề</th><th>Vấn đề</th><th>Tích cực</th><th>Tiêu cực</th><th>Trung lập</th><th>Chưa gán cảm xúc</th></tr></thead><tbody>${items.map(item => {
+      const counts = item.sentiment_counts || {};
+      const known = Number(counts['Tích cực'] || 0) + Number(counts['Tiêu cực'] || 0) + Number(counts['Trung lập'] || 0);
       const missing = Math.max(0, Number(item.issue_count || 0) - known);
-      const text = [...Object.entries(item.sentiment_counts || {}).map(([label, count]) => `${label}: ${formatNumber(count)}`), `Chưa gán cảm xúc: ${formatNumber(missing)}`].join(' · ');
-      return `<div class="analytics-distribution-row" role="listitem"><div class="analytics-distribution-label">${escHtml(item.label)}</div><div class="analytics-distribution-value">${formatNumber(item.issue_count)} · ${escHtml(text)}</div></div>`;
-    }).join('')}</div><p class="analytics-panel-note">Phân bổ cảm xúc tính theo từng nhóm; một vấn đề có thể có nhiều nhãn.</p>`;
+      return `<tr><td>${escHtml(item.label)}</td><td>${formatNumber(item.issue_count)}</td><td>${formatNumber(counts['Tích cực'])}</td><td>${formatNumber(counts['Tiêu cực'])}</td><td>${formatNumber(counts['Trung lập'])}</td><td>${formatNumber(missing)}</td></tr>`;
+    }).join('')}</tbody></table></div><p class="analytics-panel-note">Phân bổ cảm xúc tính theo từng nhóm; một vấn đề có thể có nhiều nhãn.</p>`;
   }
 
   function renderProducts(element, data) {
@@ -572,7 +558,7 @@ window.AnalyticsPage = (() => {
   function renderIssues(element, data) {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Không có vấn đề nào trong khoảng thời gian và bộ lọc đã chọn.');
-    element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Danh sách chi tiết vấn đề"><thead><tr><th>Mã vấn đề</th><th>Ngày</th><th>Nguồn</th><th>Đơn vị</th><th>Trạng thái</th><th>Kết quả phân loại</th><th>Sản phẩm</th><th>Nội dung</th><th>Chi tiết</th></tr></thead><tbody>${items.map((item, index) => `<tr><td>${escHtml(item.issue_code || '—')}</td><td>${escHtml(item.issue_date || '—')}</td><td>${escHtml(item.source || 'Chưa xác định')}</td><td>${escHtml(item.unit_name || 'Chưa xác định')}</td><td>${escHtml(item.business_status || '—')}</td><td class="wrap">${escHtml(classificationLabel(item))}</td><td>${escHtml(item.classification_state === 'pending' ? 'Chưa phân loại' : item.product || 'Chưa xác định')}</td><td class="wrap">${escHtml(item.content || '—')}</td><td><button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.showIssueDetail(${index})">Xem</button></td></tr>`).join('')}</tbody></table></div><div class="analytics-pagination"><span class="analytics-panel-note">Hiển thị ${formatNumber(items.length)} / ${formatNumber(data.total)} vấn đề.</span><div><button class="btn btn-ghost btn-sm" type="button" ${data.page <= 1 ? 'disabled' : ''} onclick="AnalyticsPage.changeIssuePage(-1)" aria-label="Trang vấn đề trước">← Trước</button><span class="analytics-page-number">Trang ${formatNumber(data.page)} / ${formatNumber(data.total_pages || 1)}</span><button class="btn btn-ghost btn-sm" type="button" ${data.page >= data.total_pages ? 'disabled' : ''} onclick="AnalyticsPage.changeIssuePage(1)" aria-label="Trang vấn đề tiếp theo">Tiếp →</button></div></div>`;
+    element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Danh sách chi tiết vấn đề"><thead><tr><th>Mã vấn đề</th><th>Ngày</th><th>Nguồn</th><th>Đơn vị</th><th>Trạng thái</th><th>Kết quả phân loại</th><th>Sản phẩm</th><th>Nội dung</th><th>Chi tiết</th></tr></thead><tbody>${items.map((item, index) => `<tr><td>${escHtml(item.issue_code || '—')}</td><td>${escHtml(item.issue_date || '—')}</td><td>${escHtml(item.source || 'DMS')}</td><td>${escHtml(item.unit_name || 'Chưa xác định')}</td><td>${escHtml(item.business_status || '—')}</td><td class="wrap">${escHtml(classificationLabel(item))}</td><td>${escHtml(item.classification_state === 'pending' ? 'Chưa phân loại' : item.product || 'Chưa xác định')}</td><td class="wrap">${escHtml(item.content || '—')}</td><td><button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.showIssueDetail(${index})">Xem</button></td></tr>`).join('')}</tbody></table></div><div class="analytics-pagination"><span class="analytics-panel-note">Hiển thị ${formatNumber(items.length)} / ${formatNumber(data.total)} vấn đề.</span><div><button class="btn btn-ghost btn-sm" type="button" ${data.page <= 1 ? 'disabled' : ''} onclick="AnalyticsPage.changeIssuePage(-1)" aria-label="Trang vấn đề trước">← Trước</button><span class="analytics-page-number">Trang ${formatNumber(data.page)} / ${formatNumber(data.total_pages || 1)}</span><button class="btn btn-ghost btn-sm" type="button" ${data.page >= data.total_pages ? 'disabled' : ''} onclick="AnalyticsPage.changeIssuePage(1)" aria-label="Trang vấn đề tiếp theo">Tiếp →</button></div></div>`;
   }
 
   function classificationLabel(item) {
@@ -587,7 +573,7 @@ window.AnalyticsPage = (() => {
   function showIssueDetail(index) {
     const item = _state.issues?.items?.[index];
     if (!item || !window.App?.showModal) return;
-    App.showModal(`<div class="analytics-detail-modal"><div class="card-header"><span class="card-title">Chi tiết vấn đề</span><button class="btn btn-ghost btn-sm" type="button" onclick="App.closeModal()">Đóng</button></div><dl class="analytics-detail-list">${detailRow('Mã vấn đề', item.issue_code)}${detailRow('Ngày', item.issue_date)}${detailRow('Nguồn', item.source)}${detailRow('Đơn vị', item.unit_name)}${detailRow('Trạng thái', item.business_status)}${detailRow(classificationDetailLabel(item), classificationLabel(item))}${detailRow('Sản phẩm', item.classification_state === 'pending' ? 'Chưa phân loại' : item.product)}${detailRow('File nguồn', item.source_file_name)}${detailRow('Dòng Excel', item.source_row_number)}${detailRow('Job', item.job_id)}${detailRow('Trạng thái phân loại', item.classification_state)}${detailRow('Nội dung', item.content)}</dl></div>`);
+    App.showModal(`<div class="analytics-detail-modal"><div class="card-header"><span class="card-title">Chi tiết vấn đề</span><button class="btn btn-ghost btn-sm" type="button" onclick="App.closeModal()">Đóng</button></div><dl class="analytics-detail-list">${detailRow('Mã vấn đề', item.issue_code)}${detailRow('Ngày', item.issue_date)}${detailRow('Nguồn', item.source || 'DMS')}${detailRow('Đơn vị', item.unit_name)}${detailRow('Trạng thái', item.business_status)}${detailRow(classificationDetailLabel(item), classificationLabel(item))}${detailRow('Sản phẩm', item.classification_state === 'pending' ? 'Chưa phân loại' : item.product)}${detailRow('File nguồn', item.source_file_name)}${detailRow('Dòng Excel', item.source_row_number)}${detailRow('Job', item.job_id)}${detailRow('Trạng thái phân loại', item.classification_state)}${detailRow('Nội dung', item.content)}</dl></div>`);
   }
 
   function detailRow(label, value) {

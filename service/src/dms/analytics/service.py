@@ -347,7 +347,7 @@ class FeedbackAnalyticsService:
             code = self._issue_code(row)
             if code is None:
                 continue
-            label = str(row.get(field) or "").strip() or _UNKNOWN
+            label = str(row.get(field) or "").strip() or ("DMS" if field == "source" else _UNKNOWN)
             memberships[label].add(code)
         items = [
             {
