@@ -32,14 +32,15 @@ window.AnalyticsPage = (() => {
     if (!app) return;
     app.classList.add('page-container-wide');
     app.innerHTML = `
-      <div class="page-header">
+      <div class="analytics-page">
+      <div class="page-header analytics-page-header">
         <h2>📊 Dashboard</h2>
         <p>Chỉ số nghiệp vụ từ dữ liệu Excel đã đưa vào phân tích; kết quả AI được hiển thị khi đã phân loại.</p>
       </div>
 
       <section class="card analytics-filter-card" aria-label="Bộ lọc thời gian phân tích">
         <div class="card-header">
-          <span class="card-title"><span class="icon">🗓️</span> Khoảng thời gian</span>
+          <span class="card-title"><span class="icon">🗓️</span> Bộ lọc phân tích</span>
           <button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.refresh()">🔄 Làm mới</button>
         </div>
         <div class="analytics-filter-grid">
@@ -53,6 +54,8 @@ window.AnalyticsPage = (() => {
           </div>
         </div>
         <p class="analytics-filter-hint">Để trống để xem toàn bộ dữ liệu. Mỗi khoảng thời gian phải có đủ ngày bắt đầu và kết thúc.</p>
+        <div id="analytics-active-filters" class="analytics-active-filters" aria-live="polite"></div>
+        <div id="analytics-filter-options-error" class="analytics-inline-alert" role="alert" hidden></div>
         <div id="analytics-filter-error" class="analytics-inline-alert" role="alert" hidden></div>
       </section>
 
@@ -103,7 +106,9 @@ window.AnalyticsPage = (() => {
         </div>
         <div id="analytics-issues" class="analytics-panel-body">${renderPanelLoading()}</div>
       </section>
+      </div>
     `;
+    renderActiveFilters();
     loadFilterOptions();
     const filterKey = getFilterKey();
     if (_cache && _cache.key === filterKey) {
@@ -166,6 +171,7 @@ window.AnalyticsPage = (() => {
     _state.issuePage = 1;
     _state.duplicatePage = 1;
     _cache = null;
+    renderActiveFilters();
     loadFilterOptions();
     refresh(true);
   }
@@ -186,6 +192,7 @@ window.AnalyticsPage = (() => {
     _state.duplicatePage = 1;
     setFilterError(null);
     _cache = null;
+    renderActiveFilters();
     loadFilterOptions();
     refresh(true);
   }
@@ -207,6 +214,7 @@ window.AnalyticsPage = (() => {
 
   async function loadFilterOptions() {
     const optionsRequestId = ++_state.optionsRequestId;
+    setFilterOptionsError(null);
     try {
       const options = await API.getAnalyticsFilterOptions({
         from: _state.filters.from || undefined,
@@ -221,7 +229,9 @@ window.AnalyticsPage = (() => {
       updateSelect('analytics-unit', _state.filterOptions.units, _state.filters.unit);
       updateSelect('analytics-district', _state.filterOptions.districts, _state.filters.district);
     } catch (error) {
+      if (optionsRequestId !== _state.optionsRequestId) return;
       console.warn('Không thể tải lựa chọn bộ lọc analytics:', error.message);
+      setFilterOptionsError('Không thể tải danh sách Đơn vị và Quận/huyện. Vui lòng thử lại.');
     }
   }
 
@@ -237,6 +247,23 @@ window.AnalyticsPage = (() => {
     if (!element) return;
     element.hidden = !message;
     element.textContent = message || '';
+  }
+
+  function setFilterOptionsError(message) {
+    const element = document.getElementById('analytics-filter-options-error');
+    if (!element) return;
+    element.hidden = !message;
+    element.textContent = message || '';
+  }
+
+  function renderActiveFilters() {
+    const element = document.getElementById('analytics-active-filters');
+    if (!element) return;
+    const labels = [];
+    if (_state.filters.from && _state.filters.to) labels.push(`${_state.filters.from} đến ${_state.filters.to}`);
+    if (_state.filters.unit) labels.push(`Đơn vị: ${_state.filters.unit}`);
+    if (_state.filters.district) labels.push(`Quận/huyện: ${_state.filters.district}`);
+    element.textContent = labels.length ? `Đang lọc: ${labels.join(' · ')}` : 'Toàn bộ dữ liệu';
   }
 
   function readIssueFilters() {
@@ -421,7 +448,8 @@ window.AnalyticsPage = (() => {
       const metric = data?.[key] || {};
       const unavailable = metric.available === false;
       const hint = metricInsight(key, metric);
-      return `<div class="stat-card ${color} animate-in" title="${escHtml(hint)}"><div class="stat-card-top"><div><div class="stat-card-value">${escHtml(unavailable ? '—' : formatMetricValue(metric.value, percent))}</div><div class="stat-card-label">${escHtml(label)}</div></div><div class="stat-card-icon">${icon}</div></div><div class="analytics-metric-hint">${escHtml(hint)}</div></div>`;
+      const displayValue = unavailable ? '—' : formatMetricValue(metric.value, percent);
+      return `<div class="stat-card ${color} analytics-kpi analytics-kpi-${key}${unavailable ? ' analytics-kpi-unavailable' : ''} animate-in" title="${escAttr(hint)}" aria-label="${escAttr(`${label}: ${displayValue}. ${hint}`)}"><div class="stat-card-top"><div><div class="stat-card-value">${escHtml(displayValue)}</div><div class="stat-card-label">${escHtml(label)}</div></div><div class="stat-card-icon" aria-hidden="true">${icon}</div></div><div class="analytics-metric-hint">${escHtml(hint)}</div></div>`;
     }).join('');
   }
 
@@ -507,8 +535,19 @@ window.AnalyticsPage = (() => {
   function renderGeography(element, data) {
     const provinces = (data?.provinces || []).slice(0, 10);
     const districts = (data?.districts || []).slice(0, 10);
-    if (!provinces.length) return renderEmpty(element, 'Chưa có dữ liệu tỉnh/thành.');
-    element.innerHTML = `<div class="grid-2"><div><div class="analytics-chart-wrap"><canvas id="analytics-provinces-chart"></canvas></div></div><div><h4>Top quận/huyện</h4>${renderDistribution(districts)}</div></div>`;
+    const topProvince = data?.top_province;
+    const topDistrict = data?.top_district;
+    const missingProvince = Number(data?.missing_province_count || 0);
+    const missingDistrict = Number(data?.missing_district_count || 0);
+    if (!provinces.length) {
+      element.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🗺️</div><p class="empty-state-text">Chưa có dữ liệu tỉnh/thành.</p><p class="empty-state-hint">Thiếu Tỉnh/TP: ${formatNumber(missingProvince)} · Thiếu Quận/huyện: ${formatNumber(missingDistrict)}</p></div>`;
+      return;
+    }
+    const insight = topProvince
+      ? `Địa phương nổi bật: ${topProvince.label} có ${formatNumber(topProvince.issue_count)} vấn đề (${formatPercent(topProvince.percentage)}).${topDistrict ? ` Quận/huyện nổi bật: ${topDistrict.label}.` : ''}`
+      : 'Chưa xác định địa phương nổi bật.';
+    const districtRows = districts.map(item => `<tr><td>${escHtml(item.label)}</td><td>${formatNumber(item.issue_count)}</td><td>${formatPercent(item.percentage)}</td></tr>`).join('');
+    element.innerHTML = `<div class="analytics-geography-insight">${escHtml(insight)}</div><div class="analytics-geography-layout"><div><h4>Top tỉnh/thành phố</h4><div class="analytics-chart-wrap"><canvas id="analytics-provinces-chart"></canvas></div></div><div><h4>Top quận/huyện</h4>${districtRows ? `<div class="table-wrap"><table class="table" aria-label="Phân bổ vấn đề theo quận huyện"><thead><tr><th>Quận/huyện</th><th>Số vấn đề</th><th>Tỷ trọng</th></tr></thead><tbody>${districtRows}</tbody></table></div>` : '<p class="analytics-panel-note">Chưa có dữ liệu quận/huyện.</p>'}</div></div><div class="analytics-geography-missing"><span>Thiếu Tỉnh/TP: <strong>${formatNumber(missingProvince)}</strong></span><span>Thiếu Quận/huyện: <strong>${formatNumber(missingDistrict)}</strong></span></div>`;
     Charts.createBarChart('analytics-provinces-chart', provinces.map(item => item.label), provinces.map(item => item.issue_count), { label: 'Số vấn đề', chartOptions: { indexAxis: 'y' } });
   }
 
@@ -516,8 +555,22 @@ window.AnalyticsPage = (() => {
     const rows = data?.rows || [];
     const issueTypes = data?.issue_types || [];
     if (!rows.length || !issueTypes.length) return renderEmpty(element, 'Chưa có dữ liệu cho ma trận đơn vị và loại vấn đề.');
+    const columnTotals = data?.column_totals || {};
+    const grandTotal = Number(data?.grand_total || 0);
+    const topUnit = data?.top_unit;
+    const topIssueType = data?.top_issue_type;
     const maxCount = Math.max(1, ...rows.flatMap(row => issueTypes.map(issueType => Number(row.counts?.[issueType] || 0))));
-    element.innerHTML = `<div class="table-wrap"><table class="table analytics-matrix" aria-label="Ma trận đơn vị theo loại vấn đề"><thead><tr><th>Đơn vị</th>${issueTypes.map(issueType => `<th>${escHtml(issueType)}</th>`).join('')}<th>Tổng</th></tr></thead><tbody>${rows.map(row => `<tr><th scope="row">${escHtml(row.unit)}</th>${issueTypes.map(issueType => { const count = Number(row.counts?.[issueType] || 0); const strength = Math.max(0.08, Math.min(0.85, count / maxCount)); return `<td class="analytics-heat-cell" style="--heat-strength:${strength}" title="${escHtml(`${row.unit} · ${issueType}: ${formatNumber(count)}`)}">${formatNumber(count)}</td>`; }).join('')}<td><strong>${formatNumber(row.total)}</strong></td></tr>`).join('')}</tbody></table></div>`;
+    const insightParts = [];
+    if (topUnit) insightParts.push(`Đơn vị nổi bật: ${topUnit.label} (${formatNumber(topUnit.issue_count)} vấn đề)`);
+    if (topIssueType) insightParts.push(`Loại vấn đề nổi bật: ${topIssueType.label} (${formatNumber(topIssueType.issue_count)} vấn đề)`);
+    const bodyRows = rows.map(row => `<tr><th scope="row">${escHtml(row.unit)}</th>${issueTypes.map(issueType => {
+      const count = Number(row.counts?.[issueType] || 0);
+      const strength = count === 0 ? 0 : Math.min(0.85, Math.max(0.14, count / maxCount));
+      const cellLabel = `${row.unit} · ${issueType}: ${formatNumber(count)} vấn đề`;
+      return `<td class="analytics-heat-cell${count === 0 ? ' analytics-heat-cell-zero' : ''}" style="--heat-strength:${strength}" title="${escAttr(cellLabel)}" aria-label="${escAttr(cellLabel)}">${formatNumber(count)}</td>`;
+    }).join('')}<td class="analytics-matrix-total"><strong>${formatNumber(row.total)}</strong></td></tr>`).join('');
+    const totalCells = issueTypes.map(issueType => `<td class="analytics-matrix-total"><strong>${formatNumber(columnTotals[issueType])}</strong></td>`).join('');
+    element.innerHTML = `${insightParts.length ? `<div class="analytics-matrix-insight">${escHtml(insightParts.join(' · '))}</div>` : ''}<div class="analytics-matrix-wrap"><table class="table analytics-matrix" aria-label="Ma trận đơn vị theo loại vấn đề"><thead><tr><th>Đơn vị</th>${issueTypes.map(issueType => `<th>${escHtml(issueType)}</th>`).join('')}<th>Tổng</th></tr></thead><tbody>${bodyRows}<tr class="analytics-matrix-grand-total"><th scope="row">Tổng cộng</th>${totalCells}<td><strong>${formatNumber(grandTotal)}</strong></td></tr></tbody></table></div>`;
   }
 
   function renderDuplicates(element, data) {

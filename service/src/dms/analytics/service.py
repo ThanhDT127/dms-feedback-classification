@@ -543,15 +543,16 @@ class FeedbackAnalyticsService:
         rows = self._rows(analytics_filter)
         issue_codes = self._issue_codes(rows)
 
-        def distribution(*aliases: str) -> list[dict[str, Any]]:
+        def distribution(*aliases: str) -> tuple[list[dict[str, Any]], int]:
             memberships: dict[str, set[str]] = defaultdict(set)
             for row in rows:
                 code = self._issue_code(row)
                 if code is None:
                     continue
-                label = self._raw_value(row, *aliases) or _UNKNOWN
-                memberships[label].add(code)
-            items = [
+                label = self._raw_value(row, *aliases)
+                if label and _canon_lower(label) != _canon_lower(_UNKNOWN):
+                    memberships[label].add(code)
+            items: list[dict[str, Any]] = [
                 {
                     "label": label,
                     "issue_count": len(codes),
@@ -561,13 +562,27 @@ class FeedbackAnalyticsService:
                 }
                 for label, codes in memberships.items()
             ]
-            items.sort(key=self._distribution_sort_key)
-            return items
+            items.sort(
+                key=lambda item: (-int(item["issue_count"]), _canon_lower(str(item["label"])))
+            )
+            located_codes = set().union(*memberships.values()) if memberships else set()
+            return items, len(issue_codes - located_codes)
+
+        provinces, missing_province_count = distribution(
+            "Tỉnh/TP", "Tinh/TP", "Tỉnh thành", "Tinh thanh"
+        )
+        districts, missing_district_count = distribution(
+            "Quận/huyện", "Quan/huyen", "Quận huyện", "Quan huyen"
+        )
 
         return {
-            "provinces": distribution("Tỉnh/TP", "Tinh/TP", "Tỉnh thành", "Tinh thanh"),
-            "districts": distribution("Quận/huyện", "Quan/huyen", "Quận huyện", "Quan huyen"),
+            "provinces": provinces,
+            "districts": districts,
             "total_issues": len(issue_codes),
+            "missing_province_count": missing_province_count,
+            "missing_district_count": missing_district_count,
+            "top_province": provinces[0] if provinces else None,
+            "top_district": districts[0] if districts else None,
         }
 
     def unit_issue_type_matrix(self, analytics_filter: AnalyticsFilter) -> dict[str, Any]:
@@ -583,11 +598,58 @@ class FeedbackAnalyticsService:
             cells[unit][issue_type].add(code)
             unit_codes[unit].add(code)
             issue_type_codes[issue_type].add(code)
-        units = sorted(unit_codes, key=lambda unit: (-len(unit_codes[unit]), unit))
-        issue_types = sorted(
-            issue_type_codes,
-            key=lambda issue_type: (-len(issue_type_codes[issue_type]), issue_type),
+        units = sorted(
+            unit_codes,
+            key=lambda unit: (-len(unit_codes[unit]), _canon_lower(unit)),
         )
+        ranked_issue_types = sorted(
+            issue_type_codes,
+            key=lambda issue_type: (
+                -len(issue_type_codes[issue_type]),
+                _canon_lower(issue_type),
+            ),
+        )
+        issue_types = ranked_issue_types
+        collapsed_issue_types: list[str] = []
+        if len(ranked_issue_types) > 10:
+            issue_types = [
+                issue_type
+                for issue_type in ranked_issue_types
+                if _canon_lower(issue_type) != _canon_lower("Loại khác")
+            ][:9]
+            collapsed_issue_types = [
+                issue_type for issue_type in ranked_issue_types if issue_type not in issue_types
+            ]
+            issue_types = [*issue_types, "Loại khác"]
+
+        def counts_for_unit(unit: str) -> dict[str, int]:
+            counts = {
+                issue_type: len(cells[unit][issue_type])
+                for issue_type in issue_types
+                if issue_type != "Loại khác"
+            }
+            if collapsed_issue_types:
+                collapsed_codes = set().union(
+                    *(cells[unit][issue_type] for issue_type in collapsed_issue_types)
+                )
+                counts["Loại khác"] = len(collapsed_codes)
+            elif "Loại khác" in issue_types:
+                counts["Loại khác"] = len(cells[unit]["Loại khác"])
+            return counts
+
+        column_totals = {
+            issue_type: len(issue_type_codes[issue_type])
+            for issue_type in issue_types
+            if issue_type != "Loại khác"
+        }
+        if collapsed_issue_types:
+            collapsed_codes = set().union(
+                *(issue_type_codes[issue_type] for issue_type in collapsed_issue_types)
+            )
+            column_totals["Loại khác"] = len(collapsed_codes)
+        elif "Loại khác" in issue_types:
+            column_totals["Loại khác"] = len(issue_type_codes["Loại khác"])
+
         return {
             "units": units,
             "issue_types": issue_types,
@@ -595,12 +657,23 @@ class FeedbackAnalyticsService:
                 {
                     "unit": unit,
                     "total": len(unit_codes[unit]),
-                    "counts": {
-                        issue_type: len(cells[unit][issue_type]) for issue_type in issue_types
-                    },
+                    "counts": counts_for_unit(unit),
                 }
                 for unit in units
             ],
+            "column_totals": column_totals,
+            "grand_total": len(set().union(*unit_codes.values())) if unit_codes else 0,
+            "top_unit": (
+                {"label": units[0], "issue_count": len(unit_codes[units[0]])} if units else None
+            ),
+            "top_issue_type": (
+                {
+                    "label": ranked_issue_types[0],
+                    "issue_count": len(issue_type_codes[ranked_issue_types[0]]),
+                }
+                if ranked_issue_types
+                else None
+            ),
         }
 
     def units(self, analytics_filter: AnalyticsFilter) -> dict[str, Any]:

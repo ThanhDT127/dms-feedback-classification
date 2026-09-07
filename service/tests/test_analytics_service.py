@@ -423,6 +423,67 @@ def test_unit_issue_type_matrix_counts_distinct_issue_codes(repo):
     ]
 
 
+def test_unit_issue_type_matrix_limits_columns_without_dropping_totals(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {
+                "issue_code": f"I{index:02d}",
+                "unit_name": "North" if index <= 6 else "South",
+                "raw_data": {"Loại vấn đề": f"Loại {index:02d}"},
+            }
+            for index in range(1, 12)
+        ],
+    )
+
+    body = FeedbackAnalyticsService(repo).unit_issue_type_matrix(AnalyticsFilter())
+
+    assert body["issue_types"] == [
+        "Loại 01",
+        "Loại 02",
+        "Loại 03",
+        "Loại 04",
+        "Loại 05",
+        "Loại 06",
+        "Loại 07",
+        "Loại 08",
+        "Loại 09",
+        "Loại khác",
+    ]
+    assert body["rows"][0] == {
+        "unit": "North",
+        "total": 6,
+        "counts": {
+            "Loại 01": 1,
+            "Loại 02": 1,
+            "Loại 03": 1,
+            "Loại 04": 1,
+            "Loại 05": 1,
+            "Loại 06": 1,
+            "Loại 07": 0,
+            "Loại 08": 0,
+            "Loại 09": 0,
+            "Loại khác": 0,
+        },
+    }
+    assert body["column_totals"] == {
+        "Loại 01": 1,
+        "Loại 02": 1,
+        "Loại 03": 1,
+        "Loại 04": 1,
+        "Loại 05": 1,
+        "Loại 06": 1,
+        "Loại 07": 1,
+        "Loại 08": 1,
+        "Loại 09": 1,
+        "Loại khác": 2,
+    }
+    assert body["grand_total"] == 11
+    assert body["top_unit"] == {"label": "North", "issue_count": 6}
+    assert body["top_issue_type"] == {"label": "Loại 01", "issue_count": 1}
+
+
 def test_geography_distribution_and_global_filter_use_raw_fields(repo):
     seed_classified_records(
         repo,
@@ -445,6 +506,38 @@ def test_geography_distribution_and_global_filter_use_raw_fields(repo):
     ]
     assert {item["label"] for item in body["districts"]} == {"Hoàng Mai", "Hà Đông", "Hạ Long"}
     assert filtered["total_issues"]["value"] == 1
+
+
+def test_geography_separates_missing_locations_and_reports_top_insight(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {"issue_code": "A", "raw_data": {"Tỉnh/TP": "Hà Nội", "Quận/huyện": "Hoàng Mai"}},
+            {"issue_code": "A", "raw_data": {"Tỉnh/TP": "Hà Nội", "Quận/huyện": "Hoàng Mai"}},
+            {"issue_code": "B", "raw_data": {"Tỉnh/TP": "Hà Nội"}},
+            {"issue_code": "C", "raw_data": {"Tỉnh/TP": "Quảng Ninh", "Quận/huyện": "Hạ Long"}},
+            {"issue_code": "D", "raw_data": {}},
+        ],
+    )
+
+    body = FeedbackAnalyticsService(repo).geography(AnalyticsFilter())
+
+    assert body["total_issues"] == 4
+    assert body["missing_province_count"] == 1
+    assert body["missing_district_count"] == 2
+    assert all(item["label"] != "Chưa xác định" for item in body["provinces"])
+    assert all(item["label"] != "Chưa xác định" for item in body["districts"])
+    assert body["top_province"] == {
+        "label": "Hà Nội",
+        "issue_count": 2,
+        "percentage": 50.0,
+    }
+    assert body["top_district"] == {
+        "label": "Hạ Long",
+        "issue_count": 1,
+        "percentage": 25.0,
+    }
 
 
 def test_status_backlog_reports_distribution_and_age_buckets(repo):

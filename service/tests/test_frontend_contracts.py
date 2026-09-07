@@ -142,9 +142,9 @@ def test_analytics_distinguishes_ingested_rows_without_ai_classification():
 def test_managed_file_analytics_assets_have_updated_cache_versions():
     index_html = _read("index.html")
 
-    assert "css/style.css?v=1.0.8" in index_html
+    assert "css/style.css?v=1.0.9" in index_html
     assert "js/api.js?v=1.0.7" in index_html
-    assert "js/pages/analytics.js?v=1.0.9" in index_html
+    assert "js/pages/analytics.js?v=1.0.10" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
 
@@ -460,6 +460,72 @@ def test_analytics_dashboard_is_wide_and_keeps_only_actionable_score_cards():
     assert "Đã nhận diện sản phẩm" in analytics_js
     assert "mã vấn đề có nội dung trùng" in analytics_js
     assert "Chưa có nhãn đối chứng do con người xác nhận." in analytics_js
+    assert "analytics-kpi analytics-kpi-${key}" in analytics_js
+    assert "analytics-kpi-unavailable" in analytics_js
+    assert 'aria-label="${escAttr(`${label}: ${displayValue}. ${hint}`)}"' in analytics_js
+    assert ".analytics-kpi-total_issues" in style_css
+    assert ".analytics-kpi-sentiment_coverage" in style_css
+    assert ".analytics-kpi-product_coverage" in style_css
+    assert ".analytics-kpi-duplicate_issue_rate" in style_css
+
+
+def test_analytics_p0_matches_prototype_structure_without_restoring_removed_scope():
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+    index_html = _read("index.html")
+
+    assert 'class="analytics-page"' in analytics_js
+    assert "Bộ lọc phân tích" in analytics_js
+    assert 'id="analytics-active-filters"' in analytics_js
+    assert analytics_js.index("dateField('analytics-date-from'") < analytics_js.index(
+        "dateField('analytics-date-to'"
+    )
+    assert analytics_js.index("dateField('analytics-date-to'") < analytics_js.index(
+        "selectField('analytics-unit'"
+    )
+    assert analytics_js.index("selectField('analytics-unit'") < analytics_js.index(
+        "selectField('analytics-district'"
+    )
+    assert "renderMetricSkeletons(5)" in analytics_js
+    assert "analytics-geography-layout" in analytics_js
+    assert "analytics-unit-issue-type-matrix" in analytics_js
+    assert "analytics-groups" in analytics_js
+    assert "analytics-products" in analytics_js
+    assert "analytics-issues" in analytics_js
+    for expected_css in [
+        ".analytics-page {",
+        ".analytics-page .card {",
+        ".analytics-page .stat-grid {",
+        ".analytics-geography-layout {",
+        ".analytics-matrix-wrap {",
+        ".analytics-matrix thead th {",
+    ]:
+        assert expected_css in style_css
+    assert "css/style.css?v=1.0.9" in index_html
+    assert "js/pages/analytics.js?v=1.0.10" in index_html
+
+    for removed in [
+        "dateField('analytics-compare-from'",
+        "dateField('analytics-compare-to'",
+        "selectField('analytics-province'",
+        "analytics-data-quality",
+        "analytics-status-backlog",
+    ]:
+        assert removed not in analytics_js
+
+
+def test_analytics_p0_filter_card_reports_applied_scope_and_option_failures():
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert 'id="analytics-active-filters"' in analytics_js
+    assert 'id="analytics-filter-options-error"' in analytics_js
+    assert "function renderActiveFilters()" in analytics_js
+    assert "Đang lọc:" in analytics_js
+    assert "Toàn bộ dữ liệu" in analytics_js
+    assert "renderActiveFilters();" in analytics_js
+    assert "function setFilterOptionsError(message)" in analytics_js
+    assert "Không thể tải danh sách Đơn vị và Quận/huyện." in analytics_js
+    assert "if (optionsRequestId !== _state.optionsRequestId) return" in analytics_js
 
 
 def test_analytics_page_renders_and_cleans_up_daily_trend():
@@ -508,6 +574,21 @@ def test_analytics_page_renders_unit_issue_type_heatmap():
     assert "analytics-heat-cell" in analytics_js
 
 
+def test_analytics_p0_matrix_renders_totals_insight_and_neutral_zero_cells():
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "data?.column_totals" in analytics_js
+    assert "data?.grand_total" in analytics_js
+    assert "data?.top_unit" in analytics_js
+    assert "data?.top_issue_type" in analytics_js
+    assert "Đơn vị nổi bật" in analytics_js
+    assert "Loại vấn đề nổi bật" in analytics_js
+    assert "Tổng cộng" in analytics_js
+    assert "analytics-heat-cell-zero" in analytics_js
+    assert "const strength = count === 0 ? 0" in analytics_js
+    assert 'aria-label="${escAttr(cellLabel)}"' in analytics_js
+
+
 def test_analytics_page_renders_unit_before_cascading_district_filter():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
@@ -539,6 +620,21 @@ def test_analytics_page_renders_unit_before_cascading_district_filter():
     assert "onUnitChange" in _page_exports(analytics_js)
     assert sidebar_js.index("{ id: 'analytics'") < sidebar_js.index("{ id: 'classify'")
     assert "const DEFAULT_PAGE = 'analytics';" in app_js
+
+
+def test_analytics_p0_geography_renders_ranked_district_table_and_data_notes():
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "data?.top_province" in analytics_js
+    assert "Địa phương nổi bật" in analytics_js
+    assert 'aria-label="Phân bổ vấn đề theo quận huyện"' in analytics_js
+    assert "<th>Quận/huyện</th>" in analytics_js
+    assert "<th>Số vấn đề</th>" in analytics_js
+    assert "<th>Tỷ trọng</th>" in analytics_js
+    assert "missing_province_count" in analytics_js
+    assert "missing_district_count" in analytics_js
+    assert "Thiếu Tỉnh/TP" in analytics_js
+    assert "Thiếu Quận/huyện" in analytics_js
 
 
 def test_analytics_page_does_not_render_status_and_backlog():
