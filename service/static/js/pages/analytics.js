@@ -525,8 +525,19 @@ window.AnalyticsPage = (() => {
       'Y/c cải tiến': '#1e40af',
       'Ý/cải tiến': '#1e40af',
       'Đề xuất SPM': '#f97316',
+      'Báo lỗi, chất lượng, bảo hành': '#ef4444',
+      'Yêu cầu khách hàng': '#3b82f6',
+      'Cải tiến sản phẩm': '#10b981',
+      'Thông tin đối thủ cạnh tranh': '#f59e0b',
+      'Chương trình bán hàng, cơ chế': '#8b5cf6',
+      'Vấn đề khác': '#06b6d4',
     };
-    const colors = items.map(it => colorMap[it.label] || '#94a3b8');
+    const defaultPalette = [
+      '#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6',
+      '#06b6d4', '#ec4899', '#f97316', '#14b8a6', '#6366f1',
+      '#84cc16', '#e11d48'
+    ];
+    const colors = items.map((it, idx) => colorMap[it.label] || defaultPalette[idx % defaultPalette.length]);
     element.innerHTML = `
       <div class="analytics-donut-shell">
         <div class="analytics-donut-circle-wrap">
@@ -534,9 +545,9 @@ window.AnalyticsPage = (() => {
           <div class="analytics-donut-total"><strong>${formatNumber(totalIssues)}</strong><span>Vấn đề</span></div>
         </div>
         <div class="analytics-donut-legend-panel">
-          ${items.map(it => `
+          ${items.map((it, idx) => `
             <div class="analytics-donut-legend-row" role="listitem">
-              <span class="analytics-donut-legend-dot" style="background:${colorMap[it.label] || '#94a3b8'};" aria-hidden="true"></span>
+              <span class="analytics-donut-legend-dot" style="background:${colors[idx]};" aria-hidden="true"></span>
               <span class="analytics-donut-legend-name" title="${escAttr(it.label)}">${escHtml(it.label)}</span>
               <span class="analytics-donut-legend-val"><strong>${formatNumber(it.issue_count)}</strong> <span class="text-muted">(${formatPercent(it.percentage)})</span></span>
             </div>
