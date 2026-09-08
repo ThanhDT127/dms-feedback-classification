@@ -529,8 +529,24 @@ window.AnalyticsPage = (() => {
       'Đề xuất SPM': '#f97316',
     };
     const colors = items.map(it => colorMap[it.label] || '#94a3b8');
-    element.innerHTML = `<div class="analytics-donut-shell"><div class="analytics-chart-wrap"><canvas id="analytics-issue-types-chart"></canvas></div><div class="analytics-donut-total"><strong>${formatNumber(totalIssues)}</strong><span>Vấn đề</span></div></div>${renderDistribution(items)}`;
-    const chart = Charts.createDoughnutChart('analytics-issue-types-chart', items.map(item => item.label), items.map(item => item.issue_count), colors);
+    element.innerHTML = `
+      <div class="analytics-donut-shell">
+        <div class="analytics-donut-circle-wrap">
+          <div class="analytics-chart-wrap"><canvas id="analytics-issue-types-chart"></canvas></div>
+          <div class="analytics-donut-total"><strong>${formatNumber(totalIssues)}</strong><span>Vấn đề</span></div>
+        </div>
+        <div class="analytics-donut-legend-panel">
+          ${items.map(it => `
+            <div class="analytics-donut-legend-row" role="listitem">
+              <span class="analytics-donut-legend-dot" style="background:${colorMap[it.label] || '#94a3b8'};" aria-hidden="true"></span>
+              <span class="analytics-donut-legend-name" title="${escAttr(it.label)}">${escHtml(it.label)}</span>
+              <span class="analytics-donut-legend-val"><strong>${formatNumber(it.issue_count)}</strong> <span class="text-muted">(${formatPercent(it.percentage)})</span></span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    const chart = Charts.createDoughnutChart('analytics-issue-types-chart', items.map(item => item.label), items.map(item => item.issue_count), colors, { showLegend: false });
     if (chart) {
       chart.options.plugins.legend.display = false;
       chart.update('none');
@@ -547,8 +563,24 @@ window.AnalyticsPage = (() => {
       'Đã xử lý': '#22c55e',
     };
     const colors = statuses.map(s => colorMap[s.label] || '#94a3b8');
-    element.innerHTML = `<div class="analytics-donut-shell"><div class="analytics-chart-wrap"><canvas id="analytics-status-chart"></canvas></div><div class="analytics-donut-total"><strong>${formatNumber(totalIssues)}</strong><span>Vấn đề</span></div></div><div class="analytics-distribution" role="list">${statuses.map(s => `<div class="analytics-distribution-row" role="listitem"><span class="analytics-distribution-label">${escHtml(s.label)}</span><span class="analytics-distribution-value"><strong>${formatNumber(s.issue_count)}</strong> (${formatPercent(s.percentage)})</span></div>`).join('')}</div>`;
-    const chart = Charts.createDoughnutChart('analytics-status-chart', statuses.map(s => s.label), statuses.map(s => s.issue_count), colors);
+    element.innerHTML = `
+      <div class="analytics-donut-shell">
+        <div class="analytics-donut-circle-wrap">
+          <div class="analytics-chart-wrap"><canvas id="analytics-status-chart"></canvas></div>
+          <div class="analytics-donut-total"><strong>${formatNumber(totalIssues)}</strong><span>Vấn đề</span></div>
+        </div>
+        <div class="analytics-donut-legend-panel">
+          ${statuses.map(s => `
+            <div class="analytics-donut-legend-row" role="listitem">
+              <span class="analytics-donut-legend-dot" style="background:${colorMap[s.label] || '#94a3b8'};" aria-hidden="true"></span>
+              <span class="analytics-donut-legend-name" title="${escAttr(s.label)}">${escHtml(s.label)}</span>
+              <span class="analytics-donut-legend-val"><strong>${formatNumber(s.issue_count)}</strong> <span class="text-muted">(${formatPercent(s.percentage)})</span></span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    const chart = Charts.createDoughnutChart('analytics-status-chart', statuses.map(s => s.label), statuses.map(s => s.issue_count), colors, { showLegend: false });
     if (chart) {
       chart.options.plugins.legend.display = false;
       chart.update('none');
@@ -559,7 +591,31 @@ window.AnalyticsPage = (() => {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Chưa có dữ liệu phân bổ.');
     const totalIssues = Number(data?.total_issues || 0);
-    element.innerHTML = `<div class="analytics-donut-shell"><div class="analytics-chart-wrap"><canvas id="analytics-sources-chart"></canvas></div><div class="analytics-donut-total"><strong>${formatNumber(totalIssues)}</strong><span>Vấn đề</span></div></div>${renderDistribution(items)}<p class="analytics-panel-note">Vòng biểu diễn lượt thuộc nguồn; số ở tâm là số vấn đề duy nhất. Các vấn đề có thể thuộc nhiều nguồn; tổng tỷ trọng không nhất thiết bằng 100%.</p>`;
+    const defaultColors = [
+      '#22c55e', '#f59e0b', '#c084fc', '#3b82f6', '#ef4444',
+      '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1',
+    ];
+    element.innerHTML = `
+      <div class="analytics-donut-shell">
+        <div class="analytics-donut-circle-wrap">
+          <div class="analytics-chart-wrap"><canvas id="analytics-sources-chart"></canvas></div>
+          <div class="analytics-donut-total"><strong>${formatNumber(totalIssues)}</strong><span>Vấn đề</span></div>
+        </div>
+        <div class="analytics-donut-legend-panel">
+          ${items.map((item, index) => {
+            const color = defaultColors[index % defaultColors.length];
+            return `
+              <div class="analytics-donut-legend-row" role="listitem">
+                <span class="analytics-donut-legend-dot" style="background:${color};" aria-hidden="true"></span>
+                <span class="analytics-donut-legend-name" title="${escAttr(item.label)}">${escHtml(item.label)}</span>
+                <span class="analytics-donut-legend-val"><strong>${formatNumber(item.issue_count)}</strong> <span class="text-muted">(${formatPercent(item.percentage)})</span></span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+      <p class="analytics-panel-note">Vòng biểu diễn lượt thuộc nguồn; số ở tâm là số vấn đề duy nhất. Các vấn đề có thể thuộc nhiều nguồn; tổng tỷ trọng không nhất thiết bằng 100%.</p>
+    `;
     const sourceChart = Charts.createDoughnutChart('analytics-sources-chart', items.map(item => item.label), items.map(item => item.issue_count), null, { showLegend: false });
     if (sourceChart) {
       sourceChart.options.plugins.legend.display = false;

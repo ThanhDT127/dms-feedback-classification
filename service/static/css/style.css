@@ -1068,10 +1068,27 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
 
 .analytics-donut-shell {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 170px;
 }
 
-.analytics-donut-shell .analytics-chart-wrap {
-  margin-bottom: 10px;
+.analytics-donut-circle-wrap {
+  position: relative;
+  width: 170px;
+  height: 170px;
+  flex: 0 0 170px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.analytics-donut-circle-wrap .analytics-chart-wrap {
+  width: 170px !important;
+  height: 170px !important;
+  margin-bottom: 0 !important;
 }
 
 .analytics-donut-total {
@@ -1081,13 +1098,17 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  text-align: center;
+  line-height: 1;
 }
 
 .analytics-donut-total strong {
   color: var(--text-primary);
   font-size: 22px;
+  font-weight: 800;
   line-height: 1;
 }
 
@@ -1095,7 +1116,50 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
   margin-top: 4px;
   color: var(--text-muted);
   font-size: 10px;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.analytics-donut-legend-panel {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.analytics-donut-legend-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.analytics-donut-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.analytics-donut-legend-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.analytics-donut-legend-val {
+  text-align: right;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.analytics-donut-legend-val strong {
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .analytics-unit-list {
