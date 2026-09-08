@@ -582,3 +582,56 @@ def test_status_backlog_reports_distribution_and_age_buckets(repo):
         {"label": "31+ ngày", "issue_count": 1},
         {"label": "Thiếu ngày", "issue_count": 0},
     ]
+
+
+def test_priority_issues_ranks_unresolved_negative_first(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {
+                "issue_code": "ISS-A",
+                "issue_date": "2026-08-30",
+                "unit_name": "R&D",
+                "product": "Đèn LED",
+                "sentiment": "Tiêu cực",
+                "business_status": "Chờ xử lý",
+                "labels": ["Lỗi sản phẩm"],
+                "content": "Đèn nhấp nháy sau 1 tháng sử dụng",
+            },
+            {
+                "issue_code": "ISS-B",
+                "issue_date": "2026-08-31",
+                "unit_name": "Kinh doanh",
+                "product": "Chiếu sáng dân dụng",
+                "sentiment": "Trung lập",
+                "business_status": "Chờ xử lý",
+                "labels": ["Chính sách giá"],
+                "content": "Đề nghị điều chỉnh giá",
+            },
+            {
+                "issue_code": "ISS-C",
+                "issue_date": "2026-08-28",
+                "unit_name": "CSKH",
+                "product": "Thiết bị điện",
+                "sentiment": "Tiêu cực",
+                "business_status": "Đã xử lý",
+                "labels": ["Hỗ trợ kỹ thuật"],
+                "content": "Đã xử lý xong",
+            },
+        ],
+    )
+
+    service = FeedbackAnalyticsService(repo)
+    body = service.priority_issues(AnalyticsFilter(), limit=5)
+
+    assert body["total"] == 3
+    assert len(body["items"]) == 3
+    assert body["items"][0]["issue_code"] == "ISS-A"
+    assert body["items"][0]["issue"] == "Lỗi sản phẩm"
+    assert body["items"][0]["department"] == "R&D"
+    assert body["items"][0]["product_group"] == "Đèn LED"
+    assert body["items"][0]["sentiment"] == "Tiêu cực"
+    assert body["items"][0]["status"] == "Chờ xử lý"
+    assert body["items"][1]["issue_code"] == "ISS-B"
+    assert body["items"][2]["issue_code"] == "ISS-C"

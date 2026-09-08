@@ -1307,6 +1307,43 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
   outline: none;
 }
 
+#analytics-priority-issues {
+  contain: inline-size;
+}
+
+.analytics-priority-table {
+  table-layout: fixed;
+  min-width: 1000px;
+}
+
+.table.analytics-priority-table thead th,
+.table.analytics-priority-table tbody td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+
+.analytics-priority-table th:first-child { width: 44px; text-align: center; }
+.analytics-priority-table th:nth-child(2) { width: 14%; }
+.analytics-priority-table th:nth-child(3) { width: 12%; }
+.analytics-priority-table th:nth-child(4) { width: 14%; }
+.analytics-priority-table th:nth-child(5) { width: 12%; }
+.analytics-priority-table th:nth-child(6) { width: 12%; }
+.analytics-priority-table th:nth-child(7) { width: 95px; }
+.analytics-priority-table th:last-child { width: 70px; text-align: center; }
+
+.analytics-priority-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
 #analytics-issues {
   contain: inline-size;
 }

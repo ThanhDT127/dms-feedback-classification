@@ -36,6 +36,7 @@ def analytics_api(settings, monkeypatch):
         "/api/analytics/geography",
         "/api/analytics/status-backlog",
         "/api/analytics/filter-options",
+        "/api/analytics/priority-issues",
     ],
 )
 def test_analytics_routes_require_authentication(path):
@@ -314,3 +315,34 @@ def test_analytics_status_backlog_route(analytics_api):
 
     assert response.status_code == 200
     assert response.json()["backlog_count"] == 1
+
+
+def test_analytics_priority_issues_route(analytics_api):
+    client, repository = analytics_api
+    seed_classified_records(
+        repository,
+        db_path=repository.db_path,
+        entries=[
+            {
+                "issue_code": "A",
+                "issue_date": "2026-08-31",
+                "sentiment": "Tiêu cực",
+                "business_status": "Chờ xử lý",
+                "unit_name": "R&D",
+                "product": "Đèn LED",
+                "labels": ["Lỗi sản phẩm"],
+                "content": "Đèn nhấp nháy",
+            }
+        ],
+    )
+
+    response = client.get("/api/analytics/priority-issues?limit=5")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["issue"] == "Lỗi sản phẩm"
+    assert payload["items"][0]["department"] == "R&D"
+    assert payload["items"][0]["sentiment"] == "Tiêu cực"
+    assert payload["items"][0]["status"] == "Chờ xử lý"

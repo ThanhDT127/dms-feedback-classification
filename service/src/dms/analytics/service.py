@@ -853,6 +853,91 @@ class FeedbackAnalyticsService:
             "total_pages": math.ceil(total / page_size) if total else 0,
         }
 
+    def priority_issues(
+        self,
+        analytics_filter: AnalyticsFilter,
+        *,
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        rows = self._rows(analytics_filter)
+
+        seen_codes: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            code = self._issue_code(row)
+            if code is None:
+                continue
+            if code not in seen_codes:
+                seen_codes[code] = row
+            else:
+                cur = seen_codes[code]
+                if not cur.get("sentiment") and row.get("sentiment"):
+                    seen_codes[code] = row
+                elif str(row.get("issue_date") or "") > str(cur.get("issue_date") or ""):
+                    seen_codes[code] = row
+
+        def _calc_priority(r: dict[str, Any]) -> tuple[int, str, int]:
+            sentiment = str(r.get("sentiment") or "").strip()
+            status = str(r.get("business_status") or "").strip()
+            is_resolved = status.casefold() == "đã xử lý".casefold()
+            is_negative = sentiment.casefold() == "tiêu cực".casefold()
+
+            if not is_resolved and is_negative:
+                score = 3
+            elif not is_resolved:
+                score = 2
+            elif is_negative:
+                score = 1
+            else:
+                score = 0
+
+            issue_date = str(r.get("issue_date") or "")
+            feedback_id = int(r.get("feedback_id") or 0)
+            return (score, issue_date, feedback_id)
+
+        ranked_rows = sorted(
+            seen_codes.values(),
+            key=_calc_priority,
+            reverse=True,
+        )
+
+        items = []
+        for idx, row in enumerate(ranked_rows[:limit], start=1):
+            labels = [item["label"] for item in row.get("labels", [])]
+            issue_label = (
+                labels[0]
+                if labels
+                else (self._raw_value(row, "Loại vấn đề", "Loai van de") or _UNKNOWN)
+            )
+            status = str(row.get("business_status") or "").strip() or "Chưa xử lý"
+            sentiment = str(row.get("sentiment") or "").strip() or "Chưa gán"
+            content = str(row.get("content") or "").strip()
+            is_overdue = "quá hạn".casefold() in status.casefold()
+
+            items.append(
+                {
+                    "index": idx,
+                    "feedback_id": row["feedback_id"],
+                    "issue_code": row.get("issue_code"),
+                    "issue": issue_label,
+                    "department": str(row.get("unit_name") or "").strip() or _UNKNOWN,
+                    "product_group": str(
+                        row.get("product") or row.get("product_line") or ""
+                    ).strip()
+                    or _UNKNOWN,
+                    "sentiment": sentiment,
+                    "status": status,
+                    "is_overdue": is_overdue,
+                    "issue_date": row.get("issue_date"),
+                    "content": content,
+                    "summary": (content[:60] + "...") if len(content) > 60 else content,
+                }
+            )
+
+        return {
+            "items": items,
+            "total": len(seen_codes),
+        }
+
     def data_quality(self, analytics_filter: AnalyticsFilter) -> dict[str, Any]:
         rows = self._rows(analytics_filter)
         fields: dict[str, dict[str, int]] = {}

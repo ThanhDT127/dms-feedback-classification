@@ -191,6 +191,15 @@ def issues(
     )
 
 
+@router.get("/priority-issues")
+def priority_issues(
+    user: _CURRENT_USER,
+    analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
+    limit: int = Query(10, ge=1, le=50),
+):
+    return _service().priority_issues(analytics_filter, limit=limit)
+
+
 @router.get("/data-quality")
 def data_quality(
     user: _CURRENT_USER,

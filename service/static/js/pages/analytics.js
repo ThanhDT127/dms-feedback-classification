@@ -13,6 +13,7 @@ window.AnalyticsPage = (() => {
     duplicatePage: 1,
     issues: null,
     duplicates: null,
+    priority: null,
     units: [],
     requestId: 0,
     optionsRequestId: 0,
@@ -102,6 +103,11 @@ window.AnalyticsPage = (() => {
       <section class="card" aria-labelledby="analytics-unit-matrix-title">
         <div class="card-header"><span id="analytics-unit-matrix-title" class="card-title">🧩 Ma trận đơn vị × loại vấn đề</span></div>
         <div id="analytics-unit-issue-type-matrix" class="analytics-panel-body">${renderPanelLoading()}</div>
+      </section>
+
+      <section class="card" aria-labelledby="analytics-priority-title">
+        <div class="card-header"><span id="analytics-priority-title" class="card-title">📋 Phản hồi cần ưu tiên</span></div>
+        <div id="analytics-priority-issues" class="analytics-panel-body">${renderPanelLoading()}</div>
       </section>
 
       <section class="card" aria-labelledby="analytics-duplicates-title">
@@ -353,6 +359,14 @@ window.AnalyticsPage = (() => {
     renderResult(results.groups, renderGroups, 'analytics-groups');
     renderResult(results.products, renderProducts, 'analytics-products');
     renderResult(results.status, renderProcessingStatus, 'analytics-processing-status');
+    if (results.priority?.status === 'fulfilled') {
+      renderResult(results.priority, renderPriorityIssues, 'analytics-priority-issues');
+    } else if (results.issues?.status === 'fulfilled') {
+      const fallbackData = derivePriorityFromIssues(results.issues.value);
+      renderPriorityIssues(document.getElementById('analytics-priority-issues'), fallbackData);
+    } else {
+      renderResult(results.priority, renderPriorityIssues, 'analytics-priority-issues');
+    }
     renderResult(results.issues, (element, data) => { _state.issues = data; renderIssues(element, data); }, 'analytics-issues');
   }
 
@@ -380,6 +394,7 @@ window.AnalyticsPage = (() => {
       groups: API.getAnalyticsGroups(globalQueryParams()),
       products: API.getAnalyticsProducts(globalQueryParams()),
       status: API.getAnalyticsStatusBacklog(globalQueryParams()),
+      priority: API.getAnalyticsPriorityIssues(globalQueryParams()),
       issues: API.getAnalyticsIssues(issueQueryParams()),
     };
     const entries = Object.entries(requests);
@@ -388,7 +403,10 @@ window.AnalyticsPage = (() => {
     const results = Object.fromEntries(entries.map(([key], index) => [key, settled[index]]));
     _cache = { key: filterKey, results };
     renderAllPanels(results);
-    const failures = settled.filter(result => result.status === 'rejected').length;
+    let failures = settled.filter(result => result.status === 'rejected').length;
+    if (results.priority?.status === 'rejected' && results.issues?.status === 'fulfilled') {
+      failures = Math.max(0, failures - 1);
+    }
     if (status) {
       status.textContent = failures ? `Không thể tải ${failures} phần dữ liệu. Các phần khác vẫn hiển thị.` : 'Dữ liệu phân tích đã được cập nhật.';
       status.classList.toggle('analytics-page-status-error', failures > 0);
@@ -767,6 +785,119 @@ window.AnalyticsPage = (() => {
     element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Danh sách nội dung phản hồi trùng"><thead><tr><th>Nội dung đại diện</th><th>Bản ghi</th><th>Dòng trùng</th><th>Mã vấn đề</th><th>Đơn vị</th></tr></thead><tbody>${items.map(item => `<tr><td class="wrap">${escHtml(item.content)}</td><td>${formatNumber(item.record_count)}</td><td>${formatNumber(item.duplicate_rows)}</td><td class="wrap">${escHtml((item.issue_codes || []).join(', '))}</td><td class="wrap">${escHtml((item.units || []).join(', ') || 'Chưa xác định')}</td></tr>`).join('')}</tbody></table></div><div class="analytics-pagination"><span class="analytics-panel-note">${formatNumber(data.total)} nhóm nội dung trùng.</span><div><button class="btn btn-ghost btn-sm" type="button" ${data.page <= 1 ? 'disabled' : ''} onclick="AnalyticsPage.changeDuplicatePage(-1)">← Trước</button><span class="analytics-page-number">Trang ${formatNumber(data.page)} / ${formatNumber(data.total_pages || 1)}</span><button class="btn btn-ghost btn-sm" type="button" ${data.page >= data.total_pages ? 'disabled' : ''} onclick="AnalyticsPage.changeDuplicatePage(1)">Tiếp →</button></div></div>`;
   }
 
+  function derivePriorityFromIssues(issuesData) {
+    const items = issuesData?.items || [];
+    if (!items.length) return { items: [], total: 0 };
+
+    function calcPriority(r) {
+      const sentiment = (r.sentiment || '').trim().toLowerCase();
+      const status = (r.business_status || '').trim().toLowerCase();
+      const isResolved = status === 'đã xử lý';
+      const isNegative = sentiment === 'tiêu cực';
+      if (!isResolved && isNegative) return 3;
+      if (!isResolved) return 2;
+      if (isNegative) return 1;
+      return 0;
+    }
+
+    const sorted = [...items].sort((a, b) => {
+      const pDiff = calcPriority(b) - calcPriority(a);
+      if (pDiff !== 0) return pDiff;
+      return String(b.issue_date || '').localeCompare(String(a.issue_date || ''));
+    });
+
+    const topItems = sorted.slice(0, 10).map((item, idx) => {
+      const labels = item.labels || [];
+      const issueLabel = labels[0] || (item.product ? `Vấn đề ${item.product}` : 'Vấn đề phản ánh');
+      const status = item.business_status || 'Chưa xử lý';
+      const isOverdue = status.toLowerCase().includes('quá hạn');
+      const content = item.content || '';
+
+      return {
+        index: idx + 1,
+        feedback_id: item.feedback_id,
+        issue_code: item.issue_code,
+        issue: issueLabel,
+        department: item.unit_name || 'Chưa xác định',
+        product_group: item.product || 'Chưa xác định',
+        sentiment: item.sentiment || 'Chưa gán',
+        status: status,
+        is_overdue: isOverdue,
+        issue_date: item.issue_date,
+        content: content,
+        summary: content.length > 60 ? content.slice(0, 60) + '...' : content,
+      };
+    });
+
+    return { items: topItems, total: sorted.length };
+  }
+
+  function renderPriorityIssues(element, data) {
+    const items = data?.items || [];
+    if (!items.length) return renderEmpty(element, 'Không có phản hồi cần ưu tiên trong khoảng thời gian đã chọn.');
+    _state.priority = data;
+    element.innerHTML = `
+      <div class="table-wrap">
+        <table class="table analytics-priority-table" aria-label="Danh sách phản hồi cần ưu tiên">
+          <thead>
+            <tr>
+              <th style="width: 44px; text-align: center;">#</th>
+              <th>Vấn đề</th>
+              <th>Phòng/ban</th>
+              <th>Nhóm SP</th>
+              <th>Sắc thái</th>
+              <th>Trạng thái</th>
+              <th>Thời gian</th>
+              <th>Nội dung tóm tắt</th>
+              <th style="width: 70px; text-align: center;">Chi tiết</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map((item, index) => {
+              const sentiment = item.sentiment || 'Chưa gán';
+              const sentimentLower = sentiment.toLowerCase();
+              const sentimentIcon = sentimentLower.includes('tiêu cực') ? '☹' : sentimentLower.includes('tích cực') ? '🙂' : '😐';
+              const sentimentColor = sentimentLower.includes('tiêu cực') ? 'red' : sentimentLower.includes('tích cực') ? 'green' : 'muted';
+
+              const status = item.status || 'Chưa xử lý';
+              const statusLower = status.toLowerCase();
+              const isOverdue = item.is_overdue || statusLower.includes('quá hạn');
+              const statusColor = isOverdue ? 'red' : statusLower.includes('đã xử lý') ? 'green' : statusLower.includes('đang xử lý') ? 'blue' : 'amber';
+              const statusIcon = isOverdue ? '⚠️' : statusLower.includes('đã xử lý') ? '✅' : '⏳';
+
+              return `<tr>
+                <td style="text-align: center; font-weight: 700; color: var(--text-muted);">${item.index || index + 1}</td>
+                <td style="font-weight: 600; color: var(--text-primary);">${escHtml(item.issue || '—')}</td>
+                <td>${escHtml(item.department || 'Chưa xác định')}</td>
+                <td>${escHtml(item.product_group || 'Chưa xác định')}</td>
+                <td>
+                  <span class="badge badge-${sentimentColor}">
+                    <span style="margin-right: 3px;">${sentimentIcon}</span> ${escHtml(sentiment)}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge badge-${statusColor}">
+                    <span style="margin-right: 3px;">${statusIcon}</span> ${escHtml(status)}
+                  </span>
+                </td>
+                <td style="white-space: nowrap;">${escHtml(item.issue_date || '—')}</td>
+                <td class="wrap"><div class="analytics-priority-summary" title="${escAttr(item.content || '')}">${escHtml(item.summary || item.content || '—')}</div></td>
+                <td style="text-align: center;"><button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.showPriorityDetail(${index})" aria-label="${escAttr(`Xem chi tiết phản hồi ưu tiên ${item.issue_code || index + 1}`)}">Xem</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="analytics-panel-note" style="margin-top: 8px;">Hiển thị ${formatNumber(items.length)} phản hồi cần ưu tiên giải quyết.</div>
+    `;
+  }
+
+  function showPriorityDetail(index) {
+    const item = _state.priority?.items?.[index];
+    if (!item || !window.App?.showModal) return;
+    App.showModal(`<div class="analytics-detail-modal"><div class="card-header"><span class="card-title">Chi tiết phản hồi ưu tiên</span><button class="btn btn-ghost btn-sm" type="button" onclick="App.closeModal()">Đóng</button></div><dl class="analytics-detail-list">${detailRow('Mã vấn đề', item.issue_code)}${detailRow('Vấn đề', item.issue)}${detailRow('Phòng/ban', item.department)}${detailRow('Nhóm SP', item.product_group)}${detailRow('Sắc thái', item.sentiment)}${detailRow('Trạng thái', item.status)}${detailRow('Thời gian', item.issue_date)}${detailRow('Nội dung', item.content)}</dl></div>`);
+  }
+
   function renderIssues(element, data) {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Không có vấn đề nào trong khoảng thời gian và bộ lọc đã chọn.');
@@ -843,5 +974,5 @@ window.AnalyticsPage = (() => {
     Charts.destroy('analytics-status-chart');
   }
 
-  return { render, destroy, applyFilters, resetFilters, refresh, onUnitChange, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, filterIssuesByUnit };
+  return { render, destroy, applyFilters, resetFilters, refresh, onUnitChange, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, showPriorityDetail, filterIssuesByUnit };
 })();

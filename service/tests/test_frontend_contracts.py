@@ -142,9 +142,9 @@ def test_analytics_distinguishes_ingested_rows_without_ai_classification():
 def test_managed_file_analytics_assets_have_updated_cache_versions():
     index_html = _read("index.html")
 
-    assert "css/style.css?v=1.0.16" in index_html
-    assert "js/api.js?v=1.0.7" in index_html
-    assert "js/pages/analytics.js?v=1.0.17" in index_html
+    assert "css/style.css?v=1.0.17" in index_html
+    assert "js/api.js?v=1.0.8" in index_html
+    assert "js/pages/analytics.js?v=1.0.18" in index_html
     assert "js/components/charts.js?v=1.0.7" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
@@ -521,8 +521,8 @@ def test_analytics_p0_matches_prototype_structure_without_restoring_removed_scop
         ".analytics-matrix thead th {",
     ]:
         assert expected_css in style_css
-    assert "css/style.css?v=1.0.16" in index_html
-    assert "js/pages/analytics.js?v=1.0.17" in index_html
+    assert "css/style.css?v=1.0.17" in index_html
+    assert "js/pages/analytics.js?v=1.0.18" in index_html
 
     for removed in [
         "dateField('analytics-compare-from'",
@@ -700,6 +700,21 @@ def test_analytics_page_renders_paginated_duplicate_details():
     assert "AnalyticsPage.changeDuplicatePage(-1)" in analytics_js
     assert "AnalyticsPage.changeDuplicatePage(1)" in analytics_js
     assert "changeDuplicatePage" in _page_exports(analytics_js)
+
+
+def test_analytics_page_renders_priority_issues():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+
+    assert "function getAnalyticsPriorityIssues(params = {})" in api_js
+    assert "/analytics/priority-issues" in api_js
+    assert "API.getAnalyticsPriorityIssues" in analytics_js
+    assert "analytics-priority-issues" in analytics_js
+    assert "Phản hồi cần ưu tiên" in analytics_js
+    assert "analytics-priority-table" in analytics_js
+    assert "showPriorityDetail" in _page_exports(analytics_js)
+    assert ".analytics-priority-table" in style_css
 
 
 def test_analytics_page_renders_unit_issue_type_heatmap():

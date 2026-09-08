@@ -248,6 +248,7 @@ window.API = (() => {
   function getAnalyticsGroups(params = {}) { return get(`/analytics/groups${buildAnalyticsQuery(params)}`); }
   function getAnalyticsProducts(params = {}) { return get(`/analytics/products${buildAnalyticsQuery(params)}`); }
   function getAnalyticsIssues(params = {}) { return get(`/analytics/issues${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsPriorityIssues(params = {}) { return get(`/analytics/priority-issues${buildAnalyticsQuery(params)}`, { silent: true }); }
   function getAnalyticsDataQuality(params = {}) { return get(`/analytics/data-quality${buildAnalyticsQuery(params)}`); }
 
   function setTokens(access, refresh) {
@@ -314,7 +315,7 @@ window.API = (() => {
     getUsageMetrics, getUsagePricing,
     resetFailedFiles, getMetricsByUser,
     getAnalyticsOverview, getAnalyticsDailyTrend, getAnalyticsIssueTypes, getAnalyticsDuplicates, getAnalyticsUnitIssueTypeMatrix, getAnalyticsGeography, getAnalyticsFilterOptions, getAnalyticsStatusBacklog, getAnalyticsSources, getAnalyticsUnits, getAnalyticsGroups,
-    getAnalyticsProducts, getAnalyticsIssues, getAnalyticsDataQuality,
+    getAnalyticsProducts, getAnalyticsIssues, getAnalyticsPriorityIssues, getAnalyticsDataQuality,
     logout
   };
 })();
