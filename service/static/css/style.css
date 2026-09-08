@@ -848,6 +848,19 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
 
 .analytics-page .stat-card-value {
   font-size: clamp(26px, 2vw, 34px);
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.analytics-page .stat-card-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.analytics-page .analytics-metric-hint {
+  color: var(--text-secondary);
+  font-size: 11.5px;
 }
 
 .analytics-kpi-copy {
@@ -1570,9 +1583,19 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
   border-radius: 2px;
 }
 
+@media (max-width: 1280px) {
+  .analytics-tertiary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analytics-product-card {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 1100px) {
   .analytics-page .stat-grid {
-    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
   }
 
   .analytics-geography-layout {
@@ -1585,12 +1608,22 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
     grid-template-columns: 1fr;
   }
 
+  .analytics-product-card {
+    grid-column: auto;
+  }
+
   .analytics-filter-grid {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
 
   .analytics-issue-filter-grid {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .analytics-page .stat-grid {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
   }
 }
 

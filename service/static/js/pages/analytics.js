@@ -670,7 +670,7 @@ window.AnalyticsPage = (() => {
       neuData.push(pNeu);
       negData.push(pNeg);
     });
-    element.innerHTML = `<div class="analytics-chart-wrap" style="height: 180px;"><canvas id="analytics-groups-chart"></canvas></div><div class="analytics-legend-bar"><span class="analytics-legend-item"><span class="analytics-legend-dot" style="background:#22c55e;"></span> Tích cực</span><span class="analytics-legend-item"><span class="analytics-legend-dot" style="background:#1e40af;"></span> Trung tính</span><span class="analytics-legend-item"><span class="analytics-legend-dot" style="background:#ef4444;"></span> Tiêu cực</span></div><div class="table-wrap" style="margin-top: 12px;"><table class="table" aria-label="Nhóm vấn đề và cảm xúc"><thead><tr><th>Nhóm vấn đề</th><th>Vấn đề</th><th>Tích cực</th><th>Tiêu cực</th><th>Trung lập</th><th>Chưa gán cảm xúc</th></tr></thead><tbody>${items.map(item => {
+    element.innerHTML = `<div class="analytics-chart-wrap" style="height: 180px;"><canvas id="analytics-groups-chart"></canvas></div><div class="analytics-legend-bar"><span class="analytics-legend-item"><span class="analytics-legend-dot" style="background:#22c55e;"></span> Tích cực</span><span class="analytics-legend-item"><span class="analytics-legend-dot" style="background:#1e40af;"></span> Trung lập</span><span class="analytics-legend-item"><span class="analytics-legend-dot" style="background:#ef4444;"></span> Tiêu cực</span></div><div class="table-wrap" style="margin-top: 12px;"><table class="table" aria-label="Nhóm vấn đề và cảm xúc"><thead><tr><th>Nhóm vấn đề</th><th>Vấn đề</th><th>Tích cực</th><th>Tiêu cực</th><th>Trung lập</th><th>Chưa gán cảm xúc</th></tr></thead><tbody>${items.map(item => {
       const counts = item.sentiment_counts || {};
       const known = Number(counts['Tích cực'] || 0) + Number(counts['Tiêu cực'] || 0) + Number(counts['Trung lập'] || 0);
       const missing = Math.max(0, Number(item.issue_count || 0) - known);
@@ -682,7 +682,7 @@ window.AnalyticsPage = (() => {
         items.map(it => it.label),
         [
           { label: 'Tích cực', data: posData, backgroundColor: '#22c55e', stack: 'sentiment', barPercentage: 0.65 },
-          { label: 'Trung tính', data: neuData, backgroundColor: '#1e40af', stack: 'sentiment', barPercentage: 0.65 },
+          { label: 'Trung lập', data: neuData, backgroundColor: '#1e40af', stack: 'sentiment', barPercentage: 0.65 },
           { label: 'Tiêu cực', data: negData, backgroundColor: '#ef4444', stack: 'sentiment', barPercentage: 0.65 },
         ],
         {
