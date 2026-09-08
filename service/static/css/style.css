@@ -1210,6 +1210,49 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
   outline: none;
 }
 
+#analytics-issues {
+  contain: inline-size;
+}
+
+.analytics-issues-table {
+  table-layout: fixed;
+  min-width: 1100px;
+}
+
+.table.analytics-issues-table thead th,
+.table.analytics-issues-table tbody td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+.analytics-issues-table th:nth-child(6) { width: 16%; }
+.analytics-issues-table th:nth-child(8) { width: 24%; }
+.analytics-issues-table th:last-child { width: 76px; }
+
+.analytics-issues-table .analytics-issue-summary {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.5;
+}
+
+.analytics-issues-table .analytics-issue-classification {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.analytics-issues-table .badge {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .analytics-pagination {
   display: flex;
   align-items: center;

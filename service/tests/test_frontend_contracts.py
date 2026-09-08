@@ -142,9 +142,9 @@ def test_analytics_distinguishes_ingested_rows_without_ai_classification():
 def test_managed_file_analytics_assets_have_updated_cache_versions():
     index_html = _read("index.html")
 
-    assert "css/style.css?v=1.0.10" in index_html
+    assert "css/style.css?v=1.0.11" in index_html
     assert "js/api.js?v=1.0.7" in index_html
-    assert "js/pages/analytics.js?v=1.0.11" in index_html
+    assert "js/pages/analytics.js?v=1.0.12" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
 
@@ -520,8 +520,8 @@ def test_analytics_p0_matches_prototype_structure_without_restoring_removed_scop
         ".analytics-matrix thead th {",
     ]:
         assert expected_css in style_css
-    assert "css/style.css?v=1.0.10" in index_html
-    assert "js/pages/analytics.js?v=1.0.11" in index_html
+    assert "css/style.css?v=1.0.11" in index_html
+    assert "js/pages/analytics.js?v=1.0.12" in index_html
 
     for removed in [
         "dateField('analytics-compare-from'",
@@ -602,6 +602,35 @@ def test_analytics_visual_refresh_uses_prototype_panel_composition():
     assert ".analytics-groups-card {" in style_css
     assert ".analytics-product-card {" in style_css
     assert "grid-column: 1 / -1" in style_css
+
+
+def test_analytics_detail_table_has_scoped_summary_and_badge_styles():
+    css = _read("css/style.css")
+    container = css.split("#analytics-issues {")[1].split("}")[0]
+    assert "contain: inline-size;" in container
+    # These selectors must outrank the later shared table nowrap rules.
+    for selector in [
+        ".table.analytics-issues-table thead th",
+        ".table.analytics-issues-table tbody td",
+    ]:
+        rules = re.findall(r"([^{}]+)\{([^{}]*)\}", css)
+        declarations = "\n".join(
+            body for selectors, body in rules if selector in map(str.strip, selectors.split(","))
+        )
+        assert "white-space: normal;" in declarations, selector
+        assert "overflow-wrap: anywhere;" in declarations
+        assert "vertical-align: top;" in declarations
+    for selector in [
+        ".analytics-issues-table {",
+        ".analytics-issues-table .analytics-issue-summary {",
+        ".analytics-issues-table .analytics-issue-classification {",
+        ".analytics-issues-table .badge {",
+    ]:
+        assert selector in css
+    summary = css.split(".analytics-issues-table .analytics-issue-summary {")[1].split("}")[0]
+    assert "-webkit-line-clamp: 3;" in summary
+    assert "overflow-wrap: anywhere;" in summary
+    assert "white-space: normal;" in summary
 
 
 def test_analytics_compact_desktop_distribution_fits_without_clipping_data():
