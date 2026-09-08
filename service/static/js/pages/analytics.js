@@ -34,13 +34,17 @@ window.AnalyticsPage = (() => {
     app.innerHTML = `
       <div class="analytics-page">
       <div class="page-header analytics-page-header">
-        <h2>📊 Dashboard</h2>
-        <p>Chỉ số nghiệp vụ từ dữ liệu Excel đã đưa vào phân tích; kết quả AI được hiển thị khi đã phân loại.</p>
+        <div class="analytics-header-icon" aria-hidden="true">▥</div>
+        <div class="analytics-header-copy">
+          <h2>Dashboard</h2>
+          <p>Chỉ số nghiệp vụ từ dữ liệu Excel đã đưa vào phân tích</p>
+        </div>
+        <div class="analytics-header-waves" aria-hidden="true"></div>
       </div>
 
       <section class="card analytics-filter-card" aria-label="Bộ lọc thời gian phân tích">
         <div class="card-header">
-          <span class="card-title"><span class="icon">🗓️</span> Bộ lọc phân tích</span>
+          <span class="card-title"><span class="analytics-filter-icon" aria-hidden="true">⌄</span> Bộ lọc phân tích</span>
           <button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.refresh()">🔄 Làm mới</button>
         </div>
         <div class="analytics-filter-grid">
@@ -53,8 +57,10 @@ window.AnalyticsPage = (() => {
             <button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.resetFilters()">Đặt lại</button>
           </div>
         </div>
-        <p class="analytics-filter-hint">Để trống để xem toàn bộ dữ liệu. Mỗi khoảng thời gian phải có đủ ngày bắt đầu và kết thúc.</p>
-        <div id="analytics-active-filters" class="analytics-active-filters" aria-live="polite"></div>
+        <div class="analytics-filter-footer">
+          <p class="analytics-filter-hint">Để trống để xem toàn bộ dữ liệu. Mỗi khoảng thời gian phải có đủ ngày bắt đầu và kết thúc.</p>
+          <div id="analytics-active-filters" class="analytics-active-filters" aria-live="polite"></div>
+        </div>
         <div id="analytics-filter-options-error" class="analytics-inline-alert" role="alert" hidden></div>
         <div id="analytics-filter-error" class="analytics-inline-alert" role="alert" hidden></div>
       </section>
@@ -66,17 +72,19 @@ window.AnalyticsPage = (() => {
         <div id="analytics-overview" class="stat-grid">${renderMetricSkeletons(5)}</div>
       </section>
 
-      <section class="card" aria-labelledby="analytics-daily-title">
-        <div class="card-header"><span id="analytics-daily-title" class="card-title">📅 Xu hướng vấn đề theo ngày</span></div>
-        <div id="analytics-daily-trend" class="analytics-panel-body">${renderPanelLoading()}</div>
-      </section>
+      <div class="analytics-primary-grid">
+        <section class="card analytics-daily-card" aria-labelledby="analytics-daily-title">
+          <div class="card-header"><span id="analytics-daily-title" class="card-title">📅 Vấn đề theo ngày</span></div>
+          <div id="analytics-daily-trend" class="analytics-panel-body">${renderPanelLoading()}</div>
+        </section>
+        ${panel('analytics-source-title', '📡 Tỷ trọng theo nguồn thông tin', 'analytics-sources', 'analytics-compact-card')}
+        ${panel('analytics-unit-title', '🏢 Tỷ trọng vấn đề theo đơn vị', 'analytics-units', 'analytics-compact-card')}
+      </div>
 
-      <div class="grid-2 analytics-panel-grid">
-        ${panel('analytics-issue-type-title', '🧭 Phân bổ loại vấn đề', 'analytics-issue-types')}
-        ${panel('analytics-source-title', '📡 Nguồn thông tin', 'analytics-sources')}
-        ${panel('analytics-unit-title', '🏢 Theo đơn vị', 'analytics-units')}
-        ${panel('analytics-group-title', '🏷️ Nhóm vấn đề & cảm xúc', 'analytics-groups')}
-        ${panel('analytics-product-title', '📦 Sản phẩm & chất lượng', 'analytics-products')}
+      <div class="analytics-secondary-grid">
+        ${panel('analytics-group-title', '🏷️ Nhóm vấn đề & cảm xúc', 'analytics-groups', 'analytics-groups-card')}
+        ${panel('analytics-issue-type-title', '🧭 Cơ cấu loại vấn đề', 'analytics-issue-types', 'analytics-compact-card')}
+        ${panel('analytics-product-title', '📦 Sản phẩm & chất lượng', 'analytics-products', 'analytics-product-card')}
       </div>
 
       <section class="card" aria-labelledby="analytics-geography-title">
@@ -120,8 +128,8 @@ window.AnalyticsPage = (() => {
     refresh(false);
   }
 
-  function panel(titleId, title, bodyId) {
-    return `<section class="card" aria-labelledby="${titleId}"><div class="card-header"><span id="${titleId}" class="card-title">${title}</span></div><div id="${bodyId}" class="analytics-panel-body">${renderPanelLoading()}</div></section>`;
+  function panel(titleId, title, bodyId, className = '') {
+    return `<section class="card ${className}" aria-labelledby="${titleId}"><div class="card-header"><span id="${titleId}" class="card-title">${title}</span></div><div id="${bodyId}" class="analytics-panel-body">${renderPanelLoading()}</div></section>`;
   }
 
   function dateField(id, label, value) {
@@ -449,7 +457,7 @@ window.AnalyticsPage = (() => {
       const unavailable = metric.available === false;
       const hint = metricInsight(key, metric);
       const displayValue = unavailable ? '—' : formatMetricValue(metric.value, percent);
-      return `<div class="stat-card ${color} analytics-kpi analytics-kpi-${key}${unavailable ? ' analytics-kpi-unavailable' : ''} animate-in" title="${escAttr(hint)}" aria-label="${escAttr(`${label}: ${displayValue}. ${hint}`)}"><div class="stat-card-top"><div><div class="stat-card-value">${escHtml(displayValue)}</div><div class="stat-card-label">${escHtml(label)}</div></div><div class="stat-card-icon" aria-hidden="true">${icon}</div></div><div class="analytics-metric-hint">${escHtml(hint)}</div></div>`;
+      return `<div class="stat-card ${color} analytics-kpi analytics-kpi-${key}${unavailable ? ' analytics-kpi-unavailable' : ''} animate-in" title="${escAttr(hint)}" aria-label="${escAttr(`${label}: ${displayValue}. ${hint}`)}"><div class="stat-card-top"><div class="analytics-kpi-copy"><div class="stat-card-value">${escHtml(displayValue)}</div><div class="stat-card-label">${escHtml(label)}</div></div><div class="stat-card-icon" aria-hidden="true">${icon}</div></div><div class="analytics-metric-hint">${escHtml(hint)}</div></div>`;
     }).join('');
   }
 
@@ -499,16 +507,21 @@ window.AnalyticsPage = (() => {
   function renderSources(element, data) {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Chưa có dữ liệu phân bổ.');
-    element.innerHTML = `<div class="analytics-chart-wrap"><canvas id="analytics-sources-chart"></canvas></div>${renderDistribution(items)}<p class="analytics-panel-note">Các vấn đề có thể thuộc nhiều nguồn; tổng tỷ trọng không nhất thiết bằng 100%.</p>`;
-    Charts.createBarChart('analytics-sources-chart', items.map(item => item.label), items.map(item => item.issue_count), { label: 'Số vấn đề', chartOptions: { indexAxis: 'y' } });
+    const totalIssues = Number(data?.total_issues || 0);
+    element.innerHTML = `<div class="analytics-donut-shell"><div class="analytics-chart-wrap"><canvas id="analytics-sources-chart"></canvas></div><div class="analytics-donut-total"><strong>${formatNumber(totalIssues)}</strong><span>Vấn đề</span></div></div>${renderDistribution(items)}<p class="analytics-panel-note">Vòng biểu diễn lượt thuộc nguồn; số ở tâm là số vấn đề duy nhất. Các vấn đề có thể thuộc nhiều nguồn; tổng tỷ trọng không nhất thiết bằng 100%.</p>`;
+    const sourceChart = Charts.createDoughnutChart('analytics-sources-chart', items.map(item => item.label), items.map(item => item.issue_count));
+    if (sourceChart) {
+      sourceChart.options.plugins.legend.display = false;
+      sourceChart.update('none');
+    }
   }
 
   function renderUnits(element, data) {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Chưa có dữ liệu phân bổ.');
     _state.units = items;
-    element.innerHTML = `<div class="analytics-chart-wrap"><canvas id="analytics-units-chart"></canvas></div><div class="analytics-distribution" role="list">${items.map((item, index) => `<button class="analytics-distribution-row analytics-drilldown" type="button" onclick="AnalyticsPage.filterIssuesByUnit(${index})" role="listitem"><span class="analytics-distribution-label">${escHtml(item.label)}</span><span class="analytics-distribution-value">${formatNumber(item.issue_count)} (${formatPercent(item.percentage)})</span></button>`).join('')}</div><p class="analytics-panel-note">Chọn một đơn vị để lọc bảng chi tiết. Các vấn đề có thể thuộc nhiều đơn vị.</p>`;
-    Charts.createDoughnutChart('analytics-units-chart', items.map(item => item.label), items.map(item => item.issue_count));
+    element.innerHTML = `<div class="analytics-chart-wrap"><canvas id="analytics-units-chart"></canvas></div><div class="analytics-distribution analytics-unit-list" role="list">${items.map((item, index) => `<button class="analytics-distribution-row analytics-drilldown" type="button" onclick="AnalyticsPage.filterIssuesByUnit(${index})" role="listitem"><span class="analytics-distribution-label">${escHtml(item.label)}</span><span class="analytics-distribution-value">${formatNumber(item.issue_count)} (${formatPercent(item.percentage)})</span></button>`).join('')}</div><p class="analytics-panel-note">Chọn một đơn vị để lọc bảng chi tiết. Các vấn đề có thể thuộc nhiều đơn vị.</p>`;
+    Charts.createBarChart('analytics-units-chart', items.map(item => item.label), items.map(item => item.issue_count), { label: 'Số vấn đề', chartOptions: { indexAxis: 'y' } });
   }
 
   function renderDistribution(items) {
@@ -529,7 +542,18 @@ window.AnalyticsPage = (() => {
   function renderProducts(element, data) {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Chưa có dữ liệu sản phẩm.');
-    element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Phân bổ phản hồi theo sản phẩm"><thead><tr><th>Sản phẩm</th><th>Vấn đề</th><th>Báo lỗi</th><th>Báo CL tốt</th><th>Y/c cải tiến</th><th>Đề xuất SPM</th></tr></thead><tbody>${items.map(item => `<tr><td>${escHtml(item.label)}</td><td>${formatNumber(item.issue_count)} (${formatPercent(item.percentage)})</td><td>${formatNumber(item.quality_labels?.['Báo lỗi'])}</td><td>${formatNumber(item.quality_labels?.['Báo CL tốt'])}</td><td>${formatNumber(item.quality_labels?.['Y/c cải tiến'])}</td><td>${formatNumber(item.quality_labels?.['Đề xuất SPM'])}</td></tr>`).join('')}</tbody></table></div>`;
+    const qualityLabels = ['Báo lỗi', 'Báo CL tốt', 'Y/c cải tiến', 'Đề xuất SPM'];
+    const maxQualityCount = Math.max(1, ...items.flatMap(item => qualityLabels.map(label => Number(item.quality_labels?.[label] || 0))));
+    const columnTotals = Object.fromEntries(qualityLabels.map(label => [label, items.reduce((total, item) => total + Number(item.quality_labels?.[label] || 0), 0)]));
+    const totalMemberships = items.reduce((total, item) => total + Number(item.issue_count || 0), 0);
+    const rows = items.map(item => `<tr><th scope="row">${escHtml(item.label)}</th><td>${formatNumber(item.issue_count)} (${formatPercent(item.percentage)})</td>${qualityLabels.map(label => {
+      const count = Number(item.quality_labels?.[label] || 0);
+      const strength = count === 0 ? 0 : Math.min(0.85, Math.max(0.14, count / maxQualityCount));
+      const cellLabel = `${item.label} · ${label}: ${formatNumber(count)} lượt`;
+      return `<td class="analytics-product-heat-cell${count === 0 ? ' analytics-product-heat-cell-zero' : ''}" style="--heat-strength:${strength}" title="${escAttr(cellLabel)}" aria-label="${escAttr(cellLabel)}">${formatNumber(count)}</td>`;
+    }).join('')}</tr>`).join('');
+    const totals = qualityLabels.map(label => `<td><strong>${formatNumber(columnTotals[label])}</strong></td>`).join('');
+    element.innerHTML = `<div class="table-wrap"><table class="table analytics-product-matrix" aria-label="Phân bổ phản hồi theo sản phẩm"><thead><tr><th>Sản phẩm</th><th>Vấn đề</th>${qualityLabels.map(label => `<th>${escHtml(label)}</th>`).join('')}</tr></thead><tbody>${rows}<tr class="analytics-product-total"><th scope="row">Tổng lượt</th><td><strong>${formatNumber(totalMemberships)}</strong></td>${totals}</tr></tbody></table></div>`;
   }
 
   function renderGeography(element, data) {

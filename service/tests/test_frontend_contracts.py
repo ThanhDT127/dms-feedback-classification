@@ -142,9 +142,9 @@ def test_analytics_distinguishes_ingested_rows_without_ai_classification():
 def test_managed_file_analytics_assets_have_updated_cache_versions():
     index_html = _read("index.html")
 
-    assert "css/style.css?v=1.0.9" in index_html
+    assert "css/style.css?v=1.0.10" in index_html
     assert "js/api.js?v=1.0.7" in index_html
-    assert "js/pages/analytics.js?v=1.0.10" in index_html
+    assert "js/pages/analytics.js?v=1.0.11" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
 
@@ -425,8 +425,8 @@ def test_analytics_page_uses_chart_helpers_and_cleans_up_its_charts():
     analytics_js = _read("js/pages/analytics.js")
 
     for expected in [
-        "Charts.createBarChart('analytics-sources-chart'",
-        "Charts.createDoughnutChart('analytics-units-chart'",
+        "Charts.createDoughnutChart('analytics-sources-chart'",
+        "Charts.createBarChart('analytics-units-chart'",
         "Charts.destroy('analytics-sources-chart')",
         "Charts.destroy('analytics-units-chart')",
         "Chưa gán cảm xúc",
@@ -441,6 +441,25 @@ def test_analytics_page_uses_chart_helpers_and_cleans_up_its_charts():
         assert expected in analytics_js
     groups_fn = analytics_js.split("function renderGroups")[1].split("function renderProducts")[0]
     assert "analytics-distribution-row" not in groups_fn
+
+
+def test_analytics_visual_refresh_uses_donut_sources_and_horizontal_unit_bars():
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+
+    sources_fn = analytics_js.split("function renderSources")[1].split("function renderUnits")[0]
+    units_fn = analytics_js.split("function renderUnits")[1].split("function renderDistribution")[0]
+    assert "analytics-donut-shell" in sources_fn
+    assert "analytics-donut-total" in sources_fn
+    assert "data?.total_issues" in sources_fn
+    assert "sourceChart.options.plugins.legend.display = false" in sources_fn
+    assert "sourceChart.update('none')" in sources_fn
+    assert "Vòng biểu diễn lượt thuộc nguồn; số ở tâm là số vấn đề duy nhất" in sources_fn
+    assert "Charts.createDoughnutChart('analytics-sources-chart'" in sources_fn
+    assert "Charts.createBarChart('analytics-units-chart'" in units_fn
+    assert "indexAxis: 'y'" in units_fn
+    assert ".analytics-donut-shell {" in style_css
+    assert ".analytics-donut-total {" in style_css
 
 
 def test_analytics_dashboard_is_wide_and_keeps_only_actionable_score_cards():
@@ -501,8 +520,8 @@ def test_analytics_p0_matches_prototype_structure_without_restoring_removed_scop
         ".analytics-matrix thead th {",
     ]:
         assert expected_css in style_css
-    assert "css/style.css?v=1.0.9" in index_html
-    assert "js/pages/analytics.js?v=1.0.10" in index_html
+    assert "css/style.css?v=1.0.10" in index_html
+    assert "js/pages/analytics.js?v=1.0.11" in index_html
 
     for removed in [
         "dateField('analytics-compare-from'",
@@ -526,6 +545,96 @@ def test_analytics_p0_filter_card_reports_applied_scope_and_option_failures():
     assert "function setFilterOptionsError(message)" in analytics_js
     assert "Không thể tải danh sách Đơn vị và Quận/huyện." in analytics_js
     assert "if (optionsRequestId !== _state.optionsRequestId) return" in analytics_js
+
+
+def test_analytics_visual_refresh_matches_prototype_header_filter_and_kpi_density():
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+
+    for expected in [
+        'class="analytics-header-icon"',
+        'class="analytics-header-waves"',
+        'class="analytics-filter-icon"',
+        "analytics-filter-footer",
+        "analytics-kpi-copy",
+    ]:
+        assert expected in analytics_js
+    for expected in [
+        ".analytics-page-header {",
+        ".analytics-header-icon {",
+        ".analytics-header-waves {",
+        ".analytics-filter-icon {",
+        ".analytics-filter-footer {",
+        ".analytics-kpi-copy {",
+    ]:
+        assert expected in style_css
+
+
+def test_analytics_visual_refresh_renders_product_quality_as_heatmap():
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+
+    products_fn = analytics_js.split("function renderProducts")[1].split(
+        "function renderGeography"
+    )[0]
+    assert "analytics-product-matrix" in products_fn
+    assert "analytics-product-heat-cell" in products_fn
+    assert "analytics-product-heat-cell-zero" in products_fn
+    assert "Tổng lượt" in products_fn
+    assert "const maxQualityCount" in products_fn
+    assert ".analytics-product-heat-cell {" in style_css
+    assert ".analytics-product-heat-cell-zero {" in style_css
+
+
+def test_analytics_visual_refresh_uses_prototype_panel_composition():
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+
+    assert 'class="analytics-primary-grid"' in analytics_js
+    assert 'class="card analytics-daily-card"' in analytics_js
+    assert "analytics-compact-card" in analytics_js
+    assert 'class="analytics-secondary-grid"' in analytics_js
+    assert "'analytics-groups-card')" in analytics_js
+    assert "'analytics-product-card')" in analytics_js
+    assert ".analytics-primary-grid," in style_css
+    assert ".analytics-daily-card," in style_css
+    assert ".analytics-secondary-grid {" in style_css
+    assert ".analytics-groups-card {" in style_css
+    assert ".analytics-product-card {" in style_css
+    assert "grid-column: 1 / -1" in style_css
+
+
+def test_analytics_compact_desktop_distribution_fits_without_clipping_data():
+    css = _read("css/style.css")
+    desktop = re.search(r"@media \(min-width: 641px\)\s*\{(.*?)\n\}", css, re.S)
+    assert desktop, "Compact desktop cards need a scoped, shrinkable distribution layout"
+
+    def declarations(selector):
+        matches = re.findall(r"([^{}]+)\{([^{}]*)\}", desktop.group(1))
+        return "\n".join(
+            body for selectors, body in matches if selector in map(str.strip, selectors.split(","))
+        )
+
+    scope = ".analytics-compact-card .analytics-distribution-"
+    row = declarations(scope + "row")
+    # Two children (unit buttons) must not reserve a third, empty track.
+    assert "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);" in row
+    for name, column in [("label", 1), ("value", 2)]:
+        text = declarations(scope + name)
+        assert f"grid-column: {column};" in text
+        assert "grid-row: 1;" in text
+        assert "min-width: 0;" in text
+        assert "white-space: normal;" in text
+        assert "overflow-wrap: anywhere;" in text
+        assert "overflow: visible;" in text
+        assert "text-overflow: ellipsis;" not in text
+    bar = declarations(scope + "bar")
+    assert "grid-column: 1 / -1;" in bar
+    assert "grid-row: 2;" in bar
+    # The noncompact distribution contract must remain unchanged.
+    global_row = re.search(r"^\.analytics-distribution-row \{([^}]+)\}", css, re.M)
+    assert global_row
+    assert "minmax(100px, 0.8fr) minmax(100px, 2fr) auto" in global_row.group(1)
 
 
 def test_analytics_page_renders_and_cleans_up_daily_trend():
