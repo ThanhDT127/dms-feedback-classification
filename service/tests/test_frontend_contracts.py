@@ -142,9 +142,10 @@ def test_analytics_distinguishes_ingested_rows_without_ai_classification():
 def test_managed_file_analytics_assets_have_updated_cache_versions():
     index_html = _read("index.html")
 
-    assert "css/style.css?v=1.0.11" in index_html
+    assert "css/style.css?v=1.0.12" in index_html
     assert "js/api.js?v=1.0.7" in index_html
-    assert "js/pages/analytics.js?v=1.0.12" in index_html
+    assert "js/pages/analytics.js?v=1.0.13" in index_html
+    assert "js/components/charts.js?v=1.0.6" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
 
@@ -520,8 +521,8 @@ def test_analytics_p0_matches_prototype_structure_without_restoring_removed_scop
         ".analytics-matrix thead th {",
     ]:
         assert expected_css in style_css
-    assert "css/style.css?v=1.0.11" in index_html
-    assert "js/pages/analytics.js?v=1.0.12" in index_html
+    assert "css/style.css?v=1.0.12" in index_html
+    assert "js/pages/analytics.js?v=1.0.13" in index_html
 
     for removed in [
         "dateField('analytics-compare-from'",
@@ -775,15 +776,14 @@ def test_analytics_p0_geography_renders_ranked_district_table_and_data_notes():
     assert "Thiếu Quận/huyện" in analytics_js
 
 
-def test_analytics_page_does_not_render_status_and_backlog():
+def test_analytics_page_renders_processing_status_donut_without_backlog_aging():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
 
     assert "function getAnalyticsStatusBacklog(params = {})" in api_js
     assert "/analytics/status-backlog" in api_js
-    assert "API.getAnalyticsStatusBacklog" not in analytics_js
-    assert "analytics-status-backlog" not in analytics_js
-    assert "analytics-status-chart" not in analytics_js
-    assert "Trạng thái xử lý" not in analytics_js
+    assert "API.getAnalyticsStatusBacklog" in analytics_js
+    assert "analytics-status-chart" in analytics_js
+    assert "Tình trạng xử lý" in analytics_js
+    assert "Charts.destroy('analytics-status-chart')" in analytics_js
     assert "Thời gian tồn đọng" not in analytics_js
-    assert "renderStatusBacklog" not in analytics_js

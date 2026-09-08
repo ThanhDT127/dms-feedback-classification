@@ -343,11 +343,22 @@ def test_daily_trend_counts_distinct_issue_codes_in_date_order(repo):
 
     assert body == {
         "items": [
-            {"date": "2026-08-01", "issue_count": 1},
-            {"date": "2026-08-02", "issue_count": 1},
+            {
+                "date": issue_date,
+                "issue_count": 1,
+                "sentiment_counts": {
+                    "Tích cực": 0,
+                    "Trung lập": 0,
+                    "Tiêu cực": 0,
+                    "Chưa gán": 1,
+                },
+                "sentiment_membership_count": 1,
+            }
+            for issue_date in ["2026-08-01", "2026-08-02"]
         ],
         "total_issues": 3,
         "excluded_missing_date": 1,
+        "count_semantics": "sentiment_memberships",
     }
 
 

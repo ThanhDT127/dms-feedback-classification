@@ -14,6 +14,7 @@ from .repository import FeedbackAnalyticsRepository
 
 _UNKNOWN = "Chưa xác định"
 _QUALITY_LABELS = ("Báo lỗi", "Báo CL tốt", "Y/c cải tiến", "Đề xuất SPM")
+_SENTIMENT_LABELS = ("Tích cực", "Trung lập", "Tiêu cực")
 
 
 class FeedbackAnalyticsService:
@@ -372,6 +373,7 @@ class FeedbackAnalyticsService:
         rows = self._rows(analytics_filter)
         issue_codes = self._issue_codes(rows)
         codes_by_date: dict[str, set[str]] = defaultdict(set)
+        sentiments_by_date: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
         excluded_missing_date = 0
         for row in rows:
             code = self._issue_code(row)
@@ -382,13 +384,32 @@ class FeedbackAnalyticsService:
                 excluded_missing_date += 1
                 continue
             codes_by_date[issue_date].add(code)
+            sentiment = str(row.get("sentiment") or "").strip()
+            if sentiment in _SENTIMENT_LABELS:
+                sentiments_by_date[issue_date][sentiment].add(code)
+
+        items = []
+        for issue_date in sorted(codes_by_date):
+            memberships = sentiments_by_date[issue_date]
+            sentiment_counts = {
+                sentiment: len(memberships[sentiment]) for sentiment in _SENTIMENT_LABELS
+            }
+            recognized_codes = set().union(*memberships.values())
+            # A blank/unknown sibling row must not double-count a recognized code as missing.
+            sentiment_counts["Chưa gán"] = len(codes_by_date[issue_date] - recognized_codes)
+            items.append(
+                {
+                    "date": issue_date,
+                    "issue_count": len(codes_by_date[issue_date]),
+                    "sentiment_counts": sentiment_counts,
+                    "sentiment_membership_count": sum(sentiment_counts.values()),
+                }
+            )
         return {
-            "items": [
-                {"date": issue_date, "issue_count": len(codes_by_date[issue_date])}
-                for issue_date in sorted(codes_by_date)
-            ],
+            "items": items,
             "total_issues": len(issue_codes),
             "excluded_missing_date": excluded_missing_date,
+            "count_semantics": "sentiment_memberships",
         }
 
     def issue_types(self, analytics_filter: AnalyticsFilter) -> dict[str, Any]:

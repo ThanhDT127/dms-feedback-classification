@@ -72,19 +72,26 @@ window.AnalyticsPage = (() => {
         <div id="analytics-overview" class="stat-grid">${renderMetricSkeletons(5)}</div>
       </section>
 
+      <!-- Hàng 1: Vấn đề theo ngày + Tỷ trọng theo nguồn thông tin -->
       <div class="analytics-primary-grid">
         <section class="card analytics-daily-card" aria-labelledby="analytics-daily-title">
           <div class="card-header"><span id="analytics-daily-title" class="card-title">📅 Vấn đề theo ngày</span></div>
           <div id="analytics-daily-trend" class="analytics-panel-body">${renderPanelLoading()}</div>
         </section>
         ${panel('analytics-source-title', '📡 Tỷ trọng theo nguồn thông tin', 'analytics-sources', 'analytics-compact-card')}
-        ${panel('analytics-unit-title', '🏢 Tỷ trọng vấn đề theo đơn vị', 'analytics-units', 'analytics-compact-card')}
       </div>
 
+      <!-- Hàng 2: Tỷ trọng theo đơn vị + Nhóm vấn đề × Cảm xúc -->
       <div class="analytics-secondary-grid">
-        ${panel('analytics-group-title', '🏷️ Nhóm vấn đề & cảm xúc', 'analytics-groups', 'analytics-groups-card')}
+        ${panel('analytics-unit-title', '👥 Tỷ trọng vấn đề theo đơn vị', 'analytics-units', 'analytics-compact-card')}
+        ${panel('analytics-group-title', '🏷️ Nhóm vấn đề × Cảm xúc', 'analytics-groups', 'analytics-groups-card')}
+      </div>
+
+      <!-- Hàng 3: Sản phẩm × Loại vấn đề + Tình trạng xử lý + Cơ cấu loại vấn đề -->
+      <div class="analytics-tertiary-grid">
+        ${panel('analytics-product-title', '📦 Sản phẩm × Loại vấn đề', 'analytics-products', 'analytics-product-card')}
+        ${panel('analytics-status-title', '⏱️ Tình trạng xử lý', 'analytics-processing-status', 'analytics-compact-card')}
         ${panel('analytics-issue-type-title', '🧭 Cơ cấu loại vấn đề', 'analytics-issue-types', 'analytics-compact-card')}
-        ${panel('analytics-product-title', '📦 Sản phẩm & chất lượng', 'analytics-products', 'analytics-product-card')}
       </div>
 
       <section class="card" aria-labelledby="analytics-geography-title">
@@ -347,6 +354,7 @@ window.AnalyticsPage = (() => {
     renderResult(results.units, renderUnits, 'analytics-units');
     renderResult(results.groups, renderGroups, 'analytics-groups');
     renderResult(results.products, renderProducts, 'analytics-products');
+    renderResult(results.status, renderProcessingStatus, 'analytics-processing-status');
     renderResult(results.issues, (element, data) => { _state.issues = data; renderIssues(element, data); }, 'analytics-issues');
   }
 
@@ -373,6 +381,7 @@ window.AnalyticsPage = (() => {
       units: API.getAnalyticsUnits(globalQueryParams()),
       groups: API.getAnalyticsGroups(globalQueryParams()),
       products: API.getAnalyticsProducts(globalQueryParams()),
+      status: API.getAnalyticsStatusBacklog(globalQueryParams()),
       issues: API.getAnalyticsIssues(issueQueryParams()),
     };
     const entries = Object.entries(requests);
@@ -487,21 +496,63 @@ window.AnalyticsPage = (() => {
   function renderDailyTrend(element, data) {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Chưa có dữ liệu xu hướng theo ngày.');
-    element.innerHTML = '<div class="analytics-chart-wrap"><canvas id="analytics-daily-trend-chart"></canvas></div>';
-    Charts.createLineChart('analytics-daily-trend-chart', items.map(item => item.date), [{
-      label: 'Số vấn đề',
-      data: items.map(item => item.issue_count),
-      borderColor: '#22c55e',
-      backgroundColor: 'rgba(34, 197, 94, 0.12)',
-      fill: true,
-    }]);
+    const hasSentiment = items.some(item => item.sentiment_counts);
+    if (hasSentiment && typeof Charts.createStackedDatasetChart === 'function') {
+      element.innerHTML = '<div class="analytics-chart-wrap"><canvas id="analytics-daily-trend-chart"></canvas></div><p class="analytics-panel-note">Biểu đồ thể hiện lượt cảm xúc theo ngày. Một vấn đề có thể có nhiều cảm xúc trong cùng ngày, tổng lượt cảm xúc có thể vượt số vấn đề duy nhất theo ngày.</p>';
+      Charts.createStackedDatasetChart('analytics-daily-trend-chart', items.map(item => item.date), [
+        { label: 'Tích cực', data: items.map(item => Number(item.sentiment_counts?.['Tích cực'] || 0)), backgroundColor: '#22c55e' },
+        { label: 'Trung lập', data: items.map(item => Number(item.sentiment_counts?.['Trung lập'] || 0)), backgroundColor: '#3b82f6' },
+        { label: 'Tiêu cực', data: items.map(item => Number(item.sentiment_counts?.['Tiêu cực'] || 0)), backgroundColor: '#ef4444' },
+        { label: 'Chưa gán', data: items.map(item => Number(item.sentiment_counts?.['Chưa gán'] || 0)), backgroundColor: '#94a3b8' },
+      ]);
+    } else {
+      element.innerHTML = '<div class="analytics-chart-wrap"><canvas id="analytics-daily-trend-chart"></canvas></div>';
+      Charts.createLineChart('analytics-daily-trend-chart', items.map(item => item.date), [{
+        label: 'Số vấn đề',
+        data: items.map(item => item.issue_count),
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34, 197, 94, 0.12)',
+        fill: true,
+      }]);
+    }
   }
 
   function renderIssueTypes(element, data) {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Chưa có dữ liệu loại vấn đề.');
-    element.innerHTML = `<div class="analytics-chart-wrap"><canvas id="analytics-issue-types-chart"></canvas></div>${renderDistribution(items)}`;
-    Charts.createDoughnutChart('analytics-issue-types-chart', items.map(item => item.label), items.map(item => item.issue_count));
+    const totalIssues = Number(data?.total_issues || 0);
+    const colorMap = {
+      'Báo lỗi': '#ef4444',
+      'Báo CL tốt': '#22c55e',
+      'Y/c cải tiến': '#1e40af',
+      'Ý/cải tiến': '#1e40af',
+      'Đề xuất SPM': '#f97316',
+    };
+    const colors = items.map(it => colorMap[it.label] || '#94a3b8');
+    element.innerHTML = `<div class="analytics-donut-shell"><div class="analytics-chart-wrap"><canvas id="analytics-issue-types-chart"></canvas></div><div class="analytics-donut-total"><strong>${formatNumber(totalIssues)}</strong><span>Vấn đề</span></div></div>${renderDistribution(items)}`;
+    const chart = Charts.createDoughnutChart('analytics-issue-types-chart', items.map(item => item.label), items.map(item => item.issue_count), colors);
+    if (chart) {
+      chart.options.plugins.legend.display = false;
+      chart.update('none');
+    }
+  }
+
+  function renderProcessingStatus(element, data) {
+    const statuses = data?.statuses || [];
+    if (!statuses.length) return renderEmpty(element, 'Chưa có dữ liệu tình trạng xử lý.');
+    const totalIssues = Number(data?.total_issues || 0);
+    const colorMap = {
+      'Chờ xử lý': '#ef4444',
+      'Đang xử lý': '#1e40af',
+      'Đã xử lý': '#22c55e',
+    };
+    const colors = statuses.map(s => colorMap[s.label] || '#94a3b8');
+    element.innerHTML = `<div class="analytics-donut-shell"><div class="analytics-chart-wrap"><canvas id="analytics-status-chart"></canvas></div><div class="analytics-donut-total"><strong>${formatNumber(totalIssues)}</strong><span>Vấn đề</span></div></div><div class="analytics-distribution" role="list">${statuses.map(s => `<div class="analytics-distribution-row" role="listitem"><span class="analytics-distribution-label">${escHtml(s.label)}</span><span class="analytics-distribution-value"><strong>${formatNumber(s.issue_count)}</strong> (${formatPercent(s.percentage)})</span></div>`).join('')}</div>`;
+    const chart = Charts.createDoughnutChart('analytics-status-chart', statuses.map(s => s.label), statuses.map(s => s.issue_count), colors);
+    if (chart) {
+      chart.options.plugins.legend.display = false;
+      chart.update('none');
+    }
   }
 
   function renderSources(element, data) {
@@ -509,7 +560,7 @@ window.AnalyticsPage = (() => {
     if (!items.length) return renderEmpty(element, 'Chưa có dữ liệu phân bổ.');
     const totalIssues = Number(data?.total_issues || 0);
     element.innerHTML = `<div class="analytics-donut-shell"><div class="analytics-chart-wrap"><canvas id="analytics-sources-chart"></canvas></div><div class="analytics-donut-total"><strong>${formatNumber(totalIssues)}</strong><span>Vấn đề</span></div></div>${renderDistribution(items)}<p class="analytics-panel-note">Vòng biểu diễn lượt thuộc nguồn; số ở tâm là số vấn đề duy nhất. Các vấn đề có thể thuộc nhiều nguồn; tổng tỷ trọng không nhất thiết bằng 100%.</p>`;
-    const sourceChart = Charts.createDoughnutChart('analytics-sources-chart', items.map(item => item.label), items.map(item => item.issue_count));
+    const sourceChart = Charts.createDoughnutChart('analytics-sources-chart', items.map(item => item.label), items.map(item => item.issue_count), null, { showLegend: false });
     if (sourceChart) {
       sourceChart.options.plugins.legend.display = false;
       sourceChart.update('none');
@@ -525,18 +576,66 @@ window.AnalyticsPage = (() => {
   }
 
   function renderDistribution(items) {
-    return `<div class="analytics-distribution" role="list">${items.map(item => `<div class="analytics-distribution-row" role="listitem"><div class="analytics-distribution-label">${escHtml(item.label)}</div><div class="analytics-distribution-bar"><span style="width:${Math.min(Number(item.percentage) || 0, 100)}%"></span></div><div class="analytics-distribution-value">${formatNumber(item.issue_count)} (${formatPercent(item.percentage)})</div></div>`).join('')}</div>`;
+    const defaultColors = [
+      '#22c55e', '#f59e0b', '#c084fc', '#3b82f6', '#ef4444',
+      '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1',
+    ];
+    return `<div class="analytics-distribution" role="list">${items.map((item, index) => {
+      const color = defaultColors[index % defaultColors.length];
+      return `<div class="analytics-distribution-row" role="listitem"><div class="analytics-distribution-label">${escHtml(item.label)}</div><div class="analytics-distribution-bar"><span style="width:${Math.min(Number(item.percentage) || 0, 100)}%;background:${color};"></span></div><div class="analytics-distribution-value">${formatNumber(item.issue_count)} (${formatPercent(item.percentage)})</div></div>`;
+    }).join('')}</div>`;
   }
 
   function renderGroups(element, data) {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Chưa có nhóm vấn đề được phân loại.');
-    element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Nhóm vấn đề và cảm xúc"><thead><tr><th>Nhóm vấn đề</th><th>Vấn đề</th><th>Tích cực</th><th>Tiêu cực</th><th>Trung lập</th><th>Chưa gán cảm xúc</th></tr></thead><tbody>${items.map(item => {
+    const posData = [];
+    const neuData = [];
+    const negData = [];
+    items.forEach(item => {
+      const counts = item.sentiment_counts || {};
+      const pos = Number(counts['Tích cực'] || 0);
+      const neu = Number(counts['Trung lập'] || 0);
+      const neg = Number(counts['Tiêu cực'] || 0);
+      const sum = pos + neu + neg;
+      const pPos = sum > 0 ? Math.round((pos / sum) * 100) : 0;
+      const pNeu = sum > 0 ? Math.round((neu / sum) * 100) : 0;
+      const pNeg = sum > 0 ? Math.max(0, 100 - pPos - pNeu) : 0;
+      posData.push(pPos);
+      neuData.push(pNeu);
+      negData.push(pNeg);
+    });
+    element.innerHTML = `<div class="analytics-chart-wrap" style="height: 180px;"><canvas id="analytics-groups-chart"></canvas></div><div class="analytics-legend-bar"><span class="analytics-legend-item"><span class="analytics-legend-dot" style="background:#22c55e;"></span> Tích cực</span><span class="analytics-legend-item"><span class="analytics-legend-dot" style="background:#1e40af;"></span> Trung tính</span><span class="analytics-legend-item"><span class="analytics-legend-dot" style="background:#ef4444;"></span> Tiêu cực</span></div><div class="table-wrap" style="margin-top: 12px;"><table class="table" aria-label="Nhóm vấn đề và cảm xúc"><thead><tr><th>Nhóm vấn đề</th><th>Vấn đề</th><th>Tích cực</th><th>Tiêu cực</th><th>Trung lập</th><th>Chưa gán cảm xúc</th></tr></thead><tbody>${items.map(item => {
       const counts = item.sentiment_counts || {};
       const known = Number(counts['Tích cực'] || 0) + Number(counts['Tiêu cực'] || 0) + Number(counts['Trung lập'] || 0);
       const missing = Math.max(0, Number(item.issue_count || 0) - known);
       return `<tr><td>${escHtml(item.label)}</td><td>${formatNumber(item.issue_count)}</td><td>${formatNumber(counts['Tích cực'])}</td><td>${formatNumber(counts['Tiêu cực'])}</td><td>${formatNumber(counts['Trung lập'])}</td><td>${formatNumber(missing)}</td></tr>`;
     }).join('')}</tbody></table></div><p class="analytics-panel-note">Phân bổ cảm xúc tính theo từng nhóm; một vấn đề có thể có nhiều nhãn.</p>`;
+    if (typeof Charts.createStackedDatasetChart === 'function') {
+      Charts.createStackedDatasetChart(
+        'analytics-groups-chart',
+        items.map(it => it.label),
+        [
+          { label: 'Tích cực', data: posData, backgroundColor: '#22c55e', stack: 'sentiment', barPercentage: 0.65 },
+          { label: 'Trung tính', data: neuData, backgroundColor: '#1e40af', stack: 'sentiment', barPercentage: 0.65 },
+          { label: 'Tiêu cực', data: negData, backgroundColor: '#ef4444', stack: 'sentiment', barPercentage: 0.65 },
+        ],
+        {
+          indexAxis: 'y',
+          plugins: { legend: { display: false } },
+          scales: {
+            x: {
+              stacked: true,
+              max: 100,
+              ticks: { callback: v => v + '%' }
+            },
+            y: {
+              stacked: true
+            }
+          }
+        }
+      );
+    }
   }
 
   function renderProducts(element, data) {
@@ -675,6 +774,8 @@ window.AnalyticsPage = (() => {
     Charts.destroy('analytics-provinces-chart');
     Charts.destroy('analytics-sources-chart');
     Charts.destroy('analytics-units-chart');
+    Charts.destroy('analytics-groups-chart');
+    Charts.destroy('analytics-status-chart');
   }
 
   return { render, destroy, applyFilters, resetFilters, refresh, onUnitChange, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, filterIssuesByUnit };

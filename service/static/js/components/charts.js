@@ -113,7 +113,7 @@ window.Charts = (() => {
     return chart;
   }
 
-  function createDoughnutChart(canvasId, labels, data, colors = null) {
+  function createDoughnutChart(canvasId, labels, data, colors = null, options = {}) {
     destroy(canvasId);
     const ctx = getCanvas(canvasId);
     if (!ctx) return null;
@@ -126,6 +126,9 @@ window.Charts = (() => {
     ];
 
     const bgColors = colors || defaultColors.slice(0, labels.length);
+    const legendDisplay = options.showLegend !== undefined
+      ? options.showLegend
+      : (options.plugins?.legend?.display !== undefined ? options.plugins.legend.display : true);
 
     const chart = new Chart(ctx, {
       type: 'doughnut',
@@ -150,7 +153,8 @@ window.Charts = (() => {
         },
         plugins: {
           legend: {
-            position: 'right',
+            display: legendDisplay,
+            position: options.legendPosition || 'right',
             labels: {
               padding: 12,
               font: { size: 11 },
@@ -174,8 +178,10 @@ window.Charts = (() => {
                 return [];
               }
             }
-          }
-        }
+          },
+          ...options.plugins
+        },
+        ...options.chartOptions
       }
     });
 
@@ -306,6 +312,51 @@ window.Charts = (() => {
     return chart;
   }
 
+  // Generic datasets; keep the success/failed helper's existing API intact.
+  function createStackedDatasetChart(canvasId, labels, datasets, options = {}) {
+    destroy(canvasId);
+    const ctx = getCanvas(canvasId);
+    if (!ctx) return null;
+
+    const isHorizontal = options.indexAxis === 'y';
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
+
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        indexAxis: options.indexAxis || 'x',
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 800, easing: 'easeOutQuart' },
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { display: true, position: options.legendPosition || 'top' },
+          ...options.plugins
+        },
+        scales: {
+          x: {
+            stacked: true,
+            grid: { display: isHorizontal, color: gridColor, drawBorder: false },
+            ticks: { maxRotation: isHorizontal ? 0 : 45, ...(options.scales?.x?.ticks || {}) },
+            ...(options.scales?.x || {})
+          },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            grid: { color: isHorizontal ? 'transparent' : gridColor, drawBorder: false },
+            ticks: { precision: isHorizontal ? undefined : 0, ...(options.scales?.y?.ticks || {}) },
+            ...(options.scales?.y || {})
+          }
+        },
+        ...options.chartOptions
+      }
+    });
+    _instances[canvasId] = chart;
+    return chart;
+  }
+
   function applyThemeColors() {
     applyDefaults();
     Object.keys(_instances).forEach(id => {
@@ -333,5 +384,5 @@ window.Charts = (() => {
     });
   }
 
-  return { createBarChart, createStackedBarChart, createDoughnutChart, createLineChart, destroy, applyThemeColors };
+  return { createBarChart, createStackedBarChart, createStackedDatasetChart, createDoughnutChart, createLineChart, destroy, applyThemeColors };
 })();

@@ -158,13 +158,40 @@ def test_analytics_daily_trend_route_returns_stable_contract(analytics_api):
     seed_classified_records(
         repository,
         db_path=repository.db_path,
-        entries=[{"issue_code": "A", "issue_date": "2026-08-15", "labels": []}],
+        entries=[
+            {"issue_code": code, "issue_date": "2026-08-15", "sentiment": sentiment}
+            for code, sentiment in [
+                ("A", "Tích cực"),
+                ("A", "Tích cực"),
+                ("A", "Tiêu cực"),
+                ("A", None),
+                ("B", "Trung lập"),
+                ("C", "unknown"),
+            ]
+        ],
     )
 
     response = client.get("/api/analytics/trends/daily?from=2026-08-01&to=2026-08-31")
 
     assert response.status_code == 200
-    assert response.json()["items"] == [{"date": "2026-08-15", "issue_count": 1}]
+    assert response.json() == {
+        "items": [
+            {
+                "date": "2026-08-15",
+                "issue_count": 3,
+                "sentiment_counts": {
+                    "Tích cực": 1,
+                    "Trung lập": 1,
+                    "Tiêu cực": 1,
+                    "Chưa gán": 1,
+                },
+                "sentiment_membership_count": 4,
+            }
+        ],
+        "total_issues": 3,
+        "excluded_missing_date": 0,
+        "count_semantics": "sentiment_memberships",
+    }
 
 
 def test_analytics_issue_types_route_returns_stable_contract(analytics_api):
