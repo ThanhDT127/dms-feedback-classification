@@ -142,8 +142,10 @@ def test_analytics_distinguishes_ingested_rows_without_ai_classification():
 def test_managed_file_analytics_assets_have_updated_cache_versions():
     index_html = _read("index.html")
 
-    assert "js/api.js?v=1.0.6" in index_html
-    assert "js/pages/analytics.js?v=1.0.3" in index_html
+    assert "css/style.css?v=1.0.17" in index_html
+    assert "js/api.js?v=1.0.8" in index_html
+    assert "js/pages/analytics.js?v=1.0.18" in index_html
+    assert "js/components/charts.js?v=1.0.7" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
 
@@ -366,6 +368,10 @@ def test_analytics_page_is_a_separate_authenticated_spa_route():
     assert "API.getAnalyticsOverview" in analytics_js
     assert "fetch(" not in analytics_js
     assert "XMLHttpRequest" not in analytics_js
+    assert "Chất lượng dữ liệu" not in analytics_js
+    assert "analytics-data-quality" not in analytics_js
+    assert "renderDataQuality" not in analytics_js
+    assert "API.getAnalyticsDataQuality" not in analytics_js
     assert {"render", "destroy", "applyFilters", "resetFilters", "refresh"} <= _page_exports(
         analytics_js
     )
@@ -377,21 +383,23 @@ def test_analytics_page_exposes_accessible_global_date_filters():
     for expected in [
         "dateField('analytics-date-from'",
         "dateField('analytics-date-to'",
-        "dateField('analytics-compare-from'",
-        "dateField('analytics-compare-to'",
         'aria-label="Bộ lọc thời gian phân tích"',
         "AnalyticsPage.applyFilters()",
         "AnalyticsPage.resetFilters()",
         "AnalyticsPage.refresh()",
     ]:
         assert expected in analytics_js
+    assert "dateField('analytics-compare-from'" not in analytics_js
+    assert "dateField('analytics-compare-to'" not in analytics_js
+    assert "So sánh từ ngày" not in analytics_js
+    assert "So sánh đến ngày" not in analytics_js
 
 
 def test_analytics_page_supports_safe_issue_drilldown_filters_and_pagination():
     analytics_js = _read("js/pages/analytics.js")
 
+    assert "textField('analytics-issue-source'" not in analytics_js
     for expected in [
-        "textField('analytics-issue-source'",
         "textField('analytics-issue-unit'",
         "textField('analytics-issue-label'",
         "textField('analytics-issue-product'",
@@ -403,7 +411,6 @@ def test_analytics_page_supports_safe_issue_drilldown_filters_and_pagination():
         "AnalyticsPage.showIssueDetail",
         "App.showModal",
         "analytics-date-from",
-        "analytics-compare-to",
     ]:
         assert expected in analytics_js
 
@@ -419,14 +426,245 @@ def test_analytics_page_uses_chart_helpers_and_cleans_up_its_charts():
     analytics_js = _read("js/pages/analytics.js")
 
     for expected in [
-        "Charts.createBarChart('analytics-sources-chart'",
-        "Charts.createDoughnutChart('analytics-units-chart'",
+        "Charts.createDoughnutChart('analytics-sources-chart'",
+        "Charts.createBarChart('analytics-units-chart'",
         "Charts.destroy('analytics-sources-chart')",
         "Charts.destroy('analytics-units-chart')",
         "Chưa gán cảm xúc",
         "available === false",
+        'aria-label="Nhóm vấn đề và cảm xúc"',
+        "<th>Nhóm vấn đề</th>",
+        "<th>Tích cực</th>",
+        "<th>Tiêu cực</th>",
+        "<th>Trung lập</th>",
+        "<th>Chưa gán cảm xúc</th>",
     ]:
         assert expected in analytics_js
+    groups_fn = analytics_js.split("function renderGroups")[1].split("function renderProducts")[0]
+    assert "analytics-distribution-row" not in groups_fn
+
+
+def test_analytics_visual_refresh_uses_donut_sources_and_horizontal_unit_bars():
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+
+    sources_fn = analytics_js.split("function renderSources")[1].split("function renderUnits")[0]
+    units_fn = analytics_js.split("function renderUnits")[1].split("function renderDistribution")[0]
+    assert "analytics-donut-shell" in sources_fn
+    assert "analytics-donut-total" in sources_fn
+    assert "data?.total_issues" in sources_fn
+    assert "sourceChart.options.plugins.legend.display = false" in sources_fn
+    assert "sourceChart.update('none')" in sources_fn
+    assert "Vòng biểu diễn lượt thuộc nguồn; số ở tâm là số vấn đề duy nhất" in sources_fn
+    assert "Charts.createDoughnutChart('analytics-sources-chart'" in sources_fn
+    assert "Charts.createBarChart('analytics-units-chart'" in units_fn
+    assert "indexAxis: 'y'" in units_fn
+    assert ".analytics-donut-shell {" in style_css
+    assert ".analytics-donut-total {" in style_css
+
+
+def test_analytics_dashboard_is_wide_and_keeps_only_actionable_score_cards():
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+
+    assert "app.classList.add('page-container-wide')" in analytics_js
+    assert "app.classList.remove('page-container-wide')" in analytics_js
+    assert ".page-container.page-container-wide" in style_css
+    assert "max-width: none" in style_css
+    assert "processed_issues" not in analytics_js
+    assert "label_coverage" not in analytics_js
+    assert "multi_label_rate" not in analytics_js
+    assert "renderMetricSkeletons(5)" in analytics_js
+    assert "function metricInsight(key, metric)" in analytics_js
+    assert "Đã có cảm xúc" in analytics_js
+    assert "Đã nhận diện sản phẩm" in analytics_js
+    assert "mã vấn đề có nội dung trùng" in analytics_js
+    assert "Chưa có nhãn đối chứng do con người xác nhận." in analytics_js
+    assert "analytics-kpi analytics-kpi-${key}" in analytics_js
+    assert "analytics-kpi-unavailable" in analytics_js
+    assert 'aria-label="${escAttr(`${label}: ${displayValue}. ${hint}`)}"' in analytics_js
+    assert ".analytics-kpi-total_issues" in style_css
+    assert ".analytics-kpi-sentiment_coverage" in style_css
+    assert ".analytics-kpi-product_coverage" in style_css
+    assert ".analytics-kpi-duplicate_issue_rate" in style_css
+
+
+def test_analytics_p0_matches_prototype_structure_without_restoring_removed_scope():
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+    index_html = _read("index.html")
+
+    assert 'class="analytics-page"' in analytics_js
+    assert "Bộ lọc phân tích" in analytics_js
+    assert 'id="analytics-active-filters"' in analytics_js
+    assert analytics_js.index("dateField('analytics-date-from'") < analytics_js.index(
+        "dateField('analytics-date-to'"
+    )
+    assert analytics_js.index("dateField('analytics-date-to'") < analytics_js.index(
+        "selectField('analytics-unit'"
+    )
+    assert analytics_js.index("selectField('analytics-unit'") < analytics_js.index(
+        "selectField('analytics-district'"
+    )
+    assert "renderMetricSkeletons(5)" in analytics_js
+    assert "analytics-geography-layout" in analytics_js
+    assert "analytics-unit-issue-type-matrix" in analytics_js
+    assert "analytics-groups" in analytics_js
+    assert "analytics-products" in analytics_js
+    assert "analytics-issues" in analytics_js
+    for expected_css in [
+        ".analytics-page {",
+        ".analytics-page .card {",
+        ".analytics-page .stat-grid {",
+        ".analytics-geography-layout {",
+        ".analytics-matrix-wrap {",
+        ".analytics-matrix thead th {",
+    ]:
+        assert expected_css in style_css
+    assert "css/style.css?v=1.0.17" in index_html
+    assert "js/pages/analytics.js?v=1.0.18" in index_html
+
+    for removed in [
+        "dateField('analytics-compare-from'",
+        "dateField('analytics-compare-to'",
+        "selectField('analytics-province'",
+        "analytics-data-quality",
+        "analytics-status-backlog",
+    ]:
+        assert removed not in analytics_js
+
+
+def test_analytics_p0_filter_card_reports_applied_scope_and_option_failures():
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert 'id="analytics-active-filters"' in analytics_js
+    assert 'id="analytics-filter-options-error"' in analytics_js
+    assert "function renderActiveFilters()" in analytics_js
+    assert "Đang lọc:" in analytics_js
+    assert "Toàn bộ dữ liệu" in analytics_js
+    assert "renderActiveFilters();" in analytics_js
+    assert "function setFilterOptionsError(message)" in analytics_js
+    assert "Không thể tải danh sách Đơn vị và Quận/huyện." in analytics_js
+    assert "if (optionsRequestId !== _state.optionsRequestId) return" in analytics_js
+
+
+def test_analytics_visual_refresh_matches_prototype_header_filter_and_kpi_density():
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+
+    for expected in [
+        'class="analytics-header-icon"',
+        'class="analytics-header-waves"',
+        'class="analytics-filter-icon"',
+        "analytics-filter-footer",
+        "analytics-kpi-copy",
+    ]:
+        assert expected in analytics_js
+    for expected in [
+        ".analytics-page-header {",
+        ".analytics-header-icon {",
+        ".analytics-header-waves {",
+        ".analytics-filter-icon {",
+        ".analytics-filter-footer {",
+        ".analytics-kpi-copy {",
+    ]:
+        assert expected in style_css
+
+
+def test_analytics_visual_refresh_renders_product_quality_as_heatmap():
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+
+    products_fn = analytics_js.split("function renderProducts")[1].split(
+        "function renderGeography"
+    )[0]
+    assert "analytics-product-matrix" in products_fn
+    assert "analytics-product-heat-cell" in products_fn
+    assert "analytics-product-heat-cell-zero" in products_fn
+    assert "Tổng lượt" in products_fn
+    assert "const maxQualityCount" in products_fn
+    assert ".analytics-product-heat-cell {" in style_css
+    assert ".analytics-product-heat-cell-zero {" in style_css
+
+
+def test_analytics_visual_refresh_uses_prototype_panel_composition():
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+
+    assert 'class="analytics-primary-grid"' in analytics_js
+    assert 'class="card analytics-daily-card"' in analytics_js
+    assert "analytics-compact-card" in analytics_js
+    assert 'class="analytics-secondary-grid"' in analytics_js
+    assert "'analytics-groups-card')" in analytics_js
+    assert "'analytics-product-card')" in analytics_js
+    assert ".analytics-primary-grid," in style_css
+    assert ".analytics-daily-card," in style_css
+    assert ".analytics-secondary-grid {" in style_css
+    assert ".analytics-groups-card {" in style_css
+    assert ".analytics-product-card {" in style_css
+    assert "grid-column: 1 / -1" in style_css
+
+
+def test_analytics_detail_table_has_scoped_summary_and_badge_styles():
+    css = _read("css/style.css")
+    container = css.split("#analytics-issues {")[1].split("}")[0]
+    assert "contain: inline-size;" in container
+    # These selectors must outrank the later shared table nowrap rules.
+    for selector in [
+        ".table.analytics-issues-table thead th",
+        ".table.analytics-issues-table tbody td",
+    ]:
+        rules = re.findall(r"([^{}]+)\{([^{}]*)\}", css)
+        declarations = "\n".join(
+            body for selectors, body in rules if selector in map(str.strip, selectors.split(","))
+        )
+        assert "white-space: normal;" in declarations, selector
+        assert "overflow-wrap: anywhere;" in declarations
+        assert "vertical-align: top;" in declarations
+    for selector in [
+        ".analytics-issues-table {",
+        ".analytics-issues-table .analytics-issue-summary {",
+        ".analytics-issues-table .analytics-issue-classification {",
+        ".analytics-issues-table .badge {",
+    ]:
+        assert selector in css
+    summary = css.split(".analytics-issues-table .analytics-issue-summary {")[1].split("}")[0]
+    assert "-webkit-line-clamp: 3;" in summary
+    assert "overflow-wrap: anywhere;" in summary
+    assert "white-space: normal;" in summary
+
+
+def test_analytics_compact_desktop_distribution_fits_without_clipping_data():
+    css = _read("css/style.css")
+    desktop = re.search(r"@media \(min-width: 641px\)\s*\{(.*?)\n\}", css, re.S)
+    assert desktop, "Compact desktop cards need a scoped, shrinkable distribution layout"
+
+    def declarations(selector):
+        matches = re.findall(r"([^{}]+)\{([^{}]*)\}", desktop.group(1))
+        return "\n".join(
+            body for selectors, body in matches if selector in map(str.strip, selectors.split(","))
+        )
+
+    scope = ".analytics-compact-card .analytics-distribution-"
+    row = declarations(scope + "row")
+    # Two children (unit buttons) must not reserve a third, empty track.
+    assert "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);" in row
+    for name, column in [("label", 1), ("value", 2)]:
+        text = declarations(scope + name)
+        assert f"grid-column: {column};" in text
+        assert "grid-row: 1;" in text
+        assert "min-width: 0;" in text
+        assert "white-space: normal;" in text
+        assert "overflow-wrap: anywhere;" in text
+        assert "overflow: visible;" in text
+        assert "text-overflow: ellipsis;" not in text
+    bar = declarations(scope + "bar")
+    assert "grid-column: 1 / -1;" in bar
+    assert "grid-row: 2;" in bar
+    # The noncompact distribution contract must remain unchanged.
+    global_row = re.search(r"^\.analytics-distribution-row \{([^}]+)\}", css, re.M)
+    assert global_row
+    assert "minmax(100px, 0.8fr) minmax(100px, 2fr) auto" in global_row.group(1)
 
 
 def test_analytics_page_renders_and_cleans_up_daily_trend():
@@ -464,6 +702,21 @@ def test_analytics_page_renders_paginated_duplicate_details():
     assert "changeDuplicatePage" in _page_exports(analytics_js)
 
 
+def test_analytics_page_renders_priority_issues():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+    style_css = _read("css/style.css")
+
+    assert "function getAnalyticsPriorityIssues(params = {})" in api_js
+    assert "/analytics/priority-issues" in api_js
+    assert "API.getAnalyticsPriorityIssues" in analytics_js
+    assert "analytics-priority-issues" in analytics_js
+    assert "Phản hồi cần ưu tiên" in analytics_js
+    assert "analytics-priority-table" in analytics_js
+    assert "showPriorityDetail" in _page_exports(analytics_js)
+    assert ".analytics-priority-table" in style_css
+
+
 def test_analytics_page_renders_unit_issue_type_heatmap():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
@@ -475,21 +728,70 @@ def test_analytics_page_renders_unit_issue_type_heatmap():
     assert "analytics-heat-cell" in analytics_js
 
 
-def test_analytics_page_renders_geography_and_global_filters():
-    api_js = _read("js/api.js")
+def test_analytics_p0_matrix_renders_totals_insight_and_neutral_zero_cells():
     analytics_js = _read("js/pages/analytics.js")
 
+    assert "data?.column_totals" in analytics_js
+    assert "data?.grand_total" in analytics_js
+    assert "data?.top_unit" in analytics_js
+    assert "data?.top_issue_type" in analytics_js
+    assert "Đơn vị nổi bật" in analytics_js
+    assert "Loại vấn đề nổi bật" in analytics_js
+    assert "Tổng cộng" in analytics_js
+    assert "analytics-heat-cell-zero" in analytics_js
+    assert "const strength = count === 0 ? 0" in analytics_js
+    assert 'aria-label="${escAttr(cellLabel)}"' in analytics_js
+
+
+def test_analytics_page_renders_unit_before_cascading_district_filter():
+    api_js = _read("js/api.js")
+    analytics_js = _read("js/pages/analytics.js")
+    sidebar_js = _read("js/components/sidebar.js")
+    app_js = _read("js/app.js")
+
     assert "function getAnalyticsGeography(params = {})" in api_js
-    assert "/analytics/geography" in api_js
-    assert "textField('analytics-province'" in analytics_js
-    assert "textField('analytics-district'" in analytics_js
+    assert "function getAnalyticsFilterOptions(params = {})" in api_js
+    assert "/analytics/filter-options" in api_js
+    assert "selectField('analytics-unit'" in analytics_js
+    assert "selectField('analytics-district'" in analytics_js
+    assert "selectField('analytics-province'" not in analytics_js
+    assert "getElementById('analytics-province')" not in analytics_js
+    assert "onProvinceChange" not in analytics_js
+    assert analytics_js.index("selectField('analytics-unit'") < analytics_js.index(
+        "selectField('analytics-district'"
+    )
+    assert "AnalyticsPage.onUnitChange()" in analytics_js
+    assert "resetSelect('analytics-district')" in analytics_js
+    assert "API.getAnalyticsFilterOptions" in analytics_js
+    assert "const optionsRequestId = ++_state.optionsRequestId" in analytics_js
+    assert "if (optionsRequestId !== _state.optionsRequestId) return" in analytics_js
     assert "API.getAnalyticsGeography" in analytics_js
     assert "analytics-provinces-chart" in analytics_js
-    assert "province: _state.filters.province" in analytics_js
     assert "district: _state.filters.district" in analytics_js
+    assert "unit: _state.filters.unit" in analytics_js
+    assert "unit: globalParams.unit || _state.issueFilters.unit" in analytics_js
+    assert "escAttr(option)" in analytics_js
+    assert "onUnitChange" in _page_exports(analytics_js)
+    assert sidebar_js.index("{ id: 'analytics'") < sidebar_js.index("{ id: 'classify'")
+    assert "const DEFAULT_PAGE = 'analytics';" in app_js
 
 
-def test_analytics_page_renders_status_and_backlog():
+def test_analytics_p0_geography_renders_ranked_district_table_and_data_notes():
+    analytics_js = _read("js/pages/analytics.js")
+
+    assert "data?.top_province" in analytics_js
+    assert "Địa phương nổi bật" in analytics_js
+    assert 'aria-label="Phân bổ vấn đề theo quận huyện"' in analytics_js
+    assert "<th>Quận/huyện</th>" in analytics_js
+    assert "<th>Số vấn đề</th>" in analytics_js
+    assert "<th>Tỷ trọng</th>" in analytics_js
+    assert "missing_province_count" in analytics_js
+    assert "missing_district_count" in analytics_js
+    assert "Thiếu Tỉnh/TP" in analytics_js
+    assert "Thiếu Quận/huyện" in analytics_js
+
+
+def test_analytics_page_renders_processing_status_donut_without_backlog_aging():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
 
@@ -497,5 +799,6 @@ def test_analytics_page_renders_status_and_backlog():
     assert "/analytics/status-backlog" in api_js
     assert "API.getAnalyticsStatusBacklog" in analytics_js
     assert "analytics-status-chart" in analytics_js
-    assert "Thời gian tồn đọng" in analytics_js
+    assert "Tình trạng xử lý" in analytics_js
     assert "Charts.destroy('analytics-status-chart')" in analytics_js
+    assert "Thời gian tồn đọng" not in analytics_js

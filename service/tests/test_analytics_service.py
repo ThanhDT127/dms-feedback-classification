@@ -51,6 +51,8 @@ def test_overview_uses_distinct_issue_codes_and_reports_missing_code_exclusions(
     assert body["label_coverage"]["available"] is True
     assert body["label_coverage"]["value"] == 100.0
     assert body["multi_label_rate"]["value"] == 100.0
+    assert body["sentiment_coverage"]["numerator"] == 1
+    assert body["product_coverage"]["numerator"] == 0
     assert body["total_issues"]["excluded_missing_issue_code"] == 1
     assert body["model_accuracy"] == {
         "available": False,
@@ -94,7 +96,7 @@ def test_sources_units_products_and_duplicates_have_documented_buckets(repo):
     overview = service.overview(AnalyticsFilter())
 
     assert sources["membership_count"] == 2
-    assert any(item["label"] == "Chưa xác định" for item in sources["items"])
+    assert any(item["label"] == "DMS" for item in sources["items"])
     assert units["items"] == [{"label": "North", "issue_count": 2, "percentage": 100.0}]
     assert any(item["quality_labels"]["Báo lỗi"] == 1 for item in products["items"])
     assert overview["duplicate_record_rate"]["value"] == 100.0
@@ -341,11 +343,22 @@ def test_daily_trend_counts_distinct_issue_codes_in_date_order(repo):
 
     assert body == {
         "items": [
-            {"date": "2026-08-01", "issue_count": 1},
-            {"date": "2026-08-02", "issue_count": 1},
+            {
+                "date": issue_date,
+                "issue_count": 1,
+                "sentiment_counts": {
+                    "Tích cực": 0,
+                    "Trung lập": 0,
+                    "Tiêu cực": 0,
+                    "Chưa gán": 1,
+                },
+                "sentiment_membership_count": 1,
+            }
+            for issue_date in ["2026-08-01", "2026-08-02"]
         ],
         "total_issues": 3,
         "excluded_missing_date": 1,
+        "count_semantics": "sentiment_memberships",
     }
 
 
@@ -421,6 +434,67 @@ def test_unit_issue_type_matrix_counts_distinct_issue_codes(repo):
     ]
 
 
+def test_unit_issue_type_matrix_limits_columns_without_dropping_totals(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {
+                "issue_code": f"I{index:02d}",
+                "unit_name": "North" if index <= 6 else "South",
+                "raw_data": {"Loại vấn đề": f"Loại {index:02d}"},
+            }
+            for index in range(1, 12)
+        ],
+    )
+
+    body = FeedbackAnalyticsService(repo).unit_issue_type_matrix(AnalyticsFilter())
+
+    assert body["issue_types"] == [
+        "Loại 01",
+        "Loại 02",
+        "Loại 03",
+        "Loại 04",
+        "Loại 05",
+        "Loại 06",
+        "Loại 07",
+        "Loại 08",
+        "Loại 09",
+        "Loại khác",
+    ]
+    assert body["rows"][0] == {
+        "unit": "North",
+        "total": 6,
+        "counts": {
+            "Loại 01": 1,
+            "Loại 02": 1,
+            "Loại 03": 1,
+            "Loại 04": 1,
+            "Loại 05": 1,
+            "Loại 06": 1,
+            "Loại 07": 0,
+            "Loại 08": 0,
+            "Loại 09": 0,
+            "Loại khác": 0,
+        },
+    }
+    assert body["column_totals"] == {
+        "Loại 01": 1,
+        "Loại 02": 1,
+        "Loại 03": 1,
+        "Loại 04": 1,
+        "Loại 05": 1,
+        "Loại 06": 1,
+        "Loại 07": 1,
+        "Loại 08": 1,
+        "Loại 09": 1,
+        "Loại khác": 2,
+    }
+    assert body["grand_total"] == 11
+    assert body["top_unit"] == {"label": "North", "issue_count": 6}
+    assert body["top_issue_type"] == {"label": "Loại 01", "issue_count": 1}
+
+
 def test_geography_distribution_and_global_filter_use_raw_fields(repo):
     seed_classified_records(
         repo,
@@ -443,6 +517,38 @@ def test_geography_distribution_and_global_filter_use_raw_fields(repo):
     ]
     assert {item["label"] for item in body["districts"]} == {"Hoàng Mai", "Hà Đông", "Hạ Long"}
     assert filtered["total_issues"]["value"] == 1
+
+
+def test_geography_separates_missing_locations_and_reports_top_insight(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {"issue_code": "A", "raw_data": {"Tỉnh/TP": "Hà Nội", "Quận/huyện": "Hoàng Mai"}},
+            {"issue_code": "A", "raw_data": {"Tỉnh/TP": "Hà Nội", "Quận/huyện": "Hoàng Mai"}},
+            {"issue_code": "B", "raw_data": {"Tỉnh/TP": "Hà Nội"}},
+            {"issue_code": "C", "raw_data": {"Tỉnh/TP": "Quảng Ninh", "Quận/huyện": "Hạ Long"}},
+            {"issue_code": "D", "raw_data": {}},
+        ],
+    )
+
+    body = FeedbackAnalyticsService(repo).geography(AnalyticsFilter())
+
+    assert body["total_issues"] == 4
+    assert body["missing_province_count"] == 1
+    assert body["missing_district_count"] == 2
+    assert all(item["label"] != "Chưa xác định" for item in body["provinces"])
+    assert all(item["label"] != "Chưa xác định" for item in body["districts"])
+    assert body["top_province"] == {
+        "label": "Hà Nội",
+        "issue_count": 2,
+        "percentage": 50.0,
+    }
+    assert body["top_district"] == {
+        "label": "Hạ Long",
+        "issue_count": 1,
+        "percentage": 25.0,
+    }
 
 
 def test_status_backlog_reports_distribution_and_age_buckets(repo):
@@ -476,3 +582,56 @@ def test_status_backlog_reports_distribution_and_age_buckets(repo):
         {"label": "31+ ngày", "issue_count": 1},
         {"label": "Thiếu ngày", "issue_count": 0},
     ]
+
+
+def test_priority_issues_ranks_unresolved_negative_first(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {
+                "issue_code": "ISS-A",
+                "issue_date": "2026-08-30",
+                "unit_name": "R&D",
+                "product": "Đèn LED",
+                "sentiment": "Tiêu cực",
+                "business_status": "Chờ xử lý",
+                "labels": ["Lỗi sản phẩm"],
+                "content": "Đèn nhấp nháy sau 1 tháng sử dụng",
+            },
+            {
+                "issue_code": "ISS-B",
+                "issue_date": "2026-08-31",
+                "unit_name": "Kinh doanh",
+                "product": "Chiếu sáng dân dụng",
+                "sentiment": "Trung lập",
+                "business_status": "Chờ xử lý",
+                "labels": ["Chính sách giá"],
+                "content": "Đề nghị điều chỉnh giá",
+            },
+            {
+                "issue_code": "ISS-C",
+                "issue_date": "2026-08-28",
+                "unit_name": "CSKH",
+                "product": "Thiết bị điện",
+                "sentiment": "Tiêu cực",
+                "business_status": "Đã xử lý",
+                "labels": ["Hỗ trợ kỹ thuật"],
+                "content": "Đã xử lý xong",
+            },
+        ],
+    )
+
+    service = FeedbackAnalyticsService(repo)
+    body = service.priority_issues(AnalyticsFilter(), limit=5)
+
+    assert body["total"] == 3
+    assert len(body["items"]) == 3
+    assert body["items"][0]["issue_code"] == "ISS-A"
+    assert body["items"][0]["issue"] == "Lỗi sản phẩm"
+    assert body["items"][0]["department"] == "R&D"
+    assert body["items"][0]["product_group"] == "Đèn LED"
+    assert body["items"][0]["sentiment"] == "Tiêu cực"
+    assert body["items"][0]["status"] == "Chờ xử lý"
+    assert body["items"][1]["issue_code"] == "ISS-B"
+    assert body["items"][2]["issue_code"] == "ISS-C"

@@ -14,6 +14,7 @@ from .repository import FeedbackAnalyticsRepository
 
 _UNKNOWN = "Chưa xác định"
 _QUALITY_LABELS = ("Báo lỗi", "Báo CL tốt", "Y/c cải tiến", "Đề xuất SPM")
+_SENTIMENT_LABELS = ("Tích cực", "Trung lập", "Tiêu cực")
 
 
 class FeedbackAnalyticsService:
@@ -61,7 +62,56 @@ class FeedbackAnalyticsService:
                     analytics_filter.district,
                 )
             ]
+        if analytics_filter.unit_name:
+            rows = [
+                row
+                for row in rows
+                if self._matches(row.get("unit_name"), analytics_filter.unit_name)
+            ]
         return rows
+
+    def filter_options(self, analytics_filter: AnalyticsFilter) -> dict[str, list[str]]:
+        """Return real dropdown values constrained by upstream selections."""
+        date_scope = AnalyticsFilter(
+            date_from=analytics_filter.date_from,
+            date_to=analytics_filter.date_to,
+        )
+        province_rows = self._rows(date_scope)
+        district_rows = self._rows(
+            AnalyticsFilter(
+                date_from=analytics_filter.date_from,
+                date_to=analytics_filter.date_to,
+                unit_name=analytics_filter.unit_name,
+            )
+        )
+        unit_rows = province_rows
+
+        def values(rows: list[dict[str, Any]], *aliases: str) -> list[str]:
+            return sorted(
+                {
+                    value
+                    for row in rows
+                    if (value := self._raw_value(row, *aliases)) is not None
+                    and _canon_lower(value) != _canon_lower(_UNKNOWN)
+                },
+                key=_canon_lower,
+            )
+
+        return {
+            "provinces": values(province_rows, "Tỉnh/TP", "Tinh/TP", "Tỉnh thành", "Tinh thanh"),
+            "districts": values(
+                district_rows, "Quận/huyện", "Quan/huyen", "Quận huyện", "Quan huyen"
+            ),
+            "units": sorted(
+                {
+                    unit
+                    for row in unit_rows
+                    if (unit := str(row.get("unit_name") or "").strip())
+                    and _canon_lower(unit) != _canon_lower(_UNKNOWN)
+                },
+                key=_canon_lower,
+            ),
+        }
 
     def _issue_codes(self, rows: list[dict[str, Any]]) -> set[str]:
         return {code for row in rows if (code := self._issue_code(row)) is not None}
@@ -96,18 +146,22 @@ class FeedbackAnalyticsService:
         unavailable_reason: str = "No issue codes are available for this metric.",
     ) -> dict[str, Any]:
         if denominator == 0:
-            return cls._metric(
+            metric = cls._metric(
                 value=None,
                 denominator=0,
                 excluded_missing_issue_code=excluded_missing_issue_code,
                 available=False,
                 reason=unavailable_reason,
             )
-        return cls._metric(
+            metric["numerator"] = numerator
+            return metric
+        metric = cls._metric(
             value=round(numerator * 100 / denominator, 2),
             denominator=denominator,
             excluded_missing_issue_code=excluded_missing_issue_code,
         )
+        metric["numerator"] = numerator
+        return metric
 
     @classmethod
     def _issue_count_metric(
@@ -168,6 +222,7 @@ class FeedbackAnalyticsService:
                 date_to=analytics_filter.compare_to,
                 province=analytics_filter.province,
                 district=analytics_filter.district,
+                unit_name=analytics_filter.unit_name,
             )
         )
         comparison_value = len(self._issue_codes(comparison_rows))
@@ -293,7 +348,7 @@ class FeedbackAnalyticsService:
             code = self._issue_code(row)
             if code is None:
                 continue
-            label = str(row.get(field) or "").strip() or _UNKNOWN
+            label = str(row.get(field) or "").strip() or ("DMS" if field == "source" else _UNKNOWN)
             memberships[label].add(code)
         items = [
             {
@@ -318,6 +373,7 @@ class FeedbackAnalyticsService:
         rows = self._rows(analytics_filter)
         issue_codes = self._issue_codes(rows)
         codes_by_date: dict[str, set[str]] = defaultdict(set)
+        sentiments_by_date: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
         excluded_missing_date = 0
         for row in rows:
             code = self._issue_code(row)
@@ -328,13 +384,32 @@ class FeedbackAnalyticsService:
                 excluded_missing_date += 1
                 continue
             codes_by_date[issue_date].add(code)
+            sentiment = str(row.get("sentiment") or "").strip()
+            if sentiment in _SENTIMENT_LABELS:
+                sentiments_by_date[issue_date][sentiment].add(code)
+
+        items = []
+        for issue_date in sorted(codes_by_date):
+            memberships = sentiments_by_date[issue_date]
+            sentiment_counts = {
+                sentiment: len(memberships[sentiment]) for sentiment in _SENTIMENT_LABELS
+            }
+            recognized_codes = set().union(*memberships.values())
+            # A blank/unknown sibling row must not double-count a recognized code as missing.
+            sentiment_counts["Chưa gán"] = len(codes_by_date[issue_date] - recognized_codes)
+            items.append(
+                {
+                    "date": issue_date,
+                    "issue_count": len(codes_by_date[issue_date]),
+                    "sentiment_counts": sentiment_counts,
+                    "sentiment_membership_count": sum(sentiment_counts.values()),
+                }
+            )
         return {
-            "items": [
-                {"date": issue_date, "issue_count": len(codes_by_date[issue_date])}
-                for issue_date in sorted(codes_by_date)
-            ],
+            "items": items,
             "total_issues": len(issue_codes),
             "excluded_missing_date": excluded_missing_date,
+            "count_semantics": "sentiment_memberships",
         }
 
     def issue_types(self, analytics_filter: AnalyticsFilter) -> dict[str, Any]:
@@ -489,15 +564,16 @@ class FeedbackAnalyticsService:
         rows = self._rows(analytics_filter)
         issue_codes = self._issue_codes(rows)
 
-        def distribution(*aliases: str) -> list[dict[str, Any]]:
+        def distribution(*aliases: str) -> tuple[list[dict[str, Any]], int]:
             memberships: dict[str, set[str]] = defaultdict(set)
             for row in rows:
                 code = self._issue_code(row)
                 if code is None:
                     continue
-                label = self._raw_value(row, *aliases) or _UNKNOWN
-                memberships[label].add(code)
-            items = [
+                label = self._raw_value(row, *aliases)
+                if label and _canon_lower(label) != _canon_lower(_UNKNOWN):
+                    memberships[label].add(code)
+            items: list[dict[str, Any]] = [
                 {
                     "label": label,
                     "issue_count": len(codes),
@@ -507,13 +583,27 @@ class FeedbackAnalyticsService:
                 }
                 for label, codes in memberships.items()
             ]
-            items.sort(key=self._distribution_sort_key)
-            return items
+            items.sort(
+                key=lambda item: (-int(item["issue_count"]), _canon_lower(str(item["label"])))
+            )
+            located_codes = set().union(*memberships.values()) if memberships else set()
+            return items, len(issue_codes - located_codes)
+
+        provinces, missing_province_count = distribution(
+            "Tỉnh/TP", "Tinh/TP", "Tỉnh thành", "Tinh thanh"
+        )
+        districts, missing_district_count = distribution(
+            "Quận/huyện", "Quan/huyen", "Quận huyện", "Quan huyen"
+        )
 
         return {
-            "provinces": distribution("Tỉnh/TP", "Tinh/TP", "Tỉnh thành", "Tinh thanh"),
-            "districts": distribution("Quận/huyện", "Quan/huyen", "Quận huyện", "Quan huyen"),
+            "provinces": provinces,
+            "districts": districts,
             "total_issues": len(issue_codes),
+            "missing_province_count": missing_province_count,
+            "missing_district_count": missing_district_count,
+            "top_province": provinces[0] if provinces else None,
+            "top_district": districts[0] if districts else None,
         }
 
     def unit_issue_type_matrix(self, analytics_filter: AnalyticsFilter) -> dict[str, Any]:
@@ -529,11 +619,58 @@ class FeedbackAnalyticsService:
             cells[unit][issue_type].add(code)
             unit_codes[unit].add(code)
             issue_type_codes[issue_type].add(code)
-        units = sorted(unit_codes, key=lambda unit: (-len(unit_codes[unit]), unit))
-        issue_types = sorted(
-            issue_type_codes,
-            key=lambda issue_type: (-len(issue_type_codes[issue_type]), issue_type),
+        units = sorted(
+            unit_codes,
+            key=lambda unit: (-len(unit_codes[unit]), _canon_lower(unit)),
         )
+        ranked_issue_types = sorted(
+            issue_type_codes,
+            key=lambda issue_type: (
+                -len(issue_type_codes[issue_type]),
+                _canon_lower(issue_type),
+            ),
+        )
+        issue_types = ranked_issue_types
+        collapsed_issue_types: list[str] = []
+        if len(ranked_issue_types) > 10:
+            issue_types = [
+                issue_type
+                for issue_type in ranked_issue_types
+                if _canon_lower(issue_type) != _canon_lower("Loại khác")
+            ][:9]
+            collapsed_issue_types = [
+                issue_type for issue_type in ranked_issue_types if issue_type not in issue_types
+            ]
+            issue_types = [*issue_types, "Loại khác"]
+
+        def counts_for_unit(unit: str) -> dict[str, int]:
+            counts = {
+                issue_type: len(cells[unit][issue_type])
+                for issue_type in issue_types
+                if issue_type != "Loại khác"
+            }
+            if collapsed_issue_types:
+                collapsed_codes = set().union(
+                    *(cells[unit][issue_type] for issue_type in collapsed_issue_types)
+                )
+                counts["Loại khác"] = len(collapsed_codes)
+            elif "Loại khác" in issue_types:
+                counts["Loại khác"] = len(cells[unit]["Loại khác"])
+            return counts
+
+        column_totals = {
+            issue_type: len(issue_type_codes[issue_type])
+            for issue_type in issue_types
+            if issue_type != "Loại khác"
+        }
+        if collapsed_issue_types:
+            collapsed_codes = set().union(
+                *(issue_type_codes[issue_type] for issue_type in collapsed_issue_types)
+            )
+            column_totals["Loại khác"] = len(collapsed_codes)
+        elif "Loại khác" in issue_types:
+            column_totals["Loại khác"] = len(issue_type_codes["Loại khác"])
+
         return {
             "units": units,
             "issue_types": issue_types,
@@ -541,12 +678,23 @@ class FeedbackAnalyticsService:
                 {
                     "unit": unit,
                     "total": len(unit_codes[unit]),
-                    "counts": {
-                        issue_type: len(cells[unit][issue_type]) for issue_type in issue_types
-                    },
+                    "counts": counts_for_unit(unit),
                 }
                 for unit in units
             ],
+            "column_totals": column_totals,
+            "grand_total": len(set().union(*unit_codes.values())) if unit_codes else 0,
+            "top_unit": (
+                {"label": units[0], "issue_count": len(unit_codes[units[0]])} if units else None
+            ),
+            "top_issue_type": (
+                {
+                    "label": ranked_issue_types[0],
+                    "issue_count": len(issue_type_codes[ranked_issue_types[0]]),
+                }
+                if ranked_issue_types
+                else None
+            ),
         }
 
     def units(self, analytics_filter: AnalyticsFilter) -> dict[str, Any]:
@@ -703,6 +851,91 @@ class FeedbackAnalyticsService:
             "page": page,
             "page_size": page_size,
             "total_pages": math.ceil(total / page_size) if total else 0,
+        }
+
+    def priority_issues(
+        self,
+        analytics_filter: AnalyticsFilter,
+        *,
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        rows = self._rows(analytics_filter)
+
+        seen_codes: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            code = self._issue_code(row)
+            if code is None:
+                continue
+            if code not in seen_codes:
+                seen_codes[code] = row
+            else:
+                cur = seen_codes[code]
+                if not cur.get("sentiment") and row.get("sentiment"):
+                    seen_codes[code] = row
+                elif str(row.get("issue_date") or "") > str(cur.get("issue_date") or ""):
+                    seen_codes[code] = row
+
+        def _calc_priority(r: dict[str, Any]) -> tuple[int, str, int]:
+            sentiment = str(r.get("sentiment") or "").strip()
+            status = str(r.get("business_status") or "").strip()
+            is_resolved = status.casefold() == "đã xử lý".casefold()
+            is_negative = sentiment.casefold() == "tiêu cực".casefold()
+
+            if not is_resolved and is_negative:
+                score = 3
+            elif not is_resolved:
+                score = 2
+            elif is_negative:
+                score = 1
+            else:
+                score = 0
+
+            issue_date = str(r.get("issue_date") or "")
+            feedback_id = int(r.get("feedback_id") or 0)
+            return (score, issue_date, feedback_id)
+
+        ranked_rows = sorted(
+            seen_codes.values(),
+            key=_calc_priority,
+            reverse=True,
+        )
+
+        items = []
+        for idx, row in enumerate(ranked_rows[:limit], start=1):
+            labels = [item["label"] for item in row.get("labels", [])]
+            issue_label = (
+                labels[0]
+                if labels
+                else (self._raw_value(row, "Loại vấn đề", "Loai van de") or _UNKNOWN)
+            )
+            status = str(row.get("business_status") or "").strip() or "Chưa xử lý"
+            sentiment = str(row.get("sentiment") or "").strip() or "Chưa gán"
+            content = str(row.get("content") or "").strip()
+            is_overdue = "quá hạn".casefold() in status.casefold()
+
+            items.append(
+                {
+                    "index": idx,
+                    "feedback_id": row["feedback_id"],
+                    "issue_code": row.get("issue_code"),
+                    "issue": issue_label,
+                    "department": str(row.get("unit_name") or "").strip() or _UNKNOWN,
+                    "product_group": str(
+                        row.get("product") or row.get("product_line") or ""
+                    ).strip()
+                    or _UNKNOWN,
+                    "sentiment": sentiment,
+                    "status": status,
+                    "is_overdue": is_overdue,
+                    "issue_date": row.get("issue_date"),
+                    "content": content,
+                    "summary": (content[:60] + "...") if len(content) > 60 else content,
+                }
+            )
+
+        return {
+            "items": items,
+            "total": len(seen_codes),
         }
 
     def data_quality(self, analytics_filter: AnalyticsFilter) -> dict[str, Any]:

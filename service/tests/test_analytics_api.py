@@ -35,6 +35,8 @@ def analytics_api(settings, monkeypatch):
         "/api/analytics/unit-issue-type-matrix",
         "/api/analytics/geography",
         "/api/analytics/status-backlog",
+        "/api/analytics/filter-options",
+        "/api/analytics/priority-issues",
     ],
 )
 def test_analytics_routes_require_authentication(path):
@@ -157,13 +159,40 @@ def test_analytics_daily_trend_route_returns_stable_contract(analytics_api):
     seed_classified_records(
         repository,
         db_path=repository.db_path,
-        entries=[{"issue_code": "A", "issue_date": "2026-08-15", "labels": []}],
+        entries=[
+            {"issue_code": code, "issue_date": "2026-08-15", "sentiment": sentiment}
+            for code, sentiment in [
+                ("A", "Tích cực"),
+                ("A", "Tích cực"),
+                ("A", "Tiêu cực"),
+                ("A", None),
+                ("B", "Trung lập"),
+                ("C", "unknown"),
+            ]
+        ],
     )
 
     response = client.get("/api/analytics/trends/daily?from=2026-08-01&to=2026-08-31")
 
     assert response.status_code == 200
-    assert response.json()["items"] == [{"date": "2026-08-15", "issue_count": 1}]
+    assert response.json() == {
+        "items": [
+            {
+                "date": "2026-08-15",
+                "issue_count": 3,
+                "sentiment_counts": {
+                    "Tích cực": 1,
+                    "Trung lập": 1,
+                    "Tiêu cực": 1,
+                    "Chưa gán": 1,
+                },
+                "sentiment_membership_count": 4,
+            }
+        ],
+        "total_issues": 3,
+        "excluded_missing_date": 0,
+        "count_semantics": "sentiment_memberships",
+    }
 
 
 def test_analytics_issue_types_route_returns_stable_contract(analytics_api):
@@ -229,6 +258,51 @@ def test_analytics_geography_route_and_filters(analytics_api):
     )
 
 
+def test_analytics_filter_options_follow_geography_and_unit_scope(analytics_api):
+    client, repository = analytics_api
+    seed_classified_records(
+        repository,
+        db_path=repository.db_path,
+        entries=[
+            {
+                "issue_code": "A",
+                "unit_name": "Đơn vị A",
+                "raw_data": {"Tỉnh/TP": "Hà Nội", "Quận/huyện": "Hoàng Mai"},
+            },
+            {
+                "issue_code": "B",
+                "unit_name": "Đơn vị B",
+                "raw_data": {"Tỉnh/TP": "Hà Nội", "Quận/huyện": "Hà Đông"},
+            },
+            {
+                "issue_code": "C",
+                "unit_name": "Đơn vị C",
+                "raw_data": {"Tỉnh/TP": "Quảng Ninh", "Quận/huyện": "Hạ Long"},
+            },
+            {"issue_code": "D", "unit_name": None, "raw_data": {}},
+            {
+                "issue_code": "E",
+                "unit_name": "Chưa xác định",
+                "raw_data": {"Tỉnh/TP": "Chưa xác định", "Quận/huyện": "Chưa xác định"},
+            },
+        ],
+    )
+
+    all_options = client.get("/api/analytics/filter-options")
+    unit_options = client.get("/api/analytics/filter-options?unit=Đơn%20vị%20A")
+    filtered_overview = client.get("/api/analytics/overview?unit=Đơn%20vị%20A")
+
+    assert all_options.status_code == 200
+    assert all_options.json() == {
+        "provinces": ["Hà Nội", "Quảng Ninh"],
+        "districts": ["Hà Đông", "Hạ Long", "Hoàng Mai"],
+        "units": ["Đơn vị A", "Đơn vị B", "Đơn vị C"],
+    }
+    assert unit_options.json()["districts"] == ["Hoàng Mai"]
+    assert unit_options.json()["units"] == ["Đơn vị A", "Đơn vị B", "Đơn vị C"]
+    assert filtered_overview.json()["total_issues"]["value"] == 1
+
+
 def test_analytics_status_backlog_route(analytics_api):
     client, repository = analytics_api
     seed_classified_records(
@@ -241,3 +315,34 @@ def test_analytics_status_backlog_route(analytics_api):
 
     assert response.status_code == 200
     assert response.json()["backlog_count"] == 1
+
+
+def test_analytics_priority_issues_route(analytics_api):
+    client, repository = analytics_api
+    seed_classified_records(
+        repository,
+        db_path=repository.db_path,
+        entries=[
+            {
+                "issue_code": "A",
+                "issue_date": "2026-08-31",
+                "sentiment": "Tiêu cực",
+                "business_status": "Chờ xử lý",
+                "unit_name": "R&D",
+                "product": "Đèn LED",
+                "labels": ["Lỗi sản phẩm"],
+                "content": "Đèn nhấp nháy",
+            }
+        ],
+    )
+
+    response = client.get("/api/analytics/priority-issues?limit=5")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["issue"] == "Lỗi sản phẩm"
+    assert payload["items"][0]["department"] == "R&D"
+    assert payload["items"][0]["sentiment"] == "Tiêu cực"
+    assert payload["items"][0]["status"] == "Chờ xử lý"

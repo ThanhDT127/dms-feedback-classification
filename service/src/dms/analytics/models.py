@@ -39,6 +39,7 @@ class AnalyticsFilter:
     compare_to: str | None = None
     province: str | None = None
     district: str | None = None
+    unit_name: str | None = None
 
 
 @dataclass(frozen=True)
