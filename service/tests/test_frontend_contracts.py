@@ -142,9 +142,9 @@ def test_analytics_distinguishes_ingested_rows_without_ai_classification():
 def test_managed_file_analytics_assets_have_updated_cache_versions():
     index_html = _read("index.html")
 
-    assert "css/style.css?v=1.0.13" in index_html
+    assert "css/style.css?v=1.0.14" in index_html
     assert "js/api.js?v=1.0.7" in index_html
-    assert "js/pages/analytics.js?v=1.0.14" in index_html
+    assert "js/pages/analytics.js?v=1.0.15" in index_html
     assert "js/components/charts.js?v=1.0.7" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
@@ -398,8 +398,8 @@ def test_analytics_page_exposes_accessible_global_date_filters():
 def test_analytics_page_supports_safe_issue_drilldown_filters_and_pagination():
     analytics_js = _read("js/pages/analytics.js")
 
+    assert "textField('analytics-issue-source'" not in analytics_js
     for expected in [
-        "textField('analytics-issue-source'",
         "textField('analytics-issue-unit'",
         "textField('analytics-issue-label'",
         "textField('analytics-issue-product'",
@@ -521,8 +521,8 @@ def test_analytics_p0_matches_prototype_structure_without_restoring_removed_scop
         ".analytics-matrix thead th {",
     ]:
         assert expected_css in style_css
-    assert "css/style.css?v=1.0.13" in index_html
-    assert "js/pages/analytics.js?v=1.0.14" in index_html
+    assert "css/style.css?v=1.0.14" in index_html
+    assert "js/pages/analytics.js?v=1.0.15" in index_html
 
     for removed in [
         "dateField('analytics-compare-from'",

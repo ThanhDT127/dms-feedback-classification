@@ -968,7 +968,7 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
 
 .analytics-issue-filter-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(130px, 1fr)) auto;
+  grid-template-columns: repeat(4, minmax(130px, 1fr)) auto;
   gap: 12px;
   align-items: end;
   margin-bottom: 16px;

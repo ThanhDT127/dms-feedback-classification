@@ -8,7 +8,7 @@ window.AnalyticsPage = (() => {
   const _state = {
     filters: { from: '', to: '', district: '', unit: '' },
     filterOptions: { districts: [], units: [] },
-    issueFilters: { source: '', unit: '', label: '', product: '', status: '' },
+    issueFilters: { unit: '', label: '', product: '', status: '' },
     issuePage: 1,
     duplicatePage: 1,
     issues: null,
@@ -112,7 +112,6 @@ window.AnalyticsPage = (() => {
       <section class="card" aria-labelledby="analytics-issues-title">
         <div class="card-header"><span id="analytics-issues-title" class="card-title">📋 Chi tiết vấn đề</span></div>
         <div class="analytics-issue-filter-grid" aria-label="Bộ lọc chi tiết vấn đề">
-          ${textField('analytics-issue-source', 'Nguồn', _state.issueFilters.source)}
           ${textField('analytics-issue-unit', 'Đơn vị', _state.issueFilters.unit)}
           ${textField('analytics-issue-label', 'Kết quả phân loại', _state.issueFilters.label)}
           ${textField('analytics-issue-product', 'Sản phẩm', _state.issueFilters.product)}
@@ -283,7 +282,6 @@ window.AnalyticsPage = (() => {
 
   function readIssueFilters() {
     return {
-      source: document.getElementById('analytics-issue-source')?.value.trim() || '',
       unit: document.getElementById('analytics-issue-unit')?.value.trim() || '',
       label: document.getElementById('analytics-issue-label')?.value.trim() || '',
       product: document.getElementById('analytics-issue-product')?.value.trim() || '',
@@ -298,7 +296,7 @@ window.AnalyticsPage = (() => {
   }
 
   function clearIssueFilters() {
-    _state.issueFilters = { source: '', unit: '', label: '', product: '', status: '' };
+    _state.issueFilters = { unit: '', label: '', product: '', status: '' };
     for (const key of Object.keys(_state.issueFilters)) {
       const input = document.getElementById(`analytics-issue-${key}`);
       if (input) input.value = '';
