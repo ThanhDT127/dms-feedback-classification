@@ -304,6 +304,60 @@ window.AnalyticsPage = (() => {
   let comparisonRequestId = 0;
   let comparisonPeriod = 'month';
 
+  function deriveFallbackIssueFilterOptions(selection) {
+    const items = _state.issues?.items || [];
+    const effectiveUnit = _state.filters.unit || selection.unit;
+    const unitSet = new Set();
+    (_state.filterOptions.units || []).forEach(u => { if (u) unitSet.add(u); });
+    (_state.units || []).forEach(u => { if (u?.label) unitSet.add(u.label); });
+    items.forEach(it => { if (it.unit_name) unitSet.add(it.unit_name); });
+    const units = Array.from(unitSet).sort();
+
+    let scoped = items;
+    if (effectiveUnit) {
+      scoped = scoped.filter(it => (it.unit_name || '').toLowerCase() === effectiveUnit.toLowerCase());
+    }
+
+    const labelSet = new Set();
+    scoped.forEach(it => {
+      const labs = it.labels || [];
+      if (!labs.length) labelSet.add('__unlabeled__');
+      else labs.forEach(l => { if (l) labelSet.add(l); });
+    });
+    const labels = Array.from(labelSet).sort();
+
+    if (selection.label) {
+      if (selection.label === '__unlabeled__') {
+        scoped = scoped.filter(it => !(it.labels && it.labels.length));
+      } else {
+        scoped = scoped.filter(it => (it.labels || []).some(l => (l || '').toLowerCase() === selection.label.toLowerCase()));
+      }
+    }
+
+    const productSet = new Set();
+    scoped.forEach(it => { if (it.product) productSet.add(it.product); });
+    const products = Array.from(productSet).sort();
+
+    if (selection.product) {
+      scoped = scoped.filter(it => (it.product || '').toLowerCase() === selection.product.toLowerCase());
+    }
+
+    const statusSet = new Set();
+    scoped.forEach(it => { if (it.business_status) statusSet.add(it.business_status); });
+    const statuses = Array.from(statusSet).sort();
+
+    return { units, labels, products, statuses };
+  }
+
+  function applyIssueOptions(options, selection) {
+    Object.entries(ISSUE_DIMENSIONS).forEach(([key, name]) => {
+      const value = key === 'unit' && _state.filters.unit ? _state.filters.unit : selection[key];
+      updateSelect(`analytics-issue-${key}`, options[name] || [], value);
+    });
+    const unit = document.getElementById('analytics-issue-unit');
+    if (unit && _state.filters.unit) unit.disabled = true;
+  }
+
   async function loadIssueFilterOptions(restoreApplied = false) {
     const requestId = ++issueOptionsRequestId;
     const errorNode = document.getElementById('analytics-issue-options-error');
@@ -316,18 +370,12 @@ window.AnalyticsPage = (() => {
     try {
       const options = await API.getAnalyticsIssueFilterOptions({ ...globalQueryParams(), issue_unit: selection.unit, label: selection.label, product: selection.product });
       if (requestId !== issueOptionsRequestId) return;
-      Object.entries(ISSUE_DIMENSIONS).forEach(([key, name]) => {
-        const value = key === 'unit' && _state.filters.unit ? _state.filters.unit : selection[key];
-        updateSelect(`analytics-issue-${key}`, options[name] || [], value);
-      });
-      const unit = document.getElementById('analytics-issue-unit');
-      if (unit && _state.filters.unit) unit.disabled = true;
+      applyIssueOptions(options, selection);
     } catch (error) {
       if (requestId !== issueOptionsRequestId) return;
-      if (errorNode) {
-        errorNode.hidden = false;
-        errorNode.textContent = 'Không thể tải danh sách lọc. Backend cần hỗ trợ API bộ lọc chi tiết; hãy thử Làm mới sau khi cập nhật backend.';
-      }
+      const fallbackOptions = deriveFallbackIssueFilterOptions(selection);
+      applyIssueOptions(fallbackOptions, selection);
+      if (errorNode) errorNode.hidden = true;
     }
   }
 
@@ -335,6 +383,59 @@ window.AnalyticsPage = (() => {
     const keys = Object.keys(ISSUE_DIMENSIONS);
     keys.slice(keys.indexOf(key) + 1).forEach(child => resetSelect(`analytics-issue-${child}`));
     await loadIssueFilterOptions();
+  }
+
+  function shiftDate(dateStr, months) {
+    const parts = (dateStr || '').split('-').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return dateStr;
+    const [y, m, d] = parts;
+    let targetMonth = m - months;
+    let targetYear = y;
+    while (targetMonth < 1) {
+      targetMonth += 12;
+      targetYear -= 1;
+    }
+    const maxDays = new Date(targetYear, targetMonth, 0).getDate();
+    const targetDay = Math.min(d, maxDays);
+    return `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
+  }
+
+  async function fallbackComparison(period) {
+    const months = { month: 1, quarter: 3, year: 12 }[period] || 1;
+    const prevFrom = shiftDate(_state.filters.from, months);
+    const prevTo = shiftDate(_state.filters.to, months);
+
+    const [current, previous] = await Promise.all([
+      API.getAnalyticsOverview(globalQueryParams()),
+      API.getAnalyticsOverview({ ...globalQueryParams(), from: prevFrom, to: prevTo }),
+    ]);
+
+    const metrics = {};
+    const keys = ['total_issues', 'sentiment_coverage', 'product_coverage', 'duplicate_issue_rate', 'model_accuracy'];
+    keys.forEach(key => {
+      const cur = current?.[key] || {};
+      const prev = previous?.[key] || {};
+      const available = Boolean(cur.available && prev.available);
+      const curVal = cur.value;
+      const prevVal = prev.value;
+      const change = available && curVal != null && prevVal != null ? Math.round((curVal - prevVal) * 100) / 100 : null;
+      const changePct = change != null && prevVal ? Math.round((change * 100 / prevVal) * 100) / 100 : null;
+      metrics[key] = {
+        current: curVal,
+        previous: prevVal,
+        change: change,
+        change_percent: changePct,
+        unit: key === 'total_issues' ? 'count' : 'percentage_points',
+        available: available,
+      };
+    });
+
+    return {
+      period: period,
+      current_range: { from: _state.filters.from, to: _state.filters.to },
+      previous_range: { from: prevFrom, to: prevTo },
+      metrics: metrics,
+    };
   }
 
   async function loadComparison() {
@@ -353,7 +454,14 @@ window.AnalyticsPage = (() => {
       renderComparison(element, data);
     } catch (error) {
       if (requestId !== comparisonRequestId) return;
-      renderFailure(element, error, 'Chưa tải được so sánh cùng kỳ. Cần backend hỗ trợ API so sánh.');
+      try {
+        const fallbackData = await fallbackComparison(comparisonPeriod);
+        if (requestId !== comparisonRequestId) return;
+        renderComparison(element, fallbackData);
+      } catch (fallbackError) {
+        if (requestId !== comparisonRequestId) return;
+        renderFailure(element, fallbackError, 'Không thể tải dữ liệu so sánh');
+      }
     }
   }
 
@@ -458,7 +566,14 @@ window.AnalyticsPage = (() => {
     } else {
       renderResult(results.priority, renderPriorityIssues, 'analytics-priority-issues');
     }
-    renderResult(results.issues, (element, data) => { _state.issues = data; renderIssues(element, data); }, 'analytics-issues');
+    renderResult(results.issues, (element, data) => {
+      _state.issues = data;
+      renderIssues(element, data);
+      const labelSelect = document.getElementById('analytics-issue-label');
+      if (labelSelect && labelSelect.options.length <= 1) {
+        loadIssueFilterOptions(true);
+      }
+    }, 'analytics-issues');
   }
 
   async function refresh(force = true) {

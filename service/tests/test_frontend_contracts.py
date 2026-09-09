@@ -144,7 +144,7 @@ def test_managed_file_analytics_assets_have_updated_cache_versions():
 
     assert "css/style.css?v=1.0.17" in index_html
     assert "js/api.js?v=1.0.9" in index_html
-    assert "js/pages/analytics.js?v=1.0.19" in index_html
+    assert "js/pages/analytics.js?v=1.0.20" in index_html
     assert "js/components/charts.js?v=1.0.7" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
@@ -522,7 +522,7 @@ def test_analytics_p0_matches_prototype_structure_without_restoring_removed_scop
     ]:
         assert expected_css in style_css
     assert "css/style.css?v=1.0.17" in index_html
-    assert "js/pages/analytics.js?v=1.0.19" in index_html
+    assert "js/pages/analytics.js?v=1.0.20" in index_html
 
     for removed in [
         "dateField('analytics-compare-from'",
