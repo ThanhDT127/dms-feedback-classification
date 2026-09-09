@@ -468,13 +468,78 @@ window.AnalyticsPage = (() => {
   function renderComparison(element, data) {
     const names = { total_issues: 'Tổng số vấn đề', sentiment_coverage: 'Hoàn thiện cảm xúc', product_coverage: 'Nhận diện sản phẩm', duplicate_issue_rate: 'Tỷ lệ vấn đề trùng', model_accuracy: 'Độ chính xác mô hình' };
     const range = value => `${value?.from || '—'} → ${value?.to || '—'}`;
-    element.innerHTML = `<p class="analytics-panel-note">Kỳ đang xem: ${escHtml(range(data.current_range))} · Kỳ đối chiếu: ${escHtml(range(data.previous_range))}. Giữ nguyên bộ lọc Đơn vị và Quận/huyện.</p><div class="table-wrap"><table class="table" aria-label="So sánh cùng kỳ"><thead><tr><th>Chỉ số</th><th>Kỳ đang xem</th><th>Kỳ đối chiếu</th><th>Chênh lệch</th></tr></thead><tbody>${Object.entries(names).map(([key, label]) => {
+    const curRange = range(data.current_range);
+    const prevRange = range(data.previous_range);
+
+    element.innerHTML = `
+      <p class="analytics-panel-note">Kỳ đang xem: ${escHtml(curRange)} · Kỳ đối chiếu: ${escHtml(prevRange)}. Giữ nguyên bộ lọc Đơn vị và Quận/huyện.</p>
+      <div class="analytics-comparison-chart-wrap"><canvas id="analytics-comparison-chart"></canvas></div>
+      <div class="table-wrap"><table class="table" aria-label="So sánh cùng kỳ"><thead><tr><th>Chỉ số</th><th>Kỳ đang xem</th><th>Kỳ đối chiếu</th><th>Chênh lệch</th></tr></thead><tbody>${Object.entries(names).map(([key, label]) => {
       const metric = data.metrics?.[key] || {};
       const percent = key !== 'total_issues';
       const display = value => value == null ? '—' : formatMetricValue(value, percent);
       const change = metric.available && metric.change != null ? `${metric.change > 0 ? '+' : ''}${formatMetricValue(metric.change, false)}${percent ? ' điểm %' : ' vấn đề'}${!percent && metric.change_percent != null ? ` (${metric.change_percent > 0 ? '+' : ''}${formatMetricValue(metric.change_percent, true)})` : ''}` : 'Chưa đủ dữ liệu so sánh';
       return `<tr><td>${label}</td><td>${escHtml(display(metric.current))}</td><td>${escHtml(display(metric.previous))}</td><td>${escHtml(change)}</td></tr>`;
-    }).join('')}</tbody></table></div><p class="analytics-panel-note">Khoảng ngày được lùi tương ứng 1 tháng, 3 tháng hoặc 1 năm; ngày không tồn tại được lấy ngày cuối tháng. Chỉ số tỷ lệ so sánh bằng điểm phần trăm; không suy diễn chất lượng từ chiều tăng/giảm.</p>`;
+    }).join('')}</tbody></table></div>
+      <p class="analytics-panel-note">Khoảng ngày được lùi tương ứng 1 tháng, 3 tháng hoặc 1 năm; ngày không tồn tại được lấy ngày cuối tháng. Chỉ số tỷ lệ so sánh bằng điểm phần trăm; không suy diễn chất lượng từ chiều tăng/giảm.</p>
+    `;
+
+    const chartMetrics = [
+      { key: 'total_issues', label: 'Tổng số vấn đề' },
+      { key: 'sentiment_coverage', label: 'Hoàn thiện cảm xúc (%)' },
+      { key: 'product_coverage', label: 'Nhận diện SP (%)' },
+      { key: 'duplicate_issue_rate', label: 'Tỷ lệ trùng (%)' },
+    ];
+    const currentData = chartMetrics.map(m => data.metrics?.[m.key]?.current ?? 0);
+    const previousData = chartMetrics.map(m => data.metrics?.[m.key]?.previous ?? 0);
+
+    if (typeof Charts !== 'undefined' && typeof Charts.createGroupedBarChart === 'function') {
+      Charts.createGroupedBarChart(
+        'analytics-comparison-chart',
+        chartMetrics.map(m => m.label),
+        [
+          {
+            label: `Kỳ đang xem (${curRange})`,
+            data: currentData,
+            backgroundColor: '#3b82f6',
+            borderColor: '#2563eb',
+            borderWidth: 1,
+            borderRadius: 6,
+            barPercentage: 0.65,
+            categoryPercentage: 0.7,
+          },
+          {
+            label: `Kỳ đối chiếu (${prevRange})`,
+            data: previousData,
+            backgroundColor: '#94a3b8',
+            borderColor: '#64748b',
+            borderWidth: 1,
+            borderRadius: 6,
+            barPercentage: 0.65,
+            categoryPercentage: 0.7,
+          },
+        ],
+        {
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: { usePointStyle: true, pointStyle: 'circle', padding: 14 }
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const idx = ctx.dataIndex;
+                  const val = ctx.parsed.y;
+                  if (val == null) return `${ctx.dataset.label}: —`;
+                  return idx === 0 ? `${ctx.dataset.label}: ${val} vấn đề` : `${ctx.dataset.label}: ${val}%`;
+                }
+              }
+            }
+          }
+        }
+      );
+    }
   }
 
   function readIssueFilters() {
@@ -1182,7 +1247,8 @@ window.AnalyticsPage = (() => {
     Charts.destroy('analytics-units-chart');
     Charts.destroy('analytics-groups-chart');
     Charts.destroy('analytics-status-chart');
+    Charts.destroy('analytics-comparison-chart');
   }
 
-  return { render, destroy, applyFilters, resetFilters, refresh, onUnitChange, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, showPriorityDetail, filterIssuesByUnit, onIssueFilterChange, loadComparison };
+  return { render, destroy, applyFilters, resetFilters, refresh, onUnitChange, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, showPriorityDetail, filterIssuesByUnit, onIssueFilterChange, loadComparison, renderComparison };
 })();
