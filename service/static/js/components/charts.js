@@ -357,6 +357,54 @@ window.Charts = (() => {
     return chart;
   }
 
+  function createGroupedBarChart(canvasId, labels, datasets, options = {}) {
+    destroy(canvasId);
+    const ctx = getCanvas(canvasId);
+    if (!ctx) return null;
+
+    const isHorizontal = options.indexAxis === 'y';
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
+
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        indexAxis: options.indexAxis || 'x',
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 800, easing: 'easeOutQuart' },
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: {
+            display: true,
+            position: options.legendPosition || 'top',
+            labels: { usePointStyle: true, pointStyle: 'circle', padding: 14 }
+          },
+          ...options.plugins
+        },
+        scales: {
+          x: {
+            stacked: false,
+            grid: { display: isHorizontal, color: gridColor, drawBorder: false },
+            ticks: { maxRotation: isHorizontal ? 0 : 30, ...(options.scales?.x?.ticks || {}) },
+            ...(options.scales?.x || {})
+          },
+          y: {
+            stacked: false,
+            beginAtZero: true,
+            grid: { color: isHorizontal ? 'transparent' : gridColor, drawBorder: false },
+            ticks: { precision: isHorizontal ? undefined : 0, ...(options.scales?.y?.ticks || {}) },
+            ...(options.scales?.y || {})
+          }
+        },
+        ...options.chartOptions
+      }
+    });
+    _instances[canvasId] = chart;
+    return chart;
+  }
+
   function applyThemeColors() {
     applyDefaults();
     Object.keys(_instances).forEach(id => {
@@ -384,5 +432,5 @@ window.Charts = (() => {
     });
   }
 
-  return { createBarChart, createStackedBarChart, createStackedDatasetChart, createDoughnutChart, createLineChart, destroy, applyThemeColors };
+  return { createBarChart, createStackedBarChart, createStackedDatasetChart, createGroupedBarChart, createDoughnutChart, createLineChart, destroy, applyThemeColors };
 })();

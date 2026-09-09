@@ -1344,6 +1344,12 @@ body.login-page .page-container { padding: 0 !important; max-width: none !import
   font-size: 12.5px;
 }
 
+.analytics-comparison-chart-wrap {
+  position: relative;
+  height: 240px;
+  margin-bottom: 16px;
+}
+
 #analytics-issues {
   contain: inline-size;
 }
