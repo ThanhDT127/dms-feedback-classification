@@ -235,6 +235,8 @@ window.API = (() => {
     return text ? `?${text}` : '';
   }
 
+  function getAnalyticsIssueFilterOptions(params = {}) { return get(`/analytics/issue-filter-options${buildAnalyticsQuery(params)}`, { silent: true }); }
+  function getAnalyticsComparison(params = {}) { return get(`/analytics/comparison${buildAnalyticsQuery(params)}`, { silent: true }); }
   function getAnalyticsOverview(params = {}) { return get(`/analytics/overview${buildAnalyticsQuery(params)}`); }
   function getAnalyticsDailyTrend(params = {}) { return get(`/analytics/trends/daily${buildAnalyticsQuery(params)}`); }
   function getAnalyticsIssueTypes(params = {}) { return get(`/analytics/issue-types${buildAnalyticsQuery(params)}`); }
@@ -315,7 +317,7 @@ window.API = (() => {
     getUsageMetrics, getUsagePricing,
     resetFailedFiles, getMetricsByUser,
     getAnalyticsOverview, getAnalyticsDailyTrend, getAnalyticsIssueTypes, getAnalyticsDuplicates, getAnalyticsUnitIssueTypeMatrix, getAnalyticsGeography, getAnalyticsFilterOptions, getAnalyticsStatusBacklog, getAnalyticsSources, getAnalyticsUnits, getAnalyticsGroups,
-    getAnalyticsProducts, getAnalyticsIssues, getAnalyticsPriorityIssues, getAnalyticsDataQuality,
+    getAnalyticsIssueFilterOptions, getAnalyticsComparison, getAnalyticsProducts, getAnalyticsIssues, getAnalyticsPriorityIssues, getAnalyticsDataQuality,
     logout
   };
 })();

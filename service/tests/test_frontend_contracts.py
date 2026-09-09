@@ -143,8 +143,8 @@ def test_managed_file_analytics_assets_have_updated_cache_versions():
     index_html = _read("index.html")
 
     assert "css/style.css?v=1.0.17" in index_html
-    assert "js/api.js?v=1.0.8" in index_html
-    assert "js/pages/analytics.js?v=1.0.18" in index_html
+    assert "js/api.js?v=1.0.9" in index_html
+    assert "js/pages/analytics.js?v=1.0.19" in index_html
     assert "js/components/charts.js?v=1.0.7" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
@@ -400,10 +400,10 @@ def test_analytics_page_supports_safe_issue_drilldown_filters_and_pagination():
 
     assert "textField('analytics-issue-source'" not in analytics_js
     for expected in [
-        "textField('analytics-issue-unit'",
-        "textField('analytics-issue-label'",
-        "textField('analytics-issue-product'",
-        "textField('analytics-issue-status'",
+        "selectField('analytics-issue-unit'",
+        "selectField('analytics-issue-label'",
+        "selectField('analytics-issue-product'",
+        "selectField('analytics-issue-status'",
         "API.getAnalyticsIssues",
         "page_size: DEFAULT_PAGE_SIZE",
         "AnalyticsPage.changeIssuePage(-1)",
@@ -522,7 +522,7 @@ def test_analytics_p0_matches_prototype_structure_without_restoring_removed_scop
     ]:
         assert expected_css in style_css
     assert "css/style.css?v=1.0.17" in index_html
-    assert "js/pages/analytics.js?v=1.0.18" in index_html
+    assert "js/pages/analytics.js?v=1.0.19" in index_html
 
     for removed in [
         "dateField('analytics-compare-from'",

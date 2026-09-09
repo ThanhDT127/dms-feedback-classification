@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import math
+from calendar import monthrange
 from collections import defaultdict
+from dataclasses import replace
 from datetime import date
 from typing import Any
 
@@ -13,6 +15,7 @@ from .models import AnalyticsFilter
 from .repository import FeedbackAnalyticsRepository
 
 _UNKNOWN = "Chưa xác định"
+_UNLABELED = "__unlabeled__"
 _QUALITY_LABELS = ("Báo lỗi", "Báo CL tốt", "Y/c cải tiến", "Đề xuất SPM")
 _SENTIMENT_LABELS = ("Tích cực", "Trung lập", "Tiêu cực")
 
@@ -111,6 +114,45 @@ class FeedbackAnalyticsService:
                 },
                 key=_canon_lower,
             ),
+        }
+
+    def issue_filter_options(
+        self,
+        analytics_filter: AnalyticsFilter,
+        *,
+        issue_unit: str | None = None,
+        label: str | None = None,
+        product: str | None = None,
+        business_status: str | None = None,
+    ) -> dict[str, list[str]]:
+        """Cascade over all current detail records, never a paginated result.
+
+        Global scope (including global unit) applies to every list. Each local
+        selection constrains only downstream lists; status has no descendants.
+        """
+        rows = self._rows(analytics_filter)
+
+        def values(scope: list[dict[str, Any]], field: str) -> list[str]:
+            return sorted(
+                {value for row in scope if (value := str(row.get(field) or "").strip())},
+                key=lambda value: (_canon_lower(value), value),
+            )
+
+        units = values(rows, "unit_name")
+        effective_unit = analytics_filter.unit_name or issue_unit
+        rows = [row for row in rows if self._matches(row.get("unit_name"), effective_unit)]
+        labels = sorted(
+            {name for row in rows for name in (self._label_names(row) or {_UNLABELED})},
+            key=lambda value: (_canon_lower(value), value),
+        )
+        rows = [row for row in rows if self._matches_label(row, label)]
+        products = values(rows, "product")
+        rows = [row for row in rows if self._matches(row.get("product"), product)]
+        return {
+            "units": units,
+            "labels": labels,
+            "products": products,
+            "statuses": values(rows, "business_status"),
         }
 
     def _issue_codes(self, rows: list[dict[str, Any]]) -> set[str]:
@@ -249,6 +291,65 @@ class FeedbackAnalyticsService:
             if change_percent < 0
             else "unchanged",
             "reason": None,
+        }
+
+    def comparison(self, analytics_filter: AnalyticsFilter, *, period: str) -> dict[str, Any]:
+        """Compare inclusive ranges shifted by calendar months, using overview KPIs."""
+        months = {"month": 1, "quarter": 3, "year": 12}.get(period)
+        if months is None:
+            raise ValueError("Invalid comparison period")
+        if analytics_filter.date_from is None or analytics_filter.date_to is None:
+            raise ValueError("Comparison requires complete from and to dates")
+        start = date.fromisoformat(analytics_filter.date_from)
+        end = date.fromisoformat(analytics_filter.date_to)
+        if end < start:
+            raise ValueError("Invalid date range")
+
+        def shift(value: date) -> str:
+            year, month_index = divmod(value.year * 12 + value.month - 1 - months, 12)
+            if year < 1:
+                raise ValueError("Previous comparison range is before year 1")
+            month = month_index + 1
+            return value.replace(
+                year=year, month=month, day=min(value.day, monthrange(year, month)[1])
+            ).isoformat()
+
+        current_filter = replace(analytics_filter, compare_from=None, compare_to=None)
+        previous_filter = replace(current_filter, date_from=shift(start), date_to=shift(end))
+        current = self.overview(current_filter)
+        previous = self.overview(previous_filter)
+        metrics = {}
+        for key in (
+            "total_issues",
+            "sentiment_coverage",
+            "product_coverage",
+            "duplicate_issue_rate",
+            "model_accuracy",
+        ):
+            current_metric, previous_metric = current[key], previous[key]
+            current_value, previous_value = current_metric["value"], previous_metric["value"]
+            available = current_metric["available"] and previous_metric["available"]
+            change = round(current_value - previous_value, 2) if available else None
+            metrics[key] = {
+                "current": current_value,
+                "previous": previous_value,
+                "change": change,
+                "change_percent": round(change * 100 / previous_value, 2)
+                if change is not None and previous_value
+                else None,
+                "unit": "count" if key == "total_issues" else "percentage_points",
+                "available": available,
+                "reason": (current_metric["reason"] or previous_metric["reason"])
+                if not available
+                else "Percentage change is unavailable when previous value is zero."
+                if previous_value == 0
+                else None,
+            }
+        return {
+            "period": period,
+            "current_range": {"from": current_filter.date_from, "to": current_filter.date_to},
+            "previous_range": {"from": previous_filter.date_from, "to": previous_filter.date_to},
+            "metrics": metrics,
         }
 
     def overview(self, analytics_filter: AnalyticsFilter) -> dict[str, Any]:
@@ -788,6 +889,13 @@ class FeedbackAnalyticsService:
             return True
         return str(value or "").strip().casefold() == expected.strip().casefold()
 
+    def _matches_label(self, row: dict[str, Any], label: str | None) -> bool:
+        if label is not None and label.strip().casefold() == _UNLABELED:
+            return not self._label_names(row)
+        return label is None or label.strip().casefold() in {
+            name.casefold() for name in self._label_names(row)
+        }
+
     def issues(
         self,
         analytics_filter: AnalyticsFilter,
@@ -808,10 +916,7 @@ class FeedbackAnalyticsService:
             and self._matches(row.get("unit_name"), unit_name)
             and self._matches(row.get("product"), product)
             and self._matches(row.get("business_status"), business_status)
-            and (
-                label is None
-                or label.strip().casefold() in {name.casefold() for name in self._label_names(row)}
-            )
+            and self._matches_label(row, label)
         ]
         filtered.sort(
             key=lambda row: (str(row.get("issue_date") or ""), int(row["feedback_id"])),

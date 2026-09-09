@@ -73,6 +73,13 @@ window.AnalyticsPage = (() => {
         <div id="analytics-overview" class="stat-grid">${renderMetricSkeletons(5)}</div>
       </section>
 
+      <section class="card" aria-labelledby="analytics-comparison-title">
+        <div class="card-header"><span id="analytics-comparison-title" class="card-title">So sánh cùng kỳ</span>
+          <label class="analytics-field" for="analytics-comparison-period"><span>Kỳ đối chiếu</span><select id="analytics-comparison-period" class="form-input" onchange="AnalyticsPage.loadComparison()">${[['month', 'Tháng trước'], ['quarter', 'Quý trước'], ['year', 'Năm trước']].map(([value, label]) => `<option value="${value}"${comparisonPeriod === value ? ' selected' : ''}>${label}</option>`).join('')}</select></label>
+        </div>
+        <div id="analytics-comparison" class="analytics-panel-body" aria-live="polite"></div>
+      </section>
+
       <!-- Hàng 1: Vấn đề theo ngày + Tỷ trọng theo nguồn thông tin -->
       <div class="analytics-primary-grid">
         <section class="card analytics-daily-card" aria-labelledby="analytics-daily-title">
@@ -118,12 +125,13 @@ window.AnalyticsPage = (() => {
       <section class="card" aria-labelledby="analytics-issues-title">
         <div class="card-header"><span id="analytics-issues-title" class="card-title">📋 Chi tiết vấn đề</span></div>
         <div class="analytics-issue-filter-grid" aria-label="Bộ lọc chi tiết vấn đề">
-          ${textField('analytics-issue-unit', 'Đơn vị', _state.issueFilters.unit)}
-          ${textField('analytics-issue-label', 'Kết quả phân loại', _state.issueFilters.label)}
-          ${textField('analytics-issue-product', 'Sản phẩm', _state.issueFilters.product)}
-          ${textField('analytics-issue-status', 'Trạng thái', _state.issueFilters.status)}
+          ${selectField('analytics-issue-unit', 'Đơn vị', _state.issueFilters.unit, [], "AnalyticsPage.onIssueFilterChange('unit')")}
+          ${selectField('analytics-issue-label', 'Kết quả phân loại', _state.issueFilters.label, [], "AnalyticsPage.onIssueFilterChange('label')")}
+          ${selectField('analytics-issue-product', 'Sản phẩm', _state.issueFilters.product, [], "AnalyticsPage.onIssueFilterChange('product')")}
+          ${selectField('analytics-issue-status', 'Trạng thái', _state.issueFilters.status, [])}
           <div class="analytics-filter-actions"><button class="btn btn-primary btn-sm" type="button" onclick="AnalyticsPage.applyIssueFilters()">Lọc</button><button class="btn btn-ghost btn-sm" type="button" onclick="AnalyticsPage.clearIssueFilters()">Bỏ lọc</button></div>
         </div>
+        <div id="analytics-issue-options-error" class="analytics-inline-alert" role="alert" hidden></div>
         <div id="analytics-issues" class="analytics-panel-body">${renderPanelLoading()}</div>
       </section>
       </div>
@@ -132,6 +140,8 @@ window.AnalyticsPage = (() => {
     loadFilterOptions();
     const filterKey = getFilterKey();
     if (_cache && _cache.key === filterKey) {
+      loadIssueFilterOptions(true);
+      loadComparison();
       renderAllPanels(_cache.results);
       const status = document.getElementById('analytics-page-status');
       if (status) status.textContent = 'Dữ liệu phân tích đã được tải từ bộ nhớ đệm.';
@@ -154,7 +164,7 @@ window.AnalyticsPage = (() => {
 
   function selectField(id, label, value, options, changeHandler = '') {
     const onchange = changeHandler ? ` onchange="${changeHandler}"` : '';
-    return `<label class="analytics-field" for="${id}"><span>${label}</span><select id="${id}" class="form-input"${onchange}><option value="">Tất cả</option>${(options || []).map(option => `<option value="${escAttr(option)}"${option === value ? ' selected' : ''}>${escHtml(option)}</option>`).join('')}</select></label>`;
+    return `<label class="analytics-field" for="${id}"><span>${label}</span><select id="${id}" class="form-input"${onchange}><option value="">Tất cả</option>${(options || []).map(option => `<option value="${escAttr(option)}"${option === value ? ' selected' : ''}>${escHtml(option === '__unlabeled__' ? 'Chưa có nhãn' : option)}</option>`).join('')}</select></label>`;
   }
 
   function renderMetricSkeletons(count) {
@@ -188,6 +198,7 @@ window.AnalyticsPage = (() => {
     setFilterError(error);
     if (error) return;
     _state.filters = filters;
+    resetIssueSelections();
     _state.issuePage = 1;
     _state.duplicatePage = 1;
     _cache = null;
@@ -198,6 +209,7 @@ window.AnalyticsPage = (() => {
 
   function resetFilters() {
     _state.filters = { from: '', to: '', district: '', unit: '' };
+    resetIssueSelections();
     const inputIds = {
       from: 'analytics-date-from',
       to: 'analytics-date-to',
@@ -218,10 +230,10 @@ window.AnalyticsPage = (() => {
   }
 
   async function onUnitChange() {
-    _state.filters.unit = document.getElementById('analytics-unit')?.value || '';
-    _state.filters.district = '';
+    const draft = { ..._state.filters, unit: document.getElementById('analytics-unit')?.value || '', district: '' };
+    // Keep the applied dashboard scope unchanged until Apply.
     resetSelect('analytics-district');
-    await loadFilterOptions();
+    await loadFilterOptions(draft);
   }
 
   function resetSelect(id) {
@@ -232,22 +244,22 @@ window.AnalyticsPage = (() => {
     select.disabled = true;
   }
 
-  async function loadFilterOptions() {
+  async function loadFilterOptions(scope = _state.filters) {
     const optionsRequestId = ++_state.optionsRequestId;
     setFilterOptionsError(null);
     try {
       const options = await API.getAnalyticsFilterOptions({
-        from: _state.filters.from || undefined,
-        to: _state.filters.to || undefined,
-        unit: _state.filters.unit || undefined,
+        from: scope.from || undefined,
+        to: scope.to || undefined,
+        unit: scope.unit || undefined,
       });
       if (optionsRequestId !== _state.optionsRequestId) return;
       _state.filterOptions = {
         districts: options?.districts || [],
         units: options?.units || [],
       };
-      updateSelect('analytics-unit', _state.filterOptions.units, _state.filters.unit);
-      updateSelect('analytics-district', _state.filterOptions.districts, _state.filters.district);
+      updateSelect('analytics-unit', _state.filterOptions.units, scope.unit);
+      updateSelect('analytics-district', _state.filterOptions.districts, scope.district);
     } catch (error) {
       if (optionsRequestId !== _state.optionsRequestId) return;
       console.warn('Không thể tải lựa chọn bộ lọc analytics:', error.message);
@@ -258,7 +270,8 @@ window.AnalyticsPage = (() => {
   function updateSelect(id, options, value) {
     const select = document.getElementById(id);
     if (!select) return;
-    select.innerHTML = `<option value="">Tất cả</option>${options.map(option => `<option value="${escAttr(option)}"${option === value ? ' selected' : ''}>${escHtml(option)}</option>`).join('')}`;
+    select.innerHTML = `<option value="">Tất cả</option>${options.map(option => `<option value="${escAttr(option)}"${option === value ? ' selected' : ''}>${escHtml(option === '__unlabeled__' ? 'Chưa có nhãn' : option)}</option>`).join('')}`;
+    select.value = options.includes(value) ? value : '';
     select.disabled = false;
   }
 
@@ -286,6 +299,76 @@ window.AnalyticsPage = (() => {
     element.textContent = labels.length ? `Đang lọc: ${labels.join(' · ')}` : 'Toàn bộ dữ liệu';
   }
 
+  const ISSUE_DIMENSIONS = { unit: 'units', label: 'labels', product: 'products', status: 'statuses' };
+  let issueOptionsRequestId = 0;
+  let comparisonRequestId = 0;
+  let comparisonPeriod = 'month';
+
+  async function loadIssueFilterOptions(restoreApplied = false) {
+    const requestId = ++issueOptionsRequestId;
+    const errorNode = document.getElementById('analytics-issue-options-error');
+    if (errorNode) errorNode.hidden = true;
+    const selection = restoreApplied ? { ..._state.issueFilters } : readIssueFilters();
+    Object.keys(ISSUE_DIMENSIONS).forEach(key => {
+      const input = document.getElementById(`analytics-issue-${key}`);
+      if (input) input.disabled = true;
+    });
+    try {
+      const options = await API.getAnalyticsIssueFilterOptions({ ...globalQueryParams(), issue_unit: selection.unit, label: selection.label, product: selection.product });
+      if (requestId !== issueOptionsRequestId) return;
+      Object.entries(ISSUE_DIMENSIONS).forEach(([key, name]) => {
+        const value = key === 'unit' && _state.filters.unit ? _state.filters.unit : selection[key];
+        updateSelect(`analytics-issue-${key}`, options[name] || [], value);
+      });
+      const unit = document.getElementById('analytics-issue-unit');
+      if (unit && _state.filters.unit) unit.disabled = true;
+    } catch (error) {
+      if (requestId !== issueOptionsRequestId) return;
+      if (errorNode) {
+        errorNode.hidden = false;
+        errorNode.textContent = 'Không thể tải danh sách lọc. Backend cần hỗ trợ API bộ lọc chi tiết; hãy thử Làm mới sau khi cập nhật backend.';
+      }
+    }
+  }
+
+  async function onIssueFilterChange(key) {
+    const keys = Object.keys(ISSUE_DIMENSIONS);
+    keys.slice(keys.indexOf(key) + 1).forEach(child => resetSelect(`analytics-issue-${child}`));
+    await loadIssueFilterOptions();
+  }
+
+  async function loadComparison() {
+    const element = document.getElementById('analytics-comparison');
+    if (!element) return;
+    const requestId = ++comparisonRequestId;
+    comparisonPeriod = document.getElementById('analytics-comparison-period')?.value || comparisonPeriod;
+    if (!_state.filters.from || !_state.filters.to) {
+      renderEmpty(element, 'Chọn đủ Từ ngày và Đến ngày rồi Áp dụng để so sánh cùng kỳ.');
+      return;
+    }
+    element.innerHTML = renderPanelLoading();
+    try {
+      const data = await API.getAnalyticsComparison({ ...globalQueryParams(), period: comparisonPeriod });
+      if (requestId !== comparisonRequestId) return;
+      renderComparison(element, data);
+    } catch (error) {
+      if (requestId !== comparisonRequestId) return;
+      renderFailure(element, error, 'Chưa tải được so sánh cùng kỳ. Cần backend hỗ trợ API so sánh.');
+    }
+  }
+
+  function renderComparison(element, data) {
+    const names = { total_issues: 'Tổng số vấn đề', sentiment_coverage: 'Hoàn thiện cảm xúc', product_coverage: 'Nhận diện sản phẩm', duplicate_issue_rate: 'Tỷ lệ vấn đề trùng', model_accuracy: 'Độ chính xác mô hình' };
+    const range = value => `${value?.from || '—'} → ${value?.to || '—'}`;
+    element.innerHTML = `<p class="analytics-panel-note">Kỳ đang xem: ${escHtml(range(data.current_range))} · Kỳ đối chiếu: ${escHtml(range(data.previous_range))}. Giữ nguyên bộ lọc Đơn vị và Quận/huyện.</p><div class="table-wrap"><table class="table" aria-label="So sánh cùng kỳ"><thead><tr><th>Chỉ số</th><th>Kỳ đang xem</th><th>Kỳ đối chiếu</th><th>Chênh lệch</th></tr></thead><tbody>${Object.entries(names).map(([key, label]) => {
+      const metric = data.metrics?.[key] || {};
+      const percent = key !== 'total_issues';
+      const display = value => value == null ? '—' : formatMetricValue(value, percent);
+      const change = metric.available && metric.change != null ? `${metric.change > 0 ? '+' : ''}${formatMetricValue(metric.change, false)}${percent ? ' điểm %' : ' vấn đề'}${!percent && metric.change_percent != null ? ` (${metric.change_percent > 0 ? '+' : ''}${formatMetricValue(metric.change_percent, true)})` : ''}` : 'Chưa đủ dữ liệu so sánh';
+      return `<tr><td>${label}</td><td>${escHtml(display(metric.current))}</td><td>${escHtml(display(metric.previous))}</td><td>${escHtml(change)}</td></tr>`;
+    }).join('')}</tbody></table></div><p class="analytics-panel-note">Khoảng ngày được lùi tương ứng 1 tháng, 3 tháng hoặc 1 năm; ngày không tồn tại được lấy ngày cuối tháng. Chỉ số tỷ lệ so sánh bằng điểm phần trăm; không suy diễn chất lượng từ chiều tăng/giảm.</p>`;
+  }
+
   function readIssueFilters() {
     return {
       unit: document.getElementById('analytics-issue-unit')?.value.trim() || '',
@@ -296,27 +379,35 @@ window.AnalyticsPage = (() => {
   }
 
   function applyIssueFilters() {
+    if (document.getElementById('analytics-issue-status')?.disabled) return;
     _state.issueFilters = readIssueFilters();
     _state.issuePage = 1;
     loadIssues();
   }
 
-  function clearIssueFilters() {
+  function resetIssueSelections() {
     _state.issueFilters = { unit: '', label: '', product: '', status: '' };
     for (const key of Object.keys(_state.issueFilters)) {
       const input = document.getElementById(`analytics-issue-${key}`);
       if (input) input.value = '';
     }
     _state.issuePage = 1;
+  }
+
+  function clearIssueFilters() {
+    resetIssueSelections();
+    loadIssueFilterOptions();
     loadIssues();
   }
 
   function filterIssuesByUnit(index) {
     const unit = _state.units[index]?.label;
     if (!unit) return;
-    _state.issueFilters.unit = unit;
+    resetIssueSelections();
+    _state.issueFilters.unit = _state.filters.unit || unit;
     const input = document.getElementById('analytics-issue-unit');
-    if (input) input.value = unit;
+    if (input) input.value = _state.issueFilters.unit;
+    loadIssueFilterOptions();
     _state.issuePage = 1;
     loadIssues();
   }
@@ -371,6 +462,8 @@ window.AnalyticsPage = (() => {
   }
 
   async function refresh(force = true) {
+    loadIssueFilterOptions(true);
+    loadComparison();
     const filterKey = getFilterKey();
     if (!force && _cache && _cache.key === filterKey) {
       renderAllPanels(_cache.results);
@@ -963,6 +1056,8 @@ window.AnalyticsPage = (() => {
   function destroy() {
     _state.requestId += 1;
     _state.optionsRequestId += 1;
+    issueOptionsRequestId += 1;
+    comparisonRequestId += 1;
     const app = document.getElementById('app');
     if (app) app.classList.remove('page-container-wide');
     Charts.destroy('analytics-daily-trend-chart');
@@ -974,5 +1069,5 @@ window.AnalyticsPage = (() => {
     Charts.destroy('analytics-status-chart');
   }
 
-  return { render, destroy, applyFilters, resetFilters, refresh, onUnitChange, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, showPriorityDetail, filterIssuesByUnit };
+  return { render, destroy, applyFilters, resetFilters, refresh, onUnitChange, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, showPriorityDetail, filterIssuesByUnit, onIssueFilterChange, loadComparison };
 })();

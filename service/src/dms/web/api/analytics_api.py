@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -77,6 +77,18 @@ def overview(
     return _service().overview(analytics_filter)
 
 
+@router.get("/comparison")
+def comparison(
+    user: _CURRENT_USER,
+    analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
+    period: Literal["month", "quarter", "year"] = Query("month"),
+):
+    try:
+        return _service().comparison(analytics_filter, period=period)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/sources")
 def sources(
     user: _CURRENT_USER,
@@ -133,6 +145,24 @@ def filter_options(
     analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
 ):
     return _service().filter_options(analytics_filter)
+
+
+@router.get("/issue-filter-options")
+def issue_filter_options(
+    user: _CURRENT_USER,
+    analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
+    issue_unit: str | None = Query(None),
+    label: str | None = Query(None),
+    product: str | None = Query(None),
+    business_status: str | None = Query(None, alias="status"),
+):
+    return _service().issue_filter_options(
+        analytics_filter,
+        issue_unit=issue_unit,
+        label=label,
+        product=product,
+        business_status=business_status,
+    )
 
 
 @router.get("/status-backlog")
