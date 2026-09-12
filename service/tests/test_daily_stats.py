@@ -208,6 +208,71 @@ def test_daily_stats_date_range_filter(job_store):
     assert result["success_counts"] == [1]
 
 
+def test_extract_date_from_filename():
+    from dms.time_utils import extract_date_from_filename
+
+    assert extract_date_from_filename("DMST0826-28-31.xlsx") == "2026-08-31"
+    assert extract_date_from_filename("DMST0826-27.xlsx") == "2026-08-27"
+    assert extract_date_from_filename("DMST0926-01-06.xlsx") == "2026-09-06"
+    assert extract_date_from_filename("DMS-13102025.xlsx") == "2025-10-13"
+    assert extract_date_from_filename("DMS_13102025.xlsx") == "2025-10-13"
+    assert extract_date_from_filename("DMS-1510-17102025.xlsx") == "2025-10-17"
+    assert (
+        extract_date_from_filename("DMS-1510-1710.xlsx", reference_date="2025-10-20")
+        == "2025-10-17"
+    )
+    assert extract_date_from_filename("Feedback_2026-09-05.xlsx") == "2026-09-05"
+    assert extract_date_from_filename("Feedback_2026_09_05.xlsx") == "2026-09-05"
+    assert extract_date_from_filename("DMS_13-10-2025.xlsx") == "2025-10-13"
+    assert extract_date_from_filename("unknown_file.xlsx") is None
+    assert extract_date_from_filename("DMS-32132025.xlsx") is None  # invalid day 32, month 13
+    assert extract_date_from_filename("DMST0826-100.xlsx") is None  # invalid suffix day 100
+    assert extract_date_from_filename(None) is None  # defensive none guard
+
+
+def test_daily_stats_prioritizes_filename_date_over_upload_and_completion(job_store):
+    reconstructed_batch_day = "2026-09-05T12:00:00Z"
+    sharepoint_batch_upload = "2026-09-05T08:00:00Z"
+
+    # 1. File có ngày trong tên (DMS-DDMMYYYY): ưu tiên ngày tên file dù bị gom upload 05/09
+    _create_completed_job(
+        job_store,
+        filename="DMS-13102025.xlsx",
+        completed_at=reconstructed_batch_day,
+        source_modified_at=sharepoint_batch_upload,
+    )
+    # 2. File có đợt DMS (DMSTMMYY-DD-DD): ưu tiên ngày cuối đợt trong tên file
+    _create_completed_job(
+        job_store,
+        filename="DMST0826-28-31.xlsx",
+        completed_at=reconstructed_batch_day,
+        source_modified_at=sharepoint_batch_upload,
+    )
+    # 3. File không có ngày trong tên: fallback ngày upload SharePoint (source_modified_at)
+    _create_completed_job(
+        job_store,
+        filename="feedback_sharepoint_no_date.xlsx",
+        completed_at=reconstructed_batch_day,
+        source_modified_at="2026-09-01T09:00:00Z",
+    )
+    # 4. Web upload không có ngày trong tên và không có SharePoint metadata: fallback completed_at
+    _create_completed_job(
+        job_store,
+        filename="manual_web_upload.xlsx",
+        completed_at=reconstructed_batch_day,
+        owner="operator",
+        source_modified_at=None,
+    )
+
+    stats = job_store.daily_stats()
+    assert stats["dates"] == ["2025-10-13", "2026-08-31", "2026-09-01", "2026-09-05"]
+    assert stats["success_counts"] == [1, 1, 1, 1]
+
+    # Audit completed_at trên server được bảo toàn 100% không bị ghi đè
+    jobs = job_store.list_jobs(include_results=False)
+    assert {job["completed_at"] for job in jobs} == {reconstructed_batch_day}
+
+
 def test_daily_stats_queued_jobs_excluded(job_store):
     """Jobs still in queued/running state should NOT appear in daily stats (no completed_at)."""
     job_id = str(uuid.uuid4())

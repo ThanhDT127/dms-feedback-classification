@@ -10,6 +10,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from .time_utils import resolve_file_reporting_date
+
 JOB_STATUS_QUEUED = "queued"
 JOB_STATUS_RUNNING = "running"
 JOB_STATUS_COMPLETED = "completed"
@@ -67,6 +69,12 @@ class ClassificationJobStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(self.db_path), timeout=30, check_same_thread=False)
         conn.row_factory = sqlite3.Row
+        conn.create_function(
+            "dms_file_reporting_date",
+            4,
+            resolve_file_reporting_date,
+            deterministic=True,
+        )
         return conn
 
     def _init_db(self) -> None:
@@ -687,9 +695,10 @@ class ClassificationJobStore:
             total_duration = float(agg["total_duration_seconds"])
 
             # --- daily counts (completed only) ---
+            business_timestamp = "dms_file_reporting_date(filename, source_modified_at, completed_at, owner_username)"
             daily_rows = conn.execute(
-                """
-                SELECT SUBSTR(completed_at, 1, 10) AS day, COUNT(*) AS cnt
+                f"""
+                SELECT SUBSTR({business_timestamp}, 1, 10) AS day, COUNT(*) AS cnt
                 FROM classification_jobs
                 WHERE status = ? AND completed_at IS NOT NULL
                 GROUP BY day
@@ -704,9 +713,10 @@ class ClassificationJobStore:
                     daily_counts[day] = int(row["cnt"])
 
             # --- daily failed counts ---
+            failed_business_timestamp = "dms_file_reporting_date(filename, source_modified_at, COALESCE(completed_at, created_at), owner_username)"
             daily_failed_rows = conn.execute(
-                """
-                SELECT SUBSTR(COALESCE(completed_at, created_at), 1, 10) AS day,
+                f"""
+                SELECT SUBSTR({failed_business_timestamp}, 1, 10) AS day,
                        COUNT(*) AS cnt
                 FROM classification_jobs
                 WHERE status = ?
@@ -762,14 +772,16 @@ class ClassificationJobStore:
     ) -> dict:
         """Return daily success/failed counts for all jobs (Watcher + Web Upload).
 
-        Watcher files use their SharePoint modification date; web uploads use completion time.
-        Missing watcher metadata falls back to completion time. Returns arrays for charting:
+        Priority for file date:
+        1. Reporting date embedded in filename (e.g. DMS-13102025, DMST0826-28-31)
+        2. SharePoint modification date (source_modified_at) for watcher jobs, or if available
+        3. Job completion audit timestamp (completed_at)
+
+        Returns arrays for charting:
         ``{"dates": [...], "success_counts": [...], "failed_counts": [...], "counts": [...]}``
         """
         business_timestamp = (
-            "CASE WHEN owner_username = 'system_watcher' "
-            "THEN COALESCE(NULLIF(source_modified_at, ''), completed_at) "
-            "ELSE completed_at END"
+            "dms_file_reporting_date(filename, source_modified_at, completed_at, owner_username)"
         )
         where_parts: list[str] = ["completed_at IS NOT NULL"]
         params: list[Any] = []
