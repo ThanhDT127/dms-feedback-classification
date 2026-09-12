@@ -25,6 +25,7 @@ def _create_completed_job(
     completed_at: str,
     total_rows: int = 10,
     owner: str = "system_watcher",
+    source_modified_at: str | None = None,
 ):
     """Helper to insert a completed job with a specific completed_at date."""
     job_id = str(uuid.uuid4())
@@ -42,9 +43,16 @@ def _create_completed_job(
         conn.execute(
             """UPDATE classification_jobs
                SET status = 'completed', total_rows = ?, rows_done = ?, percent = 100,
-                   completed_at = ?, updated_at = ?
+                   completed_at = ?, source_modified_at = ?, updated_at = ?
                WHERE job_id = ?""",
-            (total_rows, total_rows, completed_at, completed_at, job_id),
+            (
+                total_rows,
+                total_rows,
+                completed_at,
+                source_modified_at,
+                completed_at,
+                job_id,
+            ),
         )
         conn.commit()
     return job_id
@@ -133,6 +141,59 @@ def test_daily_stats_combines_watcher_and_web(job_store):
     assert result["success_counts"] == [2]  # 1 watcher + 1 web
     assert result["failed_counts"] == [1]  # 1 web failed
     assert result["counts"] == [3]
+
+
+def test_daily_stats_watcher_uses_source_date_without_overwriting_completion_audit(job_store):
+    processing_day = "2026-09-05T12:00:00Z"
+    _create_completed_job(
+        job_store,
+        filename="DMST0826-28-31.xlsx",
+        completed_at=processing_day,
+        source_modified_at="2026-08-31T09:30:00Z",
+    )
+    _create_completed_job(
+        job_store,
+        filename="DMST0826-27.xlsx",
+        completed_at=processing_day,
+        source_modified_at="2026-08-27T10:00:00Z",
+    )
+    _create_completed_job(
+        job_store,
+        filename="manual.xlsx",
+        completed_at=processing_day,
+        owner="alice",
+        source_modified_at="2020-01-01T00:00:00Z",
+    )
+
+    result = job_store.daily_stats()
+
+    assert result["dates"] == ["2026-08-27", "2026-08-31", "2026-09-05"]
+    assert result["success_counts"] == [1, 1, 1]
+    jobs = job_store.list_jobs(include_results=False)
+    assert {job["completed_at"] for job in jobs} == {processing_day}
+
+
+def test_daily_stats_watcher_falls_back_to_completion_when_source_date_missing(job_store):
+    _create_completed_job(
+        job_store,
+        filename="legacy.xlsx",
+        completed_at="2026-09-05T12:00:00Z",
+        source_modified_at=None,
+    )
+    assert job_store.daily_stats()["dates"] == ["2026-09-05"]
+
+
+def test_daily_stats_date_range_filters_business_day(job_store):
+    _create_completed_job(
+        job_store,
+        filename="batch.xlsx",
+        completed_at="2026-09-05T12:00:00Z",
+        source_modified_at="2026-08-20T09:00:00Z",
+    )
+    assert job_store.daily_stats(from_date="2026-08-01", to_date="2026-08-31")["dates"] == [
+        "2026-08-20"
+    ]
+    assert job_store.daily_stats(from_date="2026-09-01", to_date="2026-09-30")["dates"] == []
 
 
 def test_daily_stats_date_range_filter(job_store):

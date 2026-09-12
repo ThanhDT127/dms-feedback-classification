@@ -59,7 +59,9 @@ window.API = (() => {
           const errData = await res.json();
           errMsg = errData.detail || errData.message || errMsg;
         } catch (_) { /* ignore */ }
-        throw new Error(errMsg);
+        const error = new Error(errMsg);
+        error.status = res.status;
+        throw error;
       }
 
       const contentType = res.headers.get('content-type') || '';
@@ -235,23 +237,24 @@ window.API = (() => {
     return text ? `?${text}` : '';
   }
 
-  function getAnalyticsIssueFilterOptions(params = {}) { return get(`/analytics/issue-filter-options${buildAnalyticsQuery(params)}`, { silent: true }); }
-  function getAnalyticsComparison(params = {}) { return get(`/analytics/comparison${buildAnalyticsQuery(params)}`, { silent: true }); }
-  function getAnalyticsOverview(params = {}) { return get(`/analytics/overview${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsDailyTrend(params = {}) { return get(`/analytics/trends/daily${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsIssueTypes(params = {}) { return get(`/analytics/issue-types${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsDuplicates(params = {}) { return get(`/analytics/duplicates${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsUnitIssueTypeMatrix(params = {}) { return get(`/analytics/unit-issue-type-matrix${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsGeography(params = {}) { return get(`/analytics/geography${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsFilterOptions(params = {}) { return get(`/analytics/filter-options${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsStatusBacklog(params = {}) { return get(`/analytics/status-backlog${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsSources(params = {}) { return get(`/analytics/sources${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsUnits(params = {}) { return get(`/analytics/units${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsGroups(params = {}) { return get(`/analytics/groups${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsProducts(params = {}) { return get(`/analytics/products${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsIssues(params = {}) { return get(`/analytics/issues${buildAnalyticsQuery(params)}`); }
-  function getAnalyticsPriorityIssues(params = {}) { return get(`/analytics/priority-issues${buildAnalyticsQuery(params)}`, { silent: true }); }
-  function getAnalyticsDataQuality(params = {}) { return get(`/analytics/data-quality${buildAnalyticsQuery(params)}`); }
+  function getAnalyticsDashboard(params = {}, opts = {}) { return get(`/analytics/dashboard${buildAnalyticsQuery(params)}`, { silent: true, ...opts }); }
+  function getAnalyticsIssueFilterOptions(params = {}, opts = {}) { return get(`/analytics/issue-filter-options${buildAnalyticsQuery(params)}`, { silent: true, ...opts }); }
+  function getAnalyticsComparison(params = {}, opts = {}) { return get(`/analytics/comparison${buildAnalyticsQuery(params)}`, { silent: true, ...opts }); }
+  function getAnalyticsOverview(params = {}, opts = {}) { return get(`/analytics/overview${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsDailyTrend(params = {}, opts = {}) { return get(`/analytics/trends/daily${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsIssueTypes(params = {}, opts = {}) { return get(`/analytics/issue-types${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsDuplicates(params = {}, opts = {}) { return get(`/analytics/duplicates${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsUnitIssueTypeMatrix(params = {}, opts = {}) { return get(`/analytics/unit-issue-type-matrix${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsGeography(params = {}, opts = {}) { return get(`/analytics/geography${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsFilterOptions(params = {}, opts = {}) { return get(`/analytics/filter-options${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsStatusBacklog(params = {}, opts = {}) { return get(`/analytics/status-backlog${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsSources(params = {}, opts = {}) { return get(`/analytics/sources${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsUnits(params = {}, opts = {}) { return get(`/analytics/units${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsGroups(params = {}, opts = {}) { return get(`/analytics/groups${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsProducts(params = {}, opts = {}) { return get(`/analytics/products${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsIssues(params = {}, opts = {}) { return get(`/analytics/issues${buildAnalyticsQuery(params)}`, opts); }
+  function getAnalyticsPriorityIssues(params = {}, opts = {}) { return get(`/analytics/priority-issues${buildAnalyticsQuery(params)}`, { silent: true, ...opts }); }
+  function getAnalyticsDataQuality(params = {}, opts = {}) { return get(`/analytics/data-quality${buildAnalyticsQuery(params)}`, opts); }
 
   function setTokens(access, refresh) {
     _accessToken = access;
@@ -316,7 +319,7 @@ window.API = (() => {
     syncKeywordsToSP, syncProductsToSP, syncSharePoint, uploadJobToSharePoint,
     getUsageMetrics, getUsagePricing,
     resetFailedFiles, getMetricsByUser,
-    getAnalyticsOverview, getAnalyticsDailyTrend, getAnalyticsIssueTypes, getAnalyticsDuplicates, getAnalyticsUnitIssueTypeMatrix, getAnalyticsGeography, getAnalyticsFilterOptions, getAnalyticsStatusBacklog, getAnalyticsSources, getAnalyticsUnits, getAnalyticsGroups,
+    getAnalyticsDashboard, getAnalyticsOverview, getAnalyticsDailyTrend, getAnalyticsIssueTypes, getAnalyticsDuplicates, getAnalyticsUnitIssueTypeMatrix, getAnalyticsGeography, getAnalyticsFilterOptions, getAnalyticsStatusBacklog, getAnalyticsSources, getAnalyticsUnits, getAnalyticsGroups,
     getAnalyticsIssueFilterOptions, getAnalyticsComparison, getAnalyticsProducts, getAnalyticsIssues, getAnalyticsPriorityIssues, getAnalyticsDataQuality,
     logout
   };

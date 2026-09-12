@@ -106,10 +106,17 @@ def test_migration_creates_correct_records(watcher_with_store, tmp_seen_files, j
     assert len(completed) == 2
     assert len(errors) == 2  # failed + retry both become error
 
-    # Verify dates were preserved from lastModifiedDateTime
-    completed_dates = {j["completed_at"][:10] for j in completed}
-    assert "2026-05-10" in completed_dates
-    assert "2026-05-15" in completed_dates
+    # Source dates drive business charts; completed_at remains the processing audit timestamp.
+    source_dates = {j["source_modified_at"][:10] for j in completed}
+    completed_dates = {j["completed_at"][:16] for j in completed}
+    assert source_dates == {"2026-05-10", "2026-05-15"}
+    assert completed_dates == {"2026-05-10T08:05", "2026-05-15T09:10"}
+    assert job_store.daily_stats()["dates"] == [
+        "2026-05-10",
+        "2026-05-15",
+        "2026-05-20",
+        "2026-06-01",
+    ]
 
 
 def test_migration_label_distribution_saved(watcher_with_store, tmp_seen_files, job_store):

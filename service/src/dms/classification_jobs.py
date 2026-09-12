@@ -99,6 +99,7 @@ class ClassificationJobStore:
                     queued_at TEXT,
                     started_at TEXT,
                     completed_at TEXT,
+                    source_modified_at TEXT,
                     retry_count INTEGER NOT NULL DEFAULT 0,
                     last_retry_at TEXT,
                     cancellation_requested INTEGER NOT NULL DEFAULT 0,
@@ -112,6 +113,7 @@ class ClassificationJobStore:
             self._ensure_column(conn, "last_retry_at", "TEXT")
             self._ensure_column(conn, "cancellation_requested", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(conn, "heartbeat_at", "TEXT")
+            self._ensure_column(conn, "source_modified_at", "TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS classification_job_results (
@@ -191,6 +193,7 @@ class ClassificationJobStore:
         mode: str,
         input_path: str | Path,
         output_path: str | Path,
+        source_modified_at: str | None = None,
     ) -> dict:
         now = utc_now_iso()
         with self._lock, self._conn() as conn:
@@ -198,8 +201,8 @@ class ClassificationJobStore:
                 """
                 INSERT INTO classification_jobs (
                     job_id, owner_username, owner_role, filename, mode, status,
-                    input_path, output_path, created_at, queued_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    input_path, output_path, source_modified_at, created_at, queued_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job_id,
@@ -210,6 +213,7 @@ class ClassificationJobStore:
                     JOB_STATUS_QUEUED,
                     str(input_path),
                     str(output_path),
+                    source_modified_at,
                     now,
                     now,
                     now,
@@ -758,16 +762,22 @@ class ClassificationJobStore:
     ) -> dict:
         """Return daily success/failed counts for all jobs (Watcher + Web Upload).
 
-        Groups by date of completion. Returns dict with arrays suitable for charting:
+        Watcher files use their SharePoint modification date; web uploads use completion time.
+        Missing watcher metadata falls back to completion time. Returns arrays for charting:
         ``{"dates": [...], "success_counts": [...], "failed_counts": [...], "counts": [...]}``
         """
+        business_timestamp = (
+            "CASE WHEN owner_username = 'system_watcher' "
+            "THEN COALESCE(NULLIF(source_modified_at, ''), completed_at) "
+            "ELSE completed_at END"
+        )
         where_parts: list[str] = ["completed_at IS NOT NULL"]
         params: list[Any] = []
         if from_date:
-            where_parts.append("SUBSTR(completed_at, 1, 10) >= ?")
+            where_parts.append(f"SUBSTR({business_timestamp}, 1, 10) >= ?")
             params.append(from_date)
         if to_date:
-            where_parts.append("SUBSTR(completed_at, 1, 10) <= ?")
+            where_parts.append(f"SUBSTR({business_timestamp}, 1, 10) <= ?")
             params.append(to_date)
         where_sql = " AND ".join(where_parts)
 
@@ -783,10 +793,10 @@ class ClassificationJobStore:
                     SELECT
                         filename,
                         owner_username,
-                        -- Ngày cuối cùng có completed_at
-                        MAX(CASE WHEN status = '{JOB_STATUS_COMPLETED}' THEN completed_at END)
+                        -- Watcher: ngày nguồn SharePoint; web upload: ngày xử lý xong.
+                        MAX(CASE WHEN status = '{JOB_STATUS_COMPLETED}' THEN {business_timestamp} END)
                             AS success_at,
-                        MAX(completed_at) AS last_at,
+                        MAX({business_timestamp}) AS last_at,
                         -- Kết quả cuối: nếu có ít nhất 1 completed → success
                         CASE
                             WHEN SUM(CASE WHEN status = '{JOB_STATUS_COMPLETED}' THEN 1 ELSE 0 END) > 0

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
+from dataclasses import asdict
 from datetime import date
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...analytics import AnalyticsFilter, FeedbackAnalyticsService
+from ...analytics.result_cache import cached_result
 from .. import deps
 from ..deps import get_current_user
 
@@ -62,11 +65,36 @@ def analytics_filter_dependency(
     )
 
 
-def _service() -> FeedbackAnalyticsService:
+def _repository():
     repository = deps.get_feedback_analytics_repository()
     if repository is None:
         raise HTTPException(status_code=503, detail="Feedback analytics repository is unavailable")
-    return FeedbackAnalyticsService(repository)
+    return repository
+
+
+def _service() -> FeedbackAnalyticsService:
+    return FeedbackAnalyticsService(_repository())
+
+
+def _cache_key(name: str, analytics_filter: AnalyticsFilter, **options: object) -> str:
+    payload = {"filter": asdict(analytics_filter), **options}
+    return f"analytics-v2:{name}:{json.dumps(payload, sort_keys=True, ensure_ascii=False)}"
+
+
+def _cached(name: str, analytics_filter: AnalyticsFilter, compute, **options: object):
+    return cached_result(
+        _repository(),
+        _cache_key(name, analytics_filter, **options),
+        compute,
+    )
+
+
+@router.get("/dashboard")
+def dashboard(
+    user: _CURRENT_USER,
+    analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
+):
+    return _cached("dashboard", analytics_filter, lambda: _service().dashboard(analytics_filter))
 
 
 @router.get("/overview")
@@ -120,7 +148,13 @@ def duplicate_details(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
 ):
-    return _service().duplicate_details(analytics_filter, page=page, page_size=page_size)
+    return _cached(
+        "duplicates",
+        analytics_filter,
+        lambda: _service().duplicate_details(analytics_filter, page=page, page_size=page_size),
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/unit-issue-type-matrix")
@@ -128,7 +162,11 @@ def unit_issue_type_matrix(
     user: _CURRENT_USER,
     analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
 ):
-    return _service().unit_issue_type_matrix(analytics_filter)
+    return _cached(
+        "unit-issue-type-matrix",
+        analytics_filter,
+        lambda: _service().unit_issue_type_matrix(analytics_filter),
+    )
 
 
 @router.get("/geography")
@@ -227,7 +265,12 @@ def priority_issues(
     analytics_filter: AnalyticsFilter = Depends(analytics_filter_dependency),
     limit: int = Query(10, ge=1, le=50),
 ):
-    return _service().priority_issues(analytics_filter, limit=limit)
+    return _cached(
+        "priority-issues",
+        analytics_filter,
+        lambda: _service().priority_issues(analytics_filter, limit=limit),
+        limit=limit,
+    )
 
 
 @router.get("/data-quality")

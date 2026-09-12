@@ -279,6 +279,7 @@ class Watcher:
                     mode="watcher",
                     input_path=local_input,
                     output_path=local_output,
+                    source_modified_at=file_info.get("lastModifiedDateTime") or None,
                 )
                 self.job_store.mark_running(watcher_job_id)
 
@@ -597,16 +598,15 @@ class Watcher:
             file_name = info.get("name", "unknown")
             try:
                 watcher_job_id = str(uuid.uuid4())
-                # Determine timestamps
-                last_modified = info.get("lastModifiedDateTime", "")
+                # Keep the SharePoint date separate from the processing audit timestamp.
+                source_modified_at = info.get("lastModifiedDateTime", "")
                 processed_at = info.get("processed_at", "")
                 last_attempt = info.get("last_attempt", "")
 
-                # Use SharePoint modification date as completed_at for the daily chart
                 if status == "done":
-                    completed_at = last_modified or processed_at
+                    completed_at = processed_at or source_modified_at
                 elif status in ("failed", "retry"):
-                    completed_at = last_attempt or last_modified or processed_at
+                    completed_at = last_attempt or processed_at or source_modified_at
                 else:
                     skipped += 1
                     continue
@@ -624,12 +624,13 @@ class Watcher:
                     mode="watcher",
                     input_path=local_path,
                     output_path=local_path,  # placeholder, no output for historical entries
+                    source_modified_at=source_modified_at or None,
                 )
 
                 if status == "done":
                     total_rows = int(info.get("total_rows", 0))
                     duration = float(info.get("duration_seconds", 0.0))
-                    # Directly set completed_at to the historical date via SQL
+                    # Preserve the historical processing time as the audit completion timestamp.
                     with self.job_store._lock, self.job_store._conn() as conn:
                         conn.execute(
                             """UPDATE classification_jobs
@@ -714,7 +715,8 @@ class Watcher:
                     continue  # still actually failed, leave it
 
                 # File is done in seen_files but only error in SQLite → create completed record
-                completed_at = info.get("processed_at") or info.get("lastModifiedDateTime") or ""
+                source_modified_at = info.get("lastModifiedDateTime") or ""
+                completed_at = info.get("processed_at") or source_modified_at
                 total_rows = info.get("total_rows", 0)
                 duration = info.get("duration_seconds", 0.0)
                 synthetic_job_id = str(uuid.uuid4())
@@ -728,6 +730,7 @@ class Watcher:
                         mode="watcher",
                         input_path="",
                         output_path="",
+                        source_modified_at=source_modified_at or None,
                     )
                     self.job_store.complete_job(
                         synthetic_job_id,

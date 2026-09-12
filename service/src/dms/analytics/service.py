@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import heapq
 import json
 import math
 from calendar import monthrange
@@ -25,6 +26,24 @@ class FeedbackAnalyticsService:
 
     def __init__(self, repository: FeedbackAnalyticsRepository) -> None:
         self.repository = repository
+        self._dashboard_scope: tuple[AnalyticsFilter, list[dict[str, Any]]] | None = None
+
+    def dashboard(self, analytics_filter: AnalyticsFilter) -> dict[str, Any]:
+        """Compute summary panels from one request-local filtered projection."""
+        scoped = FeedbackAnalyticsService(self.repository)
+        scoped._dashboard_scope = (analytics_filter, self._rows(analytics_filter))
+        panels = {
+            "overview": scoped.overview,
+            "dailyTrend": scoped.daily_trend,
+            "issueTypes": scoped.issue_types,
+            "geography": scoped.geography,
+            "sources": scoped.sources,
+            "units": scoped.units,
+            "groups": scoped.groups,
+            "products": scoped.products,
+            "status": scoped.status_backlog,
+        }
+        return {key: compute(analytics_filter) for key, compute in panels.items()}
 
     @staticmethod
     def _issue_code(row: dict[str, Any]) -> str | None:
@@ -32,6 +51,8 @@ class FeedbackAnalyticsService:
         return value or None
 
     def _rows(self, analytics_filter: AnalyticsFilter) -> list[dict[str, Any]]:
+        if self._dashboard_scope is not None and self._dashboard_scope[0] == analytics_filter:
+            return self._dashboard_scope[1]
         rows = [row for row in self.repository.fetch_analytics_rows() if row["is_active"] == 1]
         if analytics_filter.date_from is not None or analytics_filter.date_to is not None:
             rows = [
@@ -545,46 +566,9 @@ class FeedbackAnalyticsService:
         page: int,
         page_size: int,
     ) -> dict[str, Any]:
-        groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for row in self._rows(analytics_filter):
-            normalized = str(row.get("normalized_content") or "").strip()
-            if normalized:
-                groups[normalized].append(row)
-        items = []
-        for rows in groups.values():
-            if len(rows) < 2:
-                continue
-            issue_codes = sorted(
-                {code for row in rows if (code := self._issue_code(row)) is not None}
-            )
-            units = sorted(
-                {
-                    str(row.get("unit_name") or "").strip()
-                    for row in rows
-                    if str(row.get("unit_name") or "").strip()
-                }
-            )
-            contents = sorted({" ".join(str(row["content"]).split()) for row in rows})
-            items.append(
-                {
-                    "content": contents[0],
-                    "record_count": len(rows),
-                    "duplicate_rows": len(rows) - 1,
-                    "issue_count": len(issue_codes),
-                    "issue_codes": issue_codes,
-                    "units": units,
-                }
-            )
-        items.sort(key=lambda item: (-int(str(item["record_count"])), str(item["content"])))
-        total = len(items)
-        start = (page - 1) * page_size
-        return {
-            "items": items[start : start + page_size],
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": math.ceil(total / page_size) if total else 0,
-        }
+        from .duplicate_query import duplicate_details
+
+        return duplicate_details(self.repository, analytics_filter, page=page, page_size=page_size)
 
     def status_backlog(self, analytics_filter: AnalyticsFilter) -> dict[str, Any]:
         rows = self._rows(analytics_filter)
@@ -908,23 +892,16 @@ class FeedbackAnalyticsService:
         product: str | None,
         business_status: str | None,
     ) -> dict[str, Any]:
-        rows = self._rows(analytics_filter)
-        filtered = [
-            row
-            for row in rows
-            if self._matches(row.get("source"), source)
-            and self._matches(row.get("unit_name"), unit_name)
-            and self._matches(row.get("product"), product)
-            and self._matches(row.get("business_status"), business_status)
-            and self._matches_label(row, label)
-        ]
-        filtered.sort(
-            key=lambda row: (str(row.get("issue_date") or ""), int(row["feedback_id"])),
-            reverse=True,
+        page_rows, total = self.repository.fetch_issues_page(
+            analytics_filter,
+            page=page,
+            page_size=page_size,
+            source=source,
+            unit_name=unit_name,
+            label=label,
+            product=product,
+            business_status=business_status,
         )
-        total = len(filtered)
-        start = (page - 1) * page_size
-        page_rows = filtered[start : start + page_size]
         items = [
             {
                 "feedback_id": row["feedback_id"],
@@ -999,11 +976,7 @@ class FeedbackAnalyticsService:
             feedback_id = int(r.get("feedback_id") or 0)
             return (score, issue_date, feedback_id)
 
-        ranked_rows = sorted(
-            seen_codes.values(),
-            key=_calc_priority,
-            reverse=True,
-        )
+        ranked_rows = heapq.nlargest(limit, seen_codes.values(), key=_calc_priority)
 
         items = []
         for idx, row in enumerate(ranked_rows[:limit], start=1):
