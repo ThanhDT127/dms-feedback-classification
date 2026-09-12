@@ -574,22 +574,9 @@ class Watcher:
         if not seen:
             return
 
-        # Idempotency check (task 2.2): skip if already migrated
-        try:
-            with self.job_store._lock, self.job_store._conn() as conn:
-                count = conn.execute(
-                    "SELECT COUNT(*) FROM classification_jobs WHERE owner_username = 'system_watcher'"
-                ).fetchone()[0]
-            if count > 0:
-                logger.info(
-                    "Migration skipped: %d system_watcher records already exist in SQLite", count
-                )
-                return
-        except Exception as exc:
-            logger.warning("Could not check migration status: %s", exc)
-            return
-
-        logger.info("Starting one-time migration of %d seen_files entries to SQLite...", len(seen))
+        logger.info(
+            "Starting idempotent migration of %d seen_files entries to SQLite...", len(seen)
+        )
         migrated = 0
         skipped = 0
 
@@ -597,7 +584,6 @@ class Watcher:
             status = info.get("status", "")
             file_name = info.get("name", "unknown")
             try:
-                watcher_job_id = str(uuid.uuid4())
                 # Keep the SharePoint date separate from the processing audit timestamp.
                 source_modified_at = info.get("lastModifiedDateTime", "")
                 processed_at = info.get("processed_at", "")
@@ -615,6 +601,43 @@ class Watcher:
                     skipped += 1
                     continue
 
+                with self.job_store._lock, self.job_store._conn() as conn:
+                    existing_count = int(
+                        conn.execute(
+                            """SELECT COUNT(*) FROM classification_jobs
+                               WHERE owner_username = 'system_watcher' AND filename = ?""",
+                            (file_name,),
+                        ).fetchone()[0]
+                    )
+                    if existing_count:
+                        # Backfill source metadata for every retry attempt, but restore the
+                        # processing audit only on a legacy row where completed_at was set
+                        # exactly to the SharePoint timestamp by the old migration.
+                        conn.execute(
+                            """UPDATE classification_jobs
+                               SET completed_at = CASE
+                                     WHEN ? != '' AND ? != ''
+                                      AND COALESCE(source_modified_at, '') = ''
+                                      AND completed_at = ?
+                                     THEN ? ELSE completed_at END,
+                                   source_modified_at = CASE
+                                     WHEN COALESCE(source_modified_at, '') = '' AND ? != ''
+                                     THEN ? ELSE source_modified_at END
+                               WHERE owner_username = 'system_watcher' AND filename = ?""",
+                            (
+                                processed_at,
+                                source_modified_at,
+                                source_modified_at,
+                                processed_at,
+                                source_modified_at,
+                                source_modified_at,
+                                file_name,
+                            ),
+                        )
+                        migrated += 1
+                        continue
+
+                watcher_job_id = str(uuid.uuid4())
                 local_path = self.settings.work_dir / "input" / file_name
                 self.job_store.create_job(
                     job_id=watcher_job_id,

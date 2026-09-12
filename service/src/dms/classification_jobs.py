@@ -783,15 +783,15 @@ class ClassificationJobStore:
         business_timestamp = (
             "dms_file_reporting_date(filename, source_modified_at, completed_at, owner_username)"
         )
-        where_parts: list[str] = ["completed_at IS NOT NULL"]
+        outcome_filters: list[str] = []
         params: list[Any] = []
         if from_date:
-            where_parts.append(f"SUBSTR({business_timestamp}, 1, 10) >= ?")
+            outcome_filters.append("SUBSTR(outcome_at, 1, 10) >= ?")
             params.append(from_date)
         if to_date:
-            where_parts.append(f"SUBSTR({business_timestamp}, 1, 10) <= ?")
+            outcome_filters.append("SUBSTR(outcome_at, 1, 10) <= ?")
             params.append(to_date)
-        where_sql = " AND ".join(where_parts)
+        outcome_where = "WHERE " + " AND ".join(outcome_filters) if outcome_filters else ""
 
         with self._lock, self._conn() as conn:
             # Dùng "file-level final outcome" per filename:
@@ -816,20 +816,21 @@ class ClassificationJobStore:
                             ELSE '{JOB_STATUS_ERROR}'
                         END AS final_status
                     FROM classification_jobs
-                    WHERE {where_sql}
+                    WHERE completed_at IS NOT NULL
                     GROUP BY filename, owner_username
+                ), resolved_outcomes AS (
+                    SELECT *,
+                           CASE
+                               WHEN final_status = '{JOB_STATUS_COMPLETED}' THEN success_at
+                               ELSE last_at
+                           END AS outcome_at
+                    FROM file_outcomes
                 )
-                SELECT
-                    SUBSTR(
-                        CASE
-                            WHEN final_status = '{JOB_STATUS_COMPLETED}' THEN success_at
-                            ELSE last_at
-                        END,
-                        1, 10
-                    ) AS day,
-                    SUM(CASE WHEN final_status = '{JOB_STATUS_COMPLETED}' THEN 1 ELSE 0 END) AS success,
-                    SUM(CASE WHEN final_status = '{JOB_STATUS_ERROR}'     THEN 1 ELSE 0 END) AS failed
-                FROM file_outcomes
+                SELECT SUBSTR(outcome_at, 1, 10) AS day,
+                       SUM(CASE WHEN final_status = '{JOB_STATUS_COMPLETED}' THEN 1 ELSE 0 END) AS success,
+                       SUM(CASE WHEN final_status = '{JOB_STATUS_ERROR}'     THEN 1 ELSE 0 END) AS failed
+                FROM resolved_outcomes
+                {outcome_where}
                 GROUP BY day
                 ORDER BY day
                 """,

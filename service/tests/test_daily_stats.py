@@ -229,6 +229,18 @@ def test_extract_date_from_filename():
     assert extract_date_from_filename("DMST0826-100.xlsx") is None  # invalid suffix day 100
     assert extract_date_from_filename(None) is None  # defensive none guard
 
+    # A DMS marker must start at a token boundary; substrings are not DMS files.
+    assert extract_date_from_filename("NOTDMS-13102025.xlsx") is None
+    assert extract_date_from_filename("XDMST0826-28-31.xlsx") is None
+
+    # Malformed DMS periods must fall back to metadata instead of another regex branch.
+    assert extract_date_from_filename("DMS-1510-32102025.xlsx", "2026-10-20") is None
+    assert extract_date_from_filename("DMST0826-99-31.xlsx") is None
+    assert extract_date_from_filename("DMST0826-31-30.xlsx") is None
+
+    # Generic filenames may contain an invalid candidate before a valid supported date.
+    assert extract_date_from_filename("report_32-13-2025_2026-09-05.xlsx") == "2026-09-05"
+
 
 def test_daily_stats_prioritizes_filename_date_over_upload_and_completion(job_store):
     reconstructed_batch_day = "2026-09-05T12:00:00Z"
@@ -271,6 +283,36 @@ def test_daily_stats_prioritizes_filename_date_over_upload_and_completion(job_st
     # Audit completed_at trên server được bảo toàn 100% không bị ghi đè
     jobs = job_store.list_jobs(include_results=False)
     assert {job["completed_at"] for job in jobs} == {reconstructed_batch_day}
+
+
+def test_daily_stats_filters_after_resolving_final_file_outcome(job_store):
+    filename = "retry-without-date.xlsx"
+    _create_failed_job(
+        job_store,
+        filename=filename,
+        completed_at="2026-08-20T08:00:00Z",
+        owner="alice",
+    )
+    _create_completed_job(
+        job_store,
+        filename=filename,
+        completed_at="2026-09-05T08:00:00Z",
+        owner="alice",
+    )
+
+    assert job_store.daily_stats()["dates"] == ["2026-09-05"]
+    assert job_store.daily_stats(from_date="2026-08-01", to_date="2026-08-31") == {
+        "dates": [],
+        "success_counts": [],
+        "failed_counts": [],
+        "counts": [],
+    }
+    assert job_store.daily_stats(from_date="2026-09-01", to_date="2026-09-30") == {
+        "dates": ["2026-09-05"],
+        "success_counts": [1],
+        "failed_counts": [0],
+        "counts": [1],
+    }
 
 
 def test_daily_stats_queued_jobs_excluded(job_store):

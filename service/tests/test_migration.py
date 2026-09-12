@@ -159,24 +159,42 @@ def test_migration_skips_empty_seen(watcher_with_store, job_store):
     assert len(jobs) == 0
 
 
-def test_migration_skips_when_watcher_records_exist(watcher_with_store, tmp_seen_files, job_store):
-    """Migration skips if system_watcher records already exist (idempotency check)."""
+def test_migration_upgrades_partial_legacy_history_per_file(
+    watcher_with_store, tmp_seen_files, job_store
+):
+    """Existing legacy rows are backfilled while missing seen files are still migrated."""
     import uuid
 
-    # Pre-create a watcher record to simulate already migrated
+    legacy_job_id = str(uuid.uuid4())
+    source_date = "2026-05-10T08:00:00Z"
+    processed_at = "2026-05-10T08:05:00Z"
     job_store.create_job(
-        job_id=str(uuid.uuid4()),
+        job_id=legacy_job_id,
         owner_username="system_watcher",
         owner_role="system",
-        filename="existing.xlsx",
+        filename="file_done_1.xlsx",
         mode="watcher",
-        input_path="/app/data/work/input/existing.xlsx",
-        output_path="/app/data/work/output/existing_output.xlsx",
+        input_path="/app/data/work/input/file_done_1.xlsx",
+        output_path="/app/data/work/output/file_done_1.xlsx",
     )
+    # Simulate the legacy migration that wrote SharePoint time into completed_at.
+    with job_store._lock, job_store._conn() as conn:
+        conn.execute(
+            """UPDATE classification_jobs
+               SET status = 'completed', completed_at = ?, updated_at = ?
+               WHERE job_id = ?""",
+            (source_date, source_date, legacy_job_id),
+        )
 
     _, seen = tmp_seen_files
     watcher_with_store._migrate_seen_files_to_sqlite(seen)
 
-    # Should still only have 1 record (the pre-existing one)
     jobs = job_store.list_jobs(owner_username="system_watcher", include_results=False)
-    assert len(jobs) == 1
+    assert len(jobs) == 4
+    upgraded = next(job for job in jobs if job["job_id"] == legacy_job_id)
+    assert upgraded["source_modified_at"] == source_date
+    assert upgraded["completed_at"] == processed_at
+
+    # Re-running is idempotent after a partial upgrade.
+    watcher_with_store._migrate_seen_files_to_sqlite(seen)
+    assert len(job_store.list_jobs(owner_username="system_watcher", include_results=False)) == 4

@@ -62,115 +62,83 @@ def utc_day_bounds_iso(
 
 
 def extract_date_from_filename(
-    filename: str | Path,
+    filename: str | Path | None,
     reference_date: str | datetime | date | None = None,
 ) -> str | None:
-    """Extract business reporting date (YYYY-MM-DD) from a DMS filename.
-
-    Supports:
-    - Batch periods: DMSTMMYY-DD-DD or DMSTMMYY-DD (e.g. DMST0826-28-31 -> 2026-08-31)
-    - Full standard dates: DMS-DDMMYYYY or DMS_DDMMYYYY (e.g. DMS-13102025 -> 2025-10-13)
-    - Date ranges: DMS-DDMM-DDMMYYYY (e.g. DMS-1510-17102025 -> 2025-10-17)
-    - Separated dates: DD-MM-YYYY or DD_MM_YYYY or DD.MM.YYYY
-    - ISO dates: YYYY-MM-DD or YYYY_MM_DD
-    - Compact ISO: YYYYMMDD
-    - Year-less date ranges with reference_date: DMS-1510-1710.xlsx
-    """
+    """Extract a validated business reporting date from a supported filename."""
     if not filename:
         return None
     stem = Path(filename).stem
 
-    # 1. Batch periods: DMSTMMYY-DD-DD or DMSTMMYY-DD
-    # e.g. DMST0826-28-31 -> month=8, year=2026, day=31
-    m_dmst = re.search(
-        r"(?i)DMST(\d{2})(\d{2})[-_](?:(\d{1,2})[-_])?(\d{1,2})(?:[^\d]|$)",
-        stem,
-    )
-    if m_dmst:
-        month = int(m_dmst.group(1))
-        year = 2000 + int(m_dmst.group(2))
-        day = int(m_dmst.group(4))
+    def valid_date(year: int, month: int, day: int) -> date | None:
         try:
-            return date(year, month, day).isoformat()
+            return date(year, month, day)
         except ValueError:
-            pass
+            return None
 
-    # 2. DMS-DDMM-DDMMYYYY or DMS-DDMMYYYY
-    # e.g. DMS-13102025 -> day=13, month=10, year=2025
-    # e.g. DMS-1510-17102025 -> day=17, month=10, year=2025
-    m_dms_full = re.search(
-        r"(?i)DMS[-_](?:(?:\d{2})(?:\d{2})[-_])?(\d{2})(\d{2})(20\d{2})(?:[^\d]|$)",
-        stem,
-    )
-    if m_dms_full:
-        day = int(m_dms_full.group(1))
-        month = int(m_dms_full.group(2))
-        year = int(m_dms_full.group(3))
-        try:
-            return date(year, month, day).isoformat()
-        except ValueError:
-            pass
+    # DMS/DMST names are a strict contract. Once a leading marker is present,
+    # malformed ranges must not fall through to a more permissive date pattern.
+    if re.match(r"(?i)^DMST", stem):
+        match = re.fullmatch(
+            r"(?i)DMST(\d{2})(\d{2})[-_](\d{1,2})(?:[-_](\d{1,2}))?",
+            stem,
+        )
+        if not match:
+            return None
+        month = int(match.group(1))
+        year = 2000 + int(match.group(2))
+        start_day = int(match.group(3))
+        end_day = int(match.group(4) or match.group(3))
+        start = valid_date(year, month, start_day)
+        end = valid_date(year, month, end_day)
+        return end.isoformat() if start and end and start <= end else None
 
-    # 3. Separated dates: DD-MM-YYYY or DD_MM_YYYY
-    m_separated = re.search(
-        r"(?i)(?:^|[^\d])(\d{2})[-_.](\d{2})[-_.](20\d{2})(?:[^\d]|$)",
-        stem,
-    )
-    if m_separated:
-        day = int(m_separated.group(1))
-        month = int(m_separated.group(2))
-        year = int(m_separated.group(3))
-        try:
-            return date(year, month, day).isoformat()
-        except ValueError:
-            pass
-
-    # 4. ISO format: YYYY-MM-DD or YYYY_MM_DD
-    m_iso = re.search(
-        r"(?i)(?:^|[^\d])(20\d{2})[-_.](\d{2})[-_.](\d{2})(?:[^\d]|$)",
-        stem,
-    )
-    if m_iso:
-        year = int(m_iso.group(1))
-        month = int(m_iso.group(2))
-        day = int(m_iso.group(3))
-        try:
-            return date(year, month, day).isoformat()
-        except ValueError:
-            pass
-
-    # 5. Compact ISO: YYYYMMDD
-    m_compact = re.search(
-        r"(?i)(?:^|[^\d])(20\d{2})(\d{2})(\d{2})(?:[^\d]|$)",
-        stem,
-    )
-    if m_compact:
-        year = int(m_compact.group(1))
-        month = int(m_compact.group(2))
-        day = int(m_compact.group(3))
-        try:
-            return date(year, month, day).isoformat()
-        except ValueError:
-            pass
-
-    # 6. Year-less range with reference_date: e.g. DMS-1510-1710.xlsx
-    if reference_date:
-        ref_str = str(reference_date).strip()
-        ref_year_match = re.search(r"(20\d{2})", ref_str)
-        if ref_year_match:
-            ref_year = int(ref_year_match.group(1))
-            m_yearless = re.search(
-                r"(?i)DMS[-_](?:(?:\d{2})(?:\d{2})[-_])?(\d{2})(\d{2})(?:[^\d]|$)",
-                stem,
+    if re.match(r"(?i)^DMS(?=[-_])", stem):
+        full_day = re.fullmatch(r"(?i)DMS[-_](\d{2})(\d{2})(20\d{2})", stem)
+        if full_day:
+            parsed = valid_date(
+                int(full_day.group(3)), int(full_day.group(2)), int(full_day.group(1))
             )
-            if m_yearless:
-                day = int(m_yearless.group(1))
-                month = int(m_yearless.group(2))
-                try:
-                    return date(ref_year, month, day).isoformat()
-                except ValueError:
-                    pass
+            return parsed.isoformat() if parsed else None
 
+        full_range = re.fullmatch(
+            r"(?i)DMS[-_](\d{2})(\d{2})[-_](\d{2})(\d{2})(20\d{2})",
+            stem,
+        )
+        if full_range:
+            year = int(full_range.group(5))
+            start = valid_date(year, int(full_range.group(2)), int(full_range.group(1)))
+            end = valid_date(year, int(full_range.group(4)), int(full_range.group(3)))
+            return end.isoformat() if start and end and start <= end else None
+
+        separated = re.fullmatch(r"(?i)DMS[-_](\d{2})[-_.](\d{2})[-_.](20\d{2})", stem)
+        if separated:
+            parsed = valid_date(
+                int(separated.group(3)), int(separated.group(2)), int(separated.group(1))
+            )
+            return parsed.isoformat() if parsed else None
+
+        yearless_range = re.fullmatch(r"(?i)DMS[-_](\d{2})(\d{2})[-_](\d{2})(\d{2})", stem)
+        if yearless_range and reference_date:
+            year_match = re.search(r"(20\d{2})", str(reference_date).strip())
+            if year_match:
+                year = int(year_match.group(1))
+                start = valid_date(year, int(yearless_range.group(2)), int(yearless_range.group(1)))
+                end = valid_date(year, int(yearless_range.group(4)), int(yearless_range.group(3)))
+                return end.isoformat() if start and end and start <= end else None
+        return None
+
+    # Non-DMS filenames may contain an explicit full date.
+    patterns = (
+        (r"(?:^|[^\d])(\d{2})[-_.](\d{2})[-_.](20\d{2})(?:[^\d]|$)", (3, 2, 1)),
+        (r"(?:^|[^\d])(20\d{2})[-_.](\d{2})[-_.](\d{2})(?:[^\d]|$)", (1, 2, 3)),
+        (r"(?:^|[^\d])(20\d{2})(\d{2})(\d{2})(?:[^\d]|$)", (1, 2, 3)),
+    )
+    for pattern, order in patterns:
+        for match in re.finditer(pattern, stem):
+            parsed = valid_date(*(int(match.group(index)) for index in order))
+            if parsed:
+                return parsed.isoformat()
     return None
 
 
