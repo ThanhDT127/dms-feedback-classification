@@ -225,6 +225,10 @@ def test_analytics_duplicate_details_route_validates_pagination(analytics_api):
     assert response.status_code == 200
     assert response.json()["items"][0]["duplicate_rows"] == 1
     assert client.get("/api/analytics/duplicates?page=0").status_code == 422
+    oversized = client.get(f"/api/analytics/duplicates?page={10**30}&page_size=10")
+    assert oversized.status_code == 200
+    assert oversized.json()["items"] == []
+    assert oversized.json()["total"] == 1
 
 
 def test_analytics_unit_issue_type_matrix_route(analytics_api):

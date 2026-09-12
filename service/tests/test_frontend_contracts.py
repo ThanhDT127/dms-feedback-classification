@@ -143,8 +143,8 @@ def test_managed_file_analytics_assets_have_updated_cache_versions():
     index_html = _read("index.html")
 
     assert "css/style.css?v=1.0.18" in index_html
-    assert "js/api.js?v=1.0.9" in index_html
-    assert "js/pages/analytics.js?v=1.0.21" in index_html
+    assert "js/api.js?v=1.0.10" in index_html
+    assert "js/pages/analytics.js?v=1.0.22" in index_html
     assert "js/components/charts.js?v=1.0.8" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
 
@@ -330,13 +330,13 @@ def test_analytics_api_client_has_authenticated_query_wrappers():
     api_js = _read("js/api.js")
 
     for expected in [
-        "function getAnalyticsOverview(params = {})",
-        "function getAnalyticsSources(params = {})",
-        "function getAnalyticsUnits(params = {})",
-        "function getAnalyticsGroups(params = {})",
-        "function getAnalyticsProducts(params = {})",
-        "function getAnalyticsIssues(params = {})",
-        "function getAnalyticsDataQuality(params = {})",
+        "function getAnalyticsOverview(params = {}, opts = {})",
+        "function getAnalyticsSources(params = {}, opts = {})",
+        "function getAnalyticsUnits(params = {}, opts = {})",
+        "function getAnalyticsGroups(params = {}, opts = {})",
+        "function getAnalyticsProducts(params = {}, opts = {})",
+        "function getAnalyticsIssues(params = {}, opts = {})",
+        "function getAnalyticsDataQuality(params = {}, opts = {})",
         "buildAnalyticsQuery",
         "/analytics/overview",
         "/analytics/issues",
@@ -365,13 +365,13 @@ def test_analytics_page_is_a_separate_authenticated_spa_route():
     assert "analytics:  { module: () => window.AnalyticsPage" in app_js
     assert "{ id: 'analytics', icon: '📊', label: 'Dashboard' }" in sidebar_js
     assert "window.AnalyticsPage" in analytics_js
-    assert "API.getAnalyticsOverview" in analytics_js
+    assert "getAnalyticsOverview" in analytics_js
     assert "fetch(" not in analytics_js
     assert "XMLHttpRequest" not in analytics_js
     assert "Chất lượng dữ liệu" not in analytics_js
     assert "analytics-data-quality" not in analytics_js
     assert "renderDataQuality" not in analytics_js
-    assert "API.getAnalyticsDataQuality" not in analytics_js
+    assert "getAnalyticsDataQuality" not in analytics_js
     assert {"render", "destroy", "applyFilters", "resetFilters", "refresh"} <= _page_exports(
         analytics_js
     )
@@ -404,7 +404,7 @@ def test_analytics_page_supports_safe_issue_drilldown_filters_and_pagination():
         "selectField('analytics-issue-label'",
         "selectField('analytics-issue-product'",
         "selectField('analytics-issue-status'",
-        "API.getAnalyticsIssues",
+        "getAnalyticsIssues",
         "page_size: DEFAULT_PAGE_SIZE",
         "AnalyticsPage.changeIssuePage(-1)",
         "AnalyticsPage.changeIssuePage(1)",
@@ -522,7 +522,7 @@ def test_analytics_p0_matches_prototype_structure_without_restoring_removed_scop
     ]:
         assert expected_css in style_css
     assert "css/style.css?v=1.0.18" in index_html
-    assert "js/pages/analytics.js?v=1.0.21" in index_html
+    assert "js/pages/analytics.js?v=1.0.22" in index_html
 
     for removed in [
         "dateField('analytics-compare-from'",
@@ -671,9 +671,9 @@ def test_analytics_page_renders_and_cleans_up_daily_trend():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
 
-    assert "function getAnalyticsDailyTrend(params = {})" in api_js
+    assert "function getAnalyticsDailyTrend(params = {}, opts = {})" in api_js
     assert "/analytics/trends/daily" in api_js
-    assert "API.getAnalyticsDailyTrend" in analytics_js
+    assert "getAnalyticsDailyTrend" in analytics_js
     assert "Charts.createLineChart('analytics-daily-trend-chart'" in analytics_js
     assert "Charts.destroy('analytics-daily-trend-chart')" in analytics_js
 
@@ -682,9 +682,9 @@ def test_analytics_page_renders_issue_type_distribution():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
 
-    assert "function getAnalyticsIssueTypes(params = {})" in api_js
+    assert "function getAnalyticsIssueTypes(params = {}, opts = {})" in api_js
     assert "/analytics/issue-types" in api_js
-    assert "API.getAnalyticsIssueTypes" in analytics_js
+    assert "getAnalyticsIssueTypes" in analytics_js
     assert "analytics-issue-types-chart" in analytics_js
     assert "Charts.destroy('analytics-issue-types-chart')" in analytics_js
 
@@ -693,9 +693,9 @@ def test_analytics_page_renders_paginated_duplicate_details():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
 
-    assert "function getAnalyticsDuplicates(params = {})" in api_js
+    assert "function getAnalyticsDuplicates(params = {}, opts = {})" in api_js
     assert "/analytics/duplicates" in api_js
-    assert "API.getAnalyticsDuplicates" in analytics_js
+    assert "getAnalyticsDuplicates" in analytics_js
     assert "analytics-duplicates" in analytics_js
     assert "AnalyticsPage.changeDuplicatePage(-1)" in analytics_js
     assert "AnalyticsPage.changeDuplicatePage(1)" in analytics_js
@@ -707,9 +707,9 @@ def test_analytics_page_renders_priority_issues():
     analytics_js = _read("js/pages/analytics.js")
     style_css = _read("css/style.css")
 
-    assert "function getAnalyticsPriorityIssues(params = {})" in api_js
+    assert "function getAnalyticsPriorityIssues(params = {}, opts = {})" in api_js
     assert "/analytics/priority-issues" in api_js
-    assert "API.getAnalyticsPriorityIssues" in analytics_js
+    assert "getAnalyticsPriorityIssues" in analytics_js
     assert "analytics-priority-issues" in analytics_js
     assert "Phản hồi cần ưu tiên" in analytics_js
     assert "analytics-priority-table" in analytics_js
@@ -721,9 +721,9 @@ def test_analytics_page_renders_unit_issue_type_heatmap():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
 
-    assert "function getAnalyticsUnitIssueTypeMatrix(params = {})" in api_js
+    assert "function getAnalyticsUnitIssueTypeMatrix(params = {}, opts = {})" in api_js
     assert "/analytics/unit-issue-type-matrix" in api_js
-    assert "API.getAnalyticsUnitIssueTypeMatrix" in analytics_js
+    assert "getAnalyticsUnitIssueTypeMatrix" in analytics_js
     assert "analytics-unit-issue-type-matrix" in analytics_js
     assert "analytics-heat-cell" in analytics_js
 
@@ -749,8 +749,8 @@ def test_analytics_page_renders_unit_before_cascading_district_filter():
     sidebar_js = _read("js/components/sidebar.js")
     app_js = _read("js/app.js")
 
-    assert "function getAnalyticsGeography(params = {})" in api_js
-    assert "function getAnalyticsFilterOptions(params = {})" in api_js
+    assert "function getAnalyticsGeography(params = {}, opts = {})" in api_js
+    assert "function getAnalyticsFilterOptions(params = {}, opts = {})" in api_js
     assert "/analytics/filter-options" in api_js
     assert "selectField('analytics-unit'" in analytics_js
     assert "selectField('analytics-district'" in analytics_js
@@ -762,10 +762,10 @@ def test_analytics_page_renders_unit_before_cascading_district_filter():
     )
     assert "AnalyticsPage.onUnitChange()" in analytics_js
     assert "resetSelect('analytics-district')" in analytics_js
-    assert "API.getAnalyticsFilterOptions" in analytics_js
+    assert "getAnalyticsFilterOptions" in analytics_js
     assert "const optionsRequestId = ++_state.optionsRequestId" in analytics_js
     assert "if (optionsRequestId !== _state.optionsRequestId) return" in analytics_js
-    assert "API.getAnalyticsGeography" in analytics_js
+    assert "getAnalyticsGeography" in analytics_js
     assert "analytics-provinces-chart" in analytics_js
     assert "district: _state.filters.district" in analytics_js
     assert "unit: _state.filters.unit" in analytics_js
@@ -795,9 +795,9 @@ def test_analytics_page_renders_processing_status_donut_without_backlog_aging():
     api_js = _read("js/api.js")
     analytics_js = _read("js/pages/analytics.js")
 
-    assert "function getAnalyticsStatusBacklog(params = {})" in api_js
+    assert "function getAnalyticsStatusBacklog(params = {}, opts = {})" in api_js
     assert "/analytics/status-backlog" in api_js
-    assert "API.getAnalyticsStatusBacklog" in analytics_js
+    assert "getAnalyticsStatusBacklog" in analytics_js
     assert "analytics-status-chart" in analytics_js
     assert "Tình trạng xử lý" in analytics_js
     assert "Charts.destroy('analytics-status-chart')" in analytics_js

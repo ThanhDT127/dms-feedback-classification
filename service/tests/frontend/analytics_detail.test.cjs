@@ -11,7 +11,7 @@ function harness() {
   const requests = [];
   const modals = [];
   const app = { showModal(html) { modals.push(html); } };
-  const context = {
+  const context = { AbortController,
     window: { App: app }, App: app,
     document: {
       getElementById(id) { return nodes[id] || null; },

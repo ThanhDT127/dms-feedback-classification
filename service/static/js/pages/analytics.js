@@ -17,7 +17,43 @@ window.AnalyticsPage = (() => {
     units: [],
     requestId: 0,
     optionsRequestId: 0,
+    issuesRequestId: 0,
+    duplicatesRequestId: 0,
   };
+
+  // One network lane shared by refresh, pagination, comparison and draft options.
+  // Superseded owners abort their fetch; queued stale work never reaches the API.
+  let requestTail = Promise.resolve();
+  const requestControllers = new Map();
+
+  function cancelRequest(owner) {
+    requestControllers.get(owner)?.abort();
+    requestControllers.delete(owner);
+  }
+
+  function cancelRequests() {
+    requestControllers.forEach(controller => controller.abort());
+    requestControllers.clear();
+    _state.optionsRequestId++;
+    issueOptionsRequestId++;
+    comparisonRequestId++;
+    _state.issuesRequestId++;
+    _state.duplicatesRequestId++;
+  }
+
+  function analyticsRequest(owner, method, params) {
+    cancelRequest(owner);
+    const controller = new AbortController();
+    requestControllers.set(owner, controller);
+    const request = requestTail.then(() => {
+      if (controller.signal.aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
+      return API[method](params, { signal: controller.signal, silent: true });
+    });
+    requestTail = request.catch(() => {});
+    return request.finally(() => {
+      if (requestControllers.get(owner) === controller) requestControllers.delete(owner);
+    });
+  }
 
   function getFilterKey() {
     return JSON.stringify({
@@ -137,16 +173,6 @@ window.AnalyticsPage = (() => {
       </div>
     `;
     renderActiveFilters();
-    loadFilterOptions();
-    const filterKey = getFilterKey();
-    if (_cache && _cache.key === filterKey) {
-      loadIssueFilterOptions(true);
-      loadComparison();
-      renderAllPanels(_cache.results);
-      const status = document.getElementById('analytics-page-status');
-      if (status) status.textContent = 'Dữ liệu phân tích đã được tải từ bộ nhớ đệm.';
-      return;
-    }
     refresh(false);
   }
 
@@ -203,7 +229,6 @@ window.AnalyticsPage = (() => {
     _state.duplicatePage = 1;
     _cache = null;
     renderActiveFilters();
-    loadFilterOptions();
     refresh(true);
   }
 
@@ -225,7 +250,6 @@ window.AnalyticsPage = (() => {
     setFilterError(null);
     _cache = null;
     renderActiveFilters();
-    loadFilterOptions();
     refresh(true);
   }
 
@@ -247,19 +271,26 @@ window.AnalyticsPage = (() => {
   async function loadFilterOptions(scope = _state.filters) {
     const optionsRequestId = ++_state.optionsRequestId;
     setFilterOptionsError(null);
+    const isDefaultScope = scope === _state.filters;
+    const domUnit = document.getElementById('analytics-unit')?.value;
+    const targetUnit = (isDefaultScope && domUnit) ? domUnit : (scope.unit || undefined);
     try {
-      const options = await API.getAnalyticsFilterOptions({
+      const options = await analyticsRequest('filterOptions', 'getAnalyticsFilterOptions', {
         from: scope.from || undefined,
         to: scope.to || undefined,
-        unit: scope.unit || undefined,
+        unit: targetUnit || undefined,
       });
       if (optionsRequestId !== _state.optionsRequestId) return;
       _state.filterOptions = {
         districts: options?.districts || [],
         units: options?.units || [],
       };
-      updateSelect('analytics-unit', _state.filterOptions.units, scope.unit);
-      updateSelect('analytics-district', _state.filterOptions.districts, scope.district);
+      const curUnit = document.getElementById('analytics-unit')?.value;
+      const curDistrict = document.getElementById('analytics-district')?.value;
+      const selectedUnit = (isDefaultScope && curUnit) ? curUnit : scope.unit;
+      const selectedDistrict = (isDefaultScope && curDistrict) ? curDistrict : scope.district;
+      updateSelect('analytics-unit', _state.filterOptions.units, selectedUnit);
+      updateSelect('analytics-district', _state.filterOptions.districts, selectedDistrict);
     } catch (error) {
       if (optionsRequestId !== _state.optionsRequestId) return;
       console.warn('Không thể tải lựa chọn bộ lọc analytics:', error.message);
@@ -286,7 +317,7 @@ window.AnalyticsPage = (() => {
     const element = document.getElementById('analytics-filter-options-error');
     if (!element) return;
     element.hidden = !message;
-    element.textContent = message || '';
+    element.innerHTML = message ? `${escHtml(message)} <button type="button" class="btn btn-ghost btn-sm" onclick="AnalyticsPage.loadFilterOptions()">Thử lại</button>` : '';
   }
 
   function renderActiveFilters() {
@@ -303,51 +334,6 @@ window.AnalyticsPage = (() => {
   let issueOptionsRequestId = 0;
   let comparisonRequestId = 0;
   let comparisonPeriod = 'month';
-
-  function deriveFallbackIssueFilterOptions(selection) {
-    const items = _state.issues?.items || [];
-    const effectiveUnit = _state.filters.unit || selection.unit;
-    const unitSet = new Set();
-    (_state.filterOptions.units || []).forEach(u => { if (u) unitSet.add(u); });
-    (_state.units || []).forEach(u => { if (u?.label) unitSet.add(u.label); });
-    items.forEach(it => { if (it.unit_name) unitSet.add(it.unit_name); });
-    const units = Array.from(unitSet).sort();
-
-    let scoped = items;
-    if (effectiveUnit) {
-      scoped = scoped.filter(it => (it.unit_name || '').toLowerCase() === effectiveUnit.toLowerCase());
-    }
-
-    const labelSet = new Set();
-    scoped.forEach(it => {
-      const labs = it.labels || [];
-      if (!labs.length) labelSet.add('__unlabeled__');
-      else labs.forEach(l => { if (l) labelSet.add(l); });
-    });
-    const labels = Array.from(labelSet).sort();
-
-    if (selection.label) {
-      if (selection.label === '__unlabeled__') {
-        scoped = scoped.filter(it => !(it.labels && it.labels.length));
-      } else {
-        scoped = scoped.filter(it => (it.labels || []).some(l => (l || '').toLowerCase() === selection.label.toLowerCase()));
-      }
-    }
-
-    const productSet = new Set();
-    scoped.forEach(it => { if (it.product) productSet.add(it.product); });
-    const products = Array.from(productSet).sort();
-
-    if (selection.product) {
-      scoped = scoped.filter(it => (it.product || '').toLowerCase() === selection.product.toLowerCase());
-    }
-
-    const statusSet = new Set();
-    scoped.forEach(it => { if (it.business_status) statusSet.add(it.business_status); });
-    const statuses = Array.from(statusSet).sort();
-
-    return { units, labels, products, statuses };
-  }
 
   function applyIssueOptions(options, selection) {
     Object.entries(ISSUE_DIMENSIONS).forEach(([key, name]) => {
@@ -368,14 +354,15 @@ window.AnalyticsPage = (() => {
       if (input) input.disabled = true;
     });
     try {
-      const options = await API.getAnalyticsIssueFilterOptions({ ...globalQueryParams(), issue_unit: selection.unit, label: selection.label, product: selection.product });
+      const options = await analyticsRequest('issueOptions', 'getAnalyticsIssueFilterOptions', { ...globalQueryParams(), issue_unit: selection.unit, label: selection.label, product: selection.product });
       if (requestId !== issueOptionsRequestId) return;
       applyIssueOptions(options, selection);
     } catch (error) {
       if (requestId !== issueOptionsRequestId) return;
-      const fallbackOptions = deriveFallbackIssueFilterOptions(selection);
-      applyIssueOptions(fallbackOptions, selection);
-      if (errorNode) errorNode.hidden = true;
+      if (errorNode) {
+        errorNode.hidden = false;
+        errorNode.innerHTML = `Không thể tải lựa chọn chi tiết vấn đề. <button type="button" class="btn btn-ghost btn-sm" onclick="AnalyticsPage.loadIssueFilterOptions()">Thử lại</button>`;
+      }
     }
   }
 
@@ -400,15 +387,15 @@ window.AnalyticsPage = (() => {
     return `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
   }
 
-  async function fallbackComparison(period) {
+  async function fallbackComparison(period, requestId) {
     const months = { month: 1, quarter: 3, year: 12 }[period] || 1;
     const prevFrom = shiftDate(_state.filters.from, months);
     const prevTo = shiftDate(_state.filters.to, months);
 
-    const [current, previous] = await Promise.all([
-      API.getAnalyticsOverview(globalQueryParams()),
-      API.getAnalyticsOverview({ ...globalQueryParams(), from: prevFrom, to: prevTo }),
-    ]);
+    const params = globalQueryParams();
+    const current = await analyticsRequest('comparison', 'getAnalyticsOverview', params);
+    if (requestId !== comparisonRequestId) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
+    const previous = await analyticsRequest('comparison', 'getAnalyticsOverview', { ...params, from: prevFrom, to: prevTo });
 
     const metrics = {};
     const keys = ['total_issues', 'sentiment_coverage', 'product_coverage', 'duplicate_issue_rate', 'model_accuracy'];
@@ -442,6 +429,7 @@ window.AnalyticsPage = (() => {
     const element = document.getElementById('analytics-comparison');
     if (!element) return;
     const requestId = ++comparisonRequestId;
+    cancelRequest('comparison');
     comparisonPeriod = document.getElementById('analytics-comparison-period')?.value || comparisonPeriod;
     if (!_state.filters.from || !_state.filters.to) {
       renderEmpty(element, 'Chọn đủ Từ ngày và Đến ngày rồi Áp dụng để so sánh cùng kỳ.');
@@ -449,18 +437,19 @@ window.AnalyticsPage = (() => {
     }
     element.innerHTML = renderPanelLoading();
     try {
-      const data = await API.getAnalyticsComparison({ ...globalQueryParams(), period: comparisonPeriod });
+      const data = await analyticsRequest('comparison', 'getAnalyticsComparison', { ...globalQueryParams(), period: comparisonPeriod });
       if (requestId !== comparisonRequestId) return;
       renderComparison(element, data);
     } catch (error) {
       if (requestId !== comparisonRequestId) return;
       try {
-        const fallbackData = await fallbackComparison(comparisonPeriod);
+        if (error.status !== 404) throw error;
+        const fallbackData = await fallbackComparison(comparisonPeriod, requestId);
         if (requestId !== comparisonRequestId) return;
         renderComparison(element, fallbackData);
       } catch (fallbackError) {
         if (requestId !== comparisonRequestId) return;
-        renderFailure(element, fallbackError, 'Không thể tải dữ liệu so sánh');
+        renderFailure(element, fallbackError, 'Không thể tải dữ liệu so sánh', 'AnalyticsPage.loadComparison()');
       }
     }
   }
@@ -612,115 +601,143 @@ window.AnalyticsPage = (() => {
   }
 
   function renderAllPanels(results) {
-    renderResult(results.overview, renderOverview, 'analytics-overview');
-    renderResult(results.dailyTrend, renderDailyTrend, 'analytics-daily-trend');
-    renderResult(results.issueTypes, renderIssueTypes, 'analytics-issue-types');
-    renderResult(results.unitIssueTypeMatrix, renderUnitIssueTypeMatrix, 'analytics-unit-issue-type-matrix');
-    renderResult(results.geography, renderGeography, 'analytics-geography');
-    renderResult(results.duplicates, (element, data) => { _state.duplicates = data; renderDuplicates(element, data); }, 'analytics-duplicates');
-    renderResult(results.sources, renderSources, 'analytics-sources');
-    renderResult(results.units, renderUnits, 'analytics-units');
-    renderResult(results.groups, renderGroups, 'analytics-groups');
-    renderResult(results.products, renderProducts, 'analytics-products');
-    renderResult(results.status, renderProcessingStatus, 'analytics-processing-status');
-    if (results.priority?.status === 'fulfilled') {
-      renderResult(results.priority, renderPriorityIssues, 'analytics-priority-issues');
-    } else if (results.issues?.status === 'fulfilled') {
-      const fallbackData = derivePriorityFromIssues(results.issues.value);
-      renderPriorityIssues(document.getElementById('analytics-priority-issues'), fallbackData);
-    } else {
-      renderResult(results.priority, renderPriorityIssues, 'analytics-priority-issues');
-    }
-    renderResult(results.issues, (element, data) => {
-      _state.issues = data;
-      renderIssues(element, data);
-      const labelSelect = document.getElementById('analytics-issue-label');
-      if (labelSelect && labelSelect.options.length <= 1) {
-        loadIssueFilterOptions(true);
-      }
-    }, 'analytics-issues');
+    Object.entries(results).forEach(([key, result]) => renderPanelResult(key, result));
   }
 
-  async function refresh(force = true) {
-    loadIssueFilterOptions(true);
-    loadComparison();
-    const filterKey = getFilterKey();
-    if (!force && _cache && _cache.key === filterKey) {
-      renderAllPanels(_cache.results);
-      const status = document.getElementById('analytics-page-status');
-      if (status) status.textContent = 'Dữ liệu phân tích đã được tải từ bộ nhớ đệm.';
-      return;
-    }
+  function renderPanelResult(key, result) {
+    const [renderer, id] = PANEL_RENDERERS[key];
+    renderResult(result, renderer, id, key === 'issues' ? 'AnalyticsPage.loadIssues()' : key === 'duplicates' ? 'AnalyticsPage.loadDuplicates()' : 'AnalyticsPage.refresh()');
+  }
 
+  const PANEL_RENDERERS = {
+    overview: [renderOverview, 'analytics-overview'],
+    dailyTrend: [renderDailyTrend, 'analytics-daily-trend'],
+    issueTypes: [renderIssueTypes, 'analytics-issue-types'],
+    geography: [renderGeography, 'analytics-geography'],
+    sources: [renderSources, 'analytics-sources'],
+    units: [renderUnits, 'analytics-units'],
+    groups: [renderGroups, 'analytics-groups'],
+    products: [renderProducts, 'analytics-products'],
+    status: [renderProcessingStatus, 'analytics-processing-status'],
+    unitIssueTypeMatrix: [renderUnitIssueTypeMatrix, 'analytics-unit-issue-type-matrix'],
+    priority: [renderPriorityIssues, 'analytics-priority-issues'],
+    issues: [(element, data) => { _state.issues = data; renderIssues(element, data); }, 'analytics-issues'],
+    duplicates: [(element, data) => { _state.duplicates = data; renderDuplicates(element, data); }, 'analytics-duplicates'],
+  };
+
+  const DASHBOARD_METHODS = {
+    overview: 'getAnalyticsOverview', dailyTrend: 'getAnalyticsDailyTrend',
+    issueTypes: 'getAnalyticsIssueTypes', geography: 'getAnalyticsGeography',
+    sources: 'getAnalyticsSources', units: 'getAnalyticsUnits', groups: 'getAnalyticsGroups',
+    products: 'getAnalyticsProducts', status: 'getAnalyticsStatusBacklog',
+  };
+
+  async function refresh(force = true) {
+    cancelRequests();
+    const filterKey = getFilterKey();
     const requestId = ++_state.requestId;
+    const optionsStartId = _state.optionsRequestId;
+    const current = () => requestId === _state.requestId;
     const status = document.getElementById('analytics-page-status');
-    if (status) status.textContent = 'Đang cập nhật dữ liệu phân tích...';
-    const requests = {
-      overview: API.getAnalyticsOverview(globalQueryParams()),
-      dailyTrend: API.getAnalyticsDailyTrend(globalQueryParams()),
-      issueTypes: API.getAnalyticsIssueTypes(globalQueryParams()),
-      unitIssueTypeMatrix: API.getAnalyticsUnitIssueTypeMatrix(globalQueryParams()),
-      geography: API.getAnalyticsGeography(globalQueryParams()),
-      duplicates: API.getAnalyticsDuplicates(duplicateQueryParams()),
-      sources: API.getAnalyticsSources(globalQueryParams()),
-      units: API.getAnalyticsUnits(globalQueryParams()),
-      groups: API.getAnalyticsGroups(globalQueryParams()),
-      products: API.getAnalyticsProducts(globalQueryParams()),
-      status: API.getAnalyticsStatusBacklog(globalQueryParams()),
-      priority: API.getAnalyticsPriorityIssues(globalQueryParams()),
-      issues: API.getAnalyticsIssues(issueQueryParams()),
-    };
-    const entries = Object.entries(requests);
-    const settled = await Promise.allSettled(entries.map(([, request]) => request));
-    if (requestId !== _state.requestId) return;
-    const results = Object.fromEntries(entries.map(([key], index) => [key, settled[index]]));
-    _cache = { key: filterKey, results };
-    renderAllPanels(results);
-    let failures = settled.filter(result => result.status === 'rejected').length;
-    if (results.priority?.status === 'rejected' && results.issues?.status === 'fulfilled') {
-      failures = Math.max(0, failures - 1);
+    if (!force && _cache?.complete && _cache.key === filterKey) {
+      renderAllPanels(_cache.results);
+      const failures = Object.values(_cache.results).filter(result => result.status === 'rejected').length;
+      if (status) {
+        status.textContent = failures
+          ? `Không thể tải ${failures} phần dữ liệu. Các phần khác vẫn hiển thị.`
+          : 'Dữ liệu phân tích đã được tải từ bộ nhớ đệm.';
+        status.classList.toggle('analytics-page-status-error', failures > 0);
+      }
+    } else {
+      _cache = { key: filterKey, results: {}, complete: false };
+      const results = _cache.results;
+      if (status) status.textContent = 'Đang cập nhật dữ liệu phân tích...';
+      const save = (key, result) => {
+        if (!current()) return;
+        results[key] = result;
+        renderPanelResult(key, result);
+      };
+      try {
+        const data = await analyticsRequest('dashboard', 'getAnalyticsDashboard', globalQueryParams());
+        if (!current()) return;
+        Object.keys(DASHBOARD_METHODS).forEach(key => {
+          const present = data && Object.prototype.hasOwnProperty.call(data, key);
+          save(key, present
+            ? { status: 'fulfilled', value: data[key] }
+            : { status: 'rejected', reason: new Error(`Dashboard response is missing ${key}`) });
+        });
+      } catch (error) {
+        if (!current()) return;
+        if (error.status === 404) {
+          for (const [key, method] of Object.entries(DASHBOARD_METHODS)) {
+            if (!current()) return;
+            try { save(key, { status: 'fulfilled', value: await analyticsRequest('dashboard', method, globalQueryParams()) }); }
+            catch (legacyError) { save(key, { status: 'rejected', reason: legacyError }); }
+          }
+        } else {
+          Object.keys(DASHBOARD_METHODS).forEach(key => save(key, { status: 'rejected', reason: error }));
+        }
+      }
+      for (const [key, method, params] of [
+        ['issues', 'getAnalyticsIssues', issueQueryParams()],
+        ['unitIssueTypeMatrix', 'getAnalyticsUnitIssueTypeMatrix', globalQueryParams()],
+        ['priority', 'getAnalyticsPriorityIssues', globalQueryParams()],
+        ['duplicates', 'getAnalyticsDuplicates', duplicateQueryParams()],
+      ]) {
+        if (!current()) return;
+        if (key === 'issues') { await loadIssues(); continue; }
+        if (key === 'duplicates') { await loadDuplicates(); continue; }
+        try { save(key, { status: 'fulfilled', value: await analyticsRequest(key, method, params) }); }
+        catch (error) { save(key, { status: 'rejected', reason: error }); }
+      }
+      if (!current()) return;
+      _cache.complete = true;
+      const failures = Object.values(results).filter(result => result.status === 'rejected').length;
+      if (status) {
+        status.textContent = failures ? `Không thể tải ${failures} phần dữ liệu. Các phần khác vẫn hiển thị.` : 'Dữ liệu phân tích đã được cập nhật.';
+        status.classList.toggle('analytics-page-status-error', failures > 0);
+      }
     }
-    if (status) {
-      status.textContent = failures ? `Không thể tải ${failures} phần dữ liệu. Các phần khác vẫn hiển thị.` : 'Dữ liệu phân tích đã được cập nhật.';
-      status.classList.toggle('analytics-page-status-error', failures > 0);
+    if (!current()) return;
+    if (_state.optionsRequestId === optionsStartId) {
+      await loadFilterOptions();
     }
+    if (!current()) return;
+    await loadIssueFilterOptions(true);
+    if (!current()) return;
+    await loadComparison();
+  }
+
+  async function loadPagedPanel(key, method, params) {
+    const [, id] = PANEL_RENDERERS[key];
+    const element = document.getElementById(id);
+    if (!element) return;
+    const generation = _state.requestId;
+    const idKey = `${key}RequestId`;
+    const requestId = ++_state[idKey];
+    const current = () => generation === _state.requestId && requestId === _state[idKey];
+    element.innerHTML = renderPanelLoading();
+    let result;
+    try {
+      result = { status: 'fulfilled', value: await analyticsRequest(key, method, params) };
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      result = { status: 'rejected', reason: error };
+    }
+    if (!current()) return;
+    if (_cache?.results) {
+      _cache.results[key] = result;
+      _cache.key = getFilterKey();
+    }
+    renderPanelResult(key, result);
   }
 
   async function loadIssues() {
-    const element = document.getElementById('analytics-issues');
-    if (!element) return;
-    const requestId = ++_state.requestId;
-    element.innerHTML = renderPanelLoading();
-    try {
-      const data = await API.getAnalyticsIssues(issueQueryParams());
-      if (requestId !== _state.requestId) return;
-      _state.issues = data;
-      if (_cache?.results) {
-        _cache.results.issues = { status: 'fulfilled', value: data };
-        _cache.key = getFilterKey();
-      }
-      renderIssues(element, data);
-    } catch (error) {
-      if (requestId !== _state.requestId) return;
-      renderFailure(element, error, 'Không thể tải chi tiết vấn đề');
-    }
+    return loadPagedPanel('issues', 'getAnalyticsIssues', issueQueryParams());
   }
 
   async function loadDuplicates() {
-    const element = document.getElementById('analytics-duplicates');
-    if (!element) return;
-    element.innerHTML = renderPanelLoading();
-    try {
-      const data = await API.getAnalyticsDuplicates(duplicateQueryParams());
-      _state.duplicates = data;
-      if (_cache?.results) {
-        _cache.results.duplicates = { status: 'fulfilled', value: data };
-        _cache.key = getFilterKey();
-      }
-      renderDuplicates(element, data);
-    } catch (error) {
-      renderFailure(element, error, 'Không thể tải nội dung trùng');
-    }
+    return loadPagedPanel('duplicates', 'getAnalyticsDuplicates', duplicateQueryParams());
   }
 
   function changeDuplicatePage(delta) {
@@ -731,15 +748,15 @@ window.AnalyticsPage = (() => {
     loadDuplicates();
   }
 
-  function renderResult(result, renderer, elementId) {
+  function renderResult(result, renderer, elementId, retry = 'AnalyticsPage.refresh()') {
     const element = document.getElementById(elementId);
     if (!element) return;
     if (result.status === 'fulfilled') renderer(element, result.value);
-    else renderFailure(element, result.reason);
+    else renderFailure(element, result.reason, 'Không thể tải dữ liệu', retry);
   }
 
-  function renderFailure(element, error, title = 'Không thể tải dữ liệu') {
-    element.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><p class="empty-state-text">${escHtml(title)}</p><p class="empty-state-hint">${escHtml(error?.message || 'Vui lòng thử lại.')}</p></div>`;
+  function renderFailure(element, error, title = 'Không thể tải dữ liệu', retry = 'AnalyticsPage.refresh()') {
+    element.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><p class="empty-state-text">${escHtml(title)}</p><p class="empty-state-hint">${escHtml(error?.message || 'Vui lòng thử lại.')}</p><button class="btn btn-ghost btn-sm" type="button" onclick="${retry}">Thử lại</button></div>`;
   }
 
   function renderOverview(element, data) {
@@ -1058,53 +1075,6 @@ window.AnalyticsPage = (() => {
     element.innerHTML = `<div class="table-wrap"><table class="table" aria-label="Danh sách nội dung phản hồi trùng"><thead><tr><th>Nội dung đại diện</th><th>Bản ghi</th><th>Dòng trùng</th><th>Mã vấn đề</th><th>Đơn vị</th></tr></thead><tbody>${items.map(item => `<tr><td class="wrap">${escHtml(item.content)}</td><td>${formatNumber(item.record_count)}</td><td>${formatNumber(item.duplicate_rows)}</td><td class="wrap">${escHtml((item.issue_codes || []).join(', '))}</td><td class="wrap">${escHtml((item.units || []).join(', ') || 'Chưa xác định')}</td></tr>`).join('')}</tbody></table></div><div class="analytics-pagination"><span class="analytics-panel-note">${formatNumber(data.total)} nhóm nội dung trùng.</span><div><button class="btn btn-ghost btn-sm" type="button" ${data.page <= 1 ? 'disabled' : ''} onclick="AnalyticsPage.changeDuplicatePage(-1)">← Trước</button><span class="analytics-page-number">Trang ${formatNumber(data.page)} / ${formatNumber(data.total_pages || 1)}</span><button class="btn btn-ghost btn-sm" type="button" ${data.page >= data.total_pages ? 'disabled' : ''} onclick="AnalyticsPage.changeDuplicatePage(1)">Tiếp →</button></div></div>`;
   }
 
-  function derivePriorityFromIssues(issuesData) {
-    const items = issuesData?.items || [];
-    if (!items.length) return { items: [], total: 0 };
-
-    function calcPriority(r) {
-      const sentiment = (r.sentiment || '').trim().toLowerCase();
-      const status = (r.business_status || '').trim().toLowerCase();
-      const isResolved = status === 'đã xử lý';
-      const isNegative = sentiment === 'tiêu cực';
-      if (!isResolved && isNegative) return 3;
-      if (!isResolved) return 2;
-      if (isNegative) return 1;
-      return 0;
-    }
-
-    const sorted = [...items].sort((a, b) => {
-      const pDiff = calcPriority(b) - calcPriority(a);
-      if (pDiff !== 0) return pDiff;
-      return String(b.issue_date || '').localeCompare(String(a.issue_date || ''));
-    });
-
-    const topItems = sorted.slice(0, 10).map((item, idx) => {
-      const labels = item.labels || [];
-      const issueLabel = labels[0] || (item.product ? `Vấn đề ${item.product}` : 'Vấn đề phản ánh');
-      const status = item.business_status || 'Chưa xử lý';
-      const isOverdue = status.toLowerCase().includes('quá hạn');
-      const content = item.content || '';
-
-      return {
-        index: idx + 1,
-        feedback_id: item.feedback_id,
-        issue_code: item.issue_code,
-        issue: issueLabel,
-        department: item.unit_name || 'Chưa xác định',
-        product_group: item.product || 'Chưa xác định',
-        sentiment: item.sentiment || 'Chưa gán',
-        status: status,
-        is_overdue: isOverdue,
-        issue_date: item.issue_date,
-        content: content,
-        summary: content.length > 60 ? content.slice(0, 60) + '...' : content,
-      };
-    });
-
-    return { items: topItems, total: sorted.length };
-  }
-
   function renderPriorityIssues(element, data) {
     const items = data?.items || [];
     if (!items.length) return renderEmpty(element, 'Không có phản hồi cần ưu tiên trong khoảng thời gian đã chọn.');
@@ -1234,6 +1204,8 @@ window.AnalyticsPage = (() => {
   }
 
   function destroy() {
+    cancelRequests();
+    if (_cache && !_cache.complete) _cache = null;
     _state.requestId += 1;
     _state.optionsRequestId += 1;
     issueOptionsRequestId += 1;
@@ -1250,5 +1222,5 @@ window.AnalyticsPage = (() => {
     Charts.destroy('analytics-comparison-chart');
   }
 
-  return { render, destroy, applyFilters, resetFilters, refresh, onUnitChange, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, showPriorityDetail, filterIssuesByUnit, onIssueFilterChange, loadComparison, renderComparison };
+  return { render, destroy, loadIssues, loadDuplicates, loadFilterOptions, loadIssueFilterOptions, applyFilters, resetFilters, refresh, onUnitChange, applyIssueFilters, clearIssueFilters, changeIssuePage, changeDuplicatePage, showIssueDetail, showPriorityDetail, filterIssuesByUnit, onIssueFilterChange, loadComparison, renderComparison };
 })();

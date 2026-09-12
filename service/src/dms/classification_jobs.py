@@ -10,6 +10,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from .time_utils import resolve_file_reporting_date
+
 JOB_STATUS_QUEUED = "queued"
 JOB_STATUS_RUNNING = "running"
 JOB_STATUS_COMPLETED = "completed"
@@ -67,6 +69,12 @@ class ClassificationJobStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(self.db_path), timeout=30, check_same_thread=False)
         conn.row_factory = sqlite3.Row
+        conn.create_function(
+            "dms_file_reporting_date",
+            4,
+            resolve_file_reporting_date,
+            deterministic=True,
+        )
         return conn
 
     def _init_db(self) -> None:
@@ -99,6 +107,7 @@ class ClassificationJobStore:
                     queued_at TEXT,
                     started_at TEXT,
                     completed_at TEXT,
+                    source_modified_at TEXT,
                     retry_count INTEGER NOT NULL DEFAULT 0,
                     last_retry_at TEXT,
                     cancellation_requested INTEGER NOT NULL DEFAULT 0,
@@ -112,6 +121,7 @@ class ClassificationJobStore:
             self._ensure_column(conn, "last_retry_at", "TEXT")
             self._ensure_column(conn, "cancellation_requested", "INTEGER NOT NULL DEFAULT 0")
             self._ensure_column(conn, "heartbeat_at", "TEXT")
+            self._ensure_column(conn, "source_modified_at", "TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS classification_job_results (
@@ -191,6 +201,7 @@ class ClassificationJobStore:
         mode: str,
         input_path: str | Path,
         output_path: str | Path,
+        source_modified_at: str | None = None,
     ) -> dict:
         now = utc_now_iso()
         with self._lock, self._conn() as conn:
@@ -198,8 +209,8 @@ class ClassificationJobStore:
                 """
                 INSERT INTO classification_jobs (
                     job_id, owner_username, owner_role, filename, mode, status,
-                    input_path, output_path, created_at, queued_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    input_path, output_path, source_modified_at, created_at, queued_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job_id,
@@ -210,6 +221,7 @@ class ClassificationJobStore:
                     JOB_STATUS_QUEUED,
                     str(input_path),
                     str(output_path),
+                    source_modified_at,
                     now,
                     now,
                     now,
@@ -683,9 +695,10 @@ class ClassificationJobStore:
             total_duration = float(agg["total_duration_seconds"])
 
             # --- daily counts (completed only) ---
+            business_timestamp = "dms_file_reporting_date(filename, source_modified_at, completed_at, owner_username)"
             daily_rows = conn.execute(
-                """
-                SELECT SUBSTR(completed_at, 1, 10) AS day, COUNT(*) AS cnt
+                f"""
+                SELECT SUBSTR({business_timestamp}, 1, 10) AS day, COUNT(*) AS cnt
                 FROM classification_jobs
                 WHERE status = ? AND completed_at IS NOT NULL
                 GROUP BY day
@@ -700,9 +713,10 @@ class ClassificationJobStore:
                     daily_counts[day] = int(row["cnt"])
 
             # --- daily failed counts ---
+            failed_business_timestamp = "dms_file_reporting_date(filename, source_modified_at, COALESCE(completed_at, created_at), owner_username)"
             daily_failed_rows = conn.execute(
-                """
-                SELECT SUBSTR(COALESCE(completed_at, created_at), 1, 10) AS day,
+                f"""
+                SELECT SUBSTR({failed_business_timestamp}, 1, 10) AS day,
                        COUNT(*) AS cnt
                 FROM classification_jobs
                 WHERE status = ?
@@ -758,18 +772,26 @@ class ClassificationJobStore:
     ) -> dict:
         """Return daily success/failed counts for all jobs (Watcher + Web Upload).
 
-        Groups by date of completion. Returns dict with arrays suitable for charting:
+        Priority for file date:
+        1. Reporting date embedded in filename (e.g. DMS-13102025, DMST0826-28-31)
+        2. SharePoint modification date (source_modified_at) for watcher jobs, or if available
+        3. Job completion audit timestamp (completed_at)
+
+        Returns arrays for charting:
         ``{"dates": [...], "success_counts": [...], "failed_counts": [...], "counts": [...]}``
         """
-        where_parts: list[str] = ["completed_at IS NOT NULL"]
+        business_timestamp = (
+            "dms_file_reporting_date(filename, source_modified_at, completed_at, owner_username)"
+        )
+        outcome_filters: list[str] = []
         params: list[Any] = []
         if from_date:
-            where_parts.append("SUBSTR(completed_at, 1, 10) >= ?")
+            outcome_filters.append("SUBSTR(outcome_at, 1, 10) >= ?")
             params.append(from_date)
         if to_date:
-            where_parts.append("SUBSTR(completed_at, 1, 10) <= ?")
+            outcome_filters.append("SUBSTR(outcome_at, 1, 10) <= ?")
             params.append(to_date)
-        where_sql = " AND ".join(where_parts)
+        outcome_where = "WHERE " + " AND ".join(outcome_filters) if outcome_filters else ""
 
         with self._lock, self._conn() as conn:
             # Dùng "file-level final outcome" per filename:
@@ -783,10 +805,10 @@ class ClassificationJobStore:
                     SELECT
                         filename,
                         owner_username,
-                        -- Ngày cuối cùng có completed_at
-                        MAX(CASE WHEN status = '{JOB_STATUS_COMPLETED}' THEN completed_at END)
+                        -- Watcher: ngày nguồn SharePoint; web upload: ngày xử lý xong.
+                        MAX(CASE WHEN status = '{JOB_STATUS_COMPLETED}' THEN {business_timestamp} END)
                             AS success_at,
-                        MAX(completed_at) AS last_at,
+                        MAX({business_timestamp}) AS last_at,
                         -- Kết quả cuối: nếu có ít nhất 1 completed → success
                         CASE
                             WHEN SUM(CASE WHEN status = '{JOB_STATUS_COMPLETED}' THEN 1 ELSE 0 END) > 0
@@ -794,20 +816,21 @@ class ClassificationJobStore:
                             ELSE '{JOB_STATUS_ERROR}'
                         END AS final_status
                     FROM classification_jobs
-                    WHERE {where_sql}
+                    WHERE completed_at IS NOT NULL
                     GROUP BY filename, owner_username
+                ), resolved_outcomes AS (
+                    SELECT *,
+                           CASE
+                               WHEN final_status = '{JOB_STATUS_COMPLETED}' THEN success_at
+                               ELSE last_at
+                           END AS outcome_at
+                    FROM file_outcomes
                 )
-                SELECT
-                    SUBSTR(
-                        CASE
-                            WHEN final_status = '{JOB_STATUS_COMPLETED}' THEN success_at
-                            ELSE last_at
-                        END,
-                        1, 10
-                    ) AS day,
-                    SUM(CASE WHEN final_status = '{JOB_STATUS_COMPLETED}' THEN 1 ELSE 0 END) AS success,
-                    SUM(CASE WHEN final_status = '{JOB_STATUS_ERROR}'     THEN 1 ELSE 0 END) AS failed
-                FROM file_outcomes
+                SELECT SUBSTR(outcome_at, 1, 10) AS day,
+                       SUM(CASE WHEN final_status = '{JOB_STATUS_COMPLETED}' THEN 1 ELSE 0 END) AS success,
+                       SUM(CASE WHEN final_status = '{JOB_STATUS_ERROR}'     THEN 1 ELSE 0 END) AS failed
+                FROM resolved_outcomes
+                {outcome_where}
                 GROUP BY day
                 ORDER BY day
                 """,

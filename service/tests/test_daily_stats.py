@@ -25,6 +25,7 @@ def _create_completed_job(
     completed_at: str,
     total_rows: int = 10,
     owner: str = "system_watcher",
+    source_modified_at: str | None = None,
 ):
     """Helper to insert a completed job with a specific completed_at date."""
     job_id = str(uuid.uuid4())
@@ -42,9 +43,16 @@ def _create_completed_job(
         conn.execute(
             """UPDATE classification_jobs
                SET status = 'completed', total_rows = ?, rows_done = ?, percent = 100,
-                   completed_at = ?, updated_at = ?
+                   completed_at = ?, source_modified_at = ?, updated_at = ?
                WHERE job_id = ?""",
-            (total_rows, total_rows, completed_at, completed_at, job_id),
+            (
+                total_rows,
+                total_rows,
+                completed_at,
+                source_modified_at,
+                completed_at,
+                job_id,
+            ),
         )
         conn.commit()
     return job_id
@@ -135,6 +143,59 @@ def test_daily_stats_combines_watcher_and_web(job_store):
     assert result["counts"] == [3]
 
 
+def test_daily_stats_watcher_uses_source_date_without_overwriting_completion_audit(job_store):
+    processing_day = "2026-09-05T12:00:00Z"
+    _create_completed_job(
+        job_store,
+        filename="DMST0826-28-31.xlsx",
+        completed_at=processing_day,
+        source_modified_at="2026-08-31T09:30:00Z",
+    )
+    _create_completed_job(
+        job_store,
+        filename="DMST0826-27.xlsx",
+        completed_at=processing_day,
+        source_modified_at="2026-08-27T10:00:00Z",
+    )
+    _create_completed_job(
+        job_store,
+        filename="manual.xlsx",
+        completed_at=processing_day,
+        owner="alice",
+        source_modified_at="2020-01-01T00:00:00Z",
+    )
+
+    result = job_store.daily_stats()
+
+    assert result["dates"] == ["2026-08-27", "2026-08-31", "2026-09-05"]
+    assert result["success_counts"] == [1, 1, 1]
+    jobs = job_store.list_jobs(include_results=False)
+    assert {job["completed_at"] for job in jobs} == {processing_day}
+
+
+def test_daily_stats_watcher_falls_back_to_completion_when_source_date_missing(job_store):
+    _create_completed_job(
+        job_store,
+        filename="legacy.xlsx",
+        completed_at="2026-09-05T12:00:00Z",
+        source_modified_at=None,
+    )
+    assert job_store.daily_stats()["dates"] == ["2026-09-05"]
+
+
+def test_daily_stats_date_range_filters_business_day(job_store):
+    _create_completed_job(
+        job_store,
+        filename="batch.xlsx",
+        completed_at="2026-09-05T12:00:00Z",
+        source_modified_at="2026-08-20T09:00:00Z",
+    )
+    assert job_store.daily_stats(from_date="2026-08-01", to_date="2026-08-31")["dates"] == [
+        "2026-08-20"
+    ]
+    assert job_store.daily_stats(from_date="2026-09-01", to_date="2026-09-30")["dates"] == []
+
+
 def test_daily_stats_date_range_filter(job_store):
     """from_date/to_date filters work correctly."""
     _create_completed_job(job_store, filename="old.xlsx", completed_at="2026-04-01T08:00:00Z")
@@ -145,6 +206,113 @@ def test_daily_stats_date_range_filter(job_store):
 
     assert result["dates"] == ["2026-06-10"]
     assert result["success_counts"] == [1]
+
+
+def test_extract_date_from_filename():
+    from dms.time_utils import extract_date_from_filename
+
+    assert extract_date_from_filename("DMST0826-28-31.xlsx") == "2026-08-31"
+    assert extract_date_from_filename("DMST0826-27.xlsx") == "2026-08-27"
+    assert extract_date_from_filename("DMST0926-01-06.xlsx") == "2026-09-06"
+    assert extract_date_from_filename("DMS-13102025.xlsx") == "2025-10-13"
+    assert extract_date_from_filename("DMS_13102025.xlsx") == "2025-10-13"
+    assert extract_date_from_filename("DMS-1510-17102025.xlsx") == "2025-10-17"
+    assert (
+        extract_date_from_filename("DMS-1510-1710.xlsx", reference_date="2025-10-20")
+        == "2025-10-17"
+    )
+    assert extract_date_from_filename("Feedback_2026-09-05.xlsx") == "2026-09-05"
+    assert extract_date_from_filename("Feedback_2026_09_05.xlsx") == "2026-09-05"
+    assert extract_date_from_filename("DMS_13-10-2025.xlsx") == "2025-10-13"
+    assert extract_date_from_filename("unknown_file.xlsx") is None
+    assert extract_date_from_filename("DMS-32132025.xlsx") is None  # invalid day 32, month 13
+    assert extract_date_from_filename("DMST0826-100.xlsx") is None  # invalid suffix day 100
+    assert extract_date_from_filename(None) is None  # defensive none guard
+
+    # A DMS marker must start at a token boundary; substrings are not DMS files.
+    assert extract_date_from_filename("NOTDMS-13102025.xlsx") is None
+    assert extract_date_from_filename("XDMST0826-28-31.xlsx") is None
+
+    # Malformed DMS periods must fall back to metadata instead of another regex branch.
+    assert extract_date_from_filename("DMS-1510-32102025.xlsx", "2026-10-20") is None
+    assert extract_date_from_filename("DMST0826-99-31.xlsx") is None
+    assert extract_date_from_filename("DMST0826-31-30.xlsx") is None
+
+    # Generic filenames may contain an invalid candidate before a valid supported date.
+    assert extract_date_from_filename("report_32-13-2025_2026-09-05.xlsx") == "2026-09-05"
+
+
+def test_daily_stats_prioritizes_filename_date_over_upload_and_completion(job_store):
+    reconstructed_batch_day = "2026-09-05T12:00:00Z"
+    sharepoint_batch_upload = "2026-09-05T08:00:00Z"
+
+    # 1. File có ngày trong tên (DMS-DDMMYYYY): ưu tiên ngày tên file dù bị gom upload 05/09
+    _create_completed_job(
+        job_store,
+        filename="DMS-13102025.xlsx",
+        completed_at=reconstructed_batch_day,
+        source_modified_at=sharepoint_batch_upload,
+    )
+    # 2. File có đợt DMS (DMSTMMYY-DD-DD): ưu tiên ngày cuối đợt trong tên file
+    _create_completed_job(
+        job_store,
+        filename="DMST0826-28-31.xlsx",
+        completed_at=reconstructed_batch_day,
+        source_modified_at=sharepoint_batch_upload,
+    )
+    # 3. File không có ngày trong tên: fallback ngày upload SharePoint (source_modified_at)
+    _create_completed_job(
+        job_store,
+        filename="feedback_sharepoint_no_date.xlsx",
+        completed_at=reconstructed_batch_day,
+        source_modified_at="2026-09-01T09:00:00Z",
+    )
+    # 4. Web upload không có ngày trong tên và không có SharePoint metadata: fallback completed_at
+    _create_completed_job(
+        job_store,
+        filename="manual_web_upload.xlsx",
+        completed_at=reconstructed_batch_day,
+        owner="operator",
+        source_modified_at=None,
+    )
+
+    stats = job_store.daily_stats()
+    assert stats["dates"] == ["2025-10-13", "2026-08-31", "2026-09-01", "2026-09-05"]
+    assert stats["success_counts"] == [1, 1, 1, 1]
+
+    # Audit completed_at trên server được bảo toàn 100% không bị ghi đè
+    jobs = job_store.list_jobs(include_results=False)
+    assert {job["completed_at"] for job in jobs} == {reconstructed_batch_day}
+
+
+def test_daily_stats_filters_after_resolving_final_file_outcome(job_store):
+    filename = "retry-without-date.xlsx"
+    _create_failed_job(
+        job_store,
+        filename=filename,
+        completed_at="2026-08-20T08:00:00Z",
+        owner="alice",
+    )
+    _create_completed_job(
+        job_store,
+        filename=filename,
+        completed_at="2026-09-05T08:00:00Z",
+        owner="alice",
+    )
+
+    assert job_store.daily_stats()["dates"] == ["2026-09-05"]
+    assert job_store.daily_stats(from_date="2026-08-01", to_date="2026-08-31") == {
+        "dates": [],
+        "success_counts": [],
+        "failed_counts": [],
+        "counts": [],
+    }
+    assert job_store.daily_stats(from_date="2026-09-01", to_date="2026-09-30") == {
+        "dates": ["2026-09-05"],
+        "success_counts": [1],
+        "failed_counts": [0],
+        "counts": [1],
+    }
 
 
 def test_daily_stats_queued_jobs_excluded(job_store):
