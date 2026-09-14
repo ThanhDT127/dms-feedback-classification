@@ -101,7 +101,13 @@ NULL_BRAND_ALIASES = {
 }
 
 LABEL_DEFINITIONS = {
-    "Báo lỗi": "Sản phẩm vật lý bị lỗi kỹ thuật, hỏng, cháy, không sáng, không hoạt động, lệch ren, rò điện, nứt vỡ thực tế. KHÔNG dùng cho phàn nàn về thiết kế, kích thước, độ dày/mỏng vỏ nhựa/thanh đồng, phích to vướng (các phàn nàn thiết kế này thuộc Y/c cải tiến).",
+    "Báo lỗi": (
+        "Sản phẩm vật lý bị lỗi kỹ thuật, hỏng, cháy, không sáng, không hoạt động, "
+        "lệch ren, rò điện, nứt vỡ thực tế. "
+        "KHÔNG dùng cho: (1) phàn nàn thiết kế/kích thước/độ dày vỏ nhựa (→ Y/c cải tiến); "
+        "(2) khách nhắc SP cũ hỏng nhưng mục đích chính là MUA MỚI/thay thế (Luật 8); "
+        "(3) khách gặp khó khăn cài đặt/cấu hình do chưa biết cách dùng (Luật 10)."
+    ),
     "Báo CL tốt": "Khen chất lượng sản phẩm tốt, bền, sáng tốt, ổn định, khách hài lòng.",
     "Y/c cải tiến": "Yêu cầu chỉnh sửa hoặc phàn nàn về thiết kế, kích thước, tính năng, độ dày/mỏng của vỏ nhựa/thanh đồng, bao bì, mẫu mã, phích to vướng, kết cấu của sản phẩm HIỆN CÓ đang bán (như vỏ mỏng cần làm dày hơn, phích to cần làm nhỏ lại, thanh đồng mỏng cần làm dày).",
     "Đề xuất SPM": "Đề xuất sản xuất SP MỚI chưa có: mã mới, kích thước mới, loại mới ('ra thêm', 'sản xuất thêm', 'thêm loại', 'có thêm', 'mã mới').",
@@ -112,7 +118,12 @@ LABEL_DEFINITIONS = {
     "Tốt/ ko tốt": "Nhận xét về giá/cơ chế của RẠNG ĐÔNG: giá tốt/cao/rẻ, khó bán, dễ bán, cạnh tranh. Từ khóa: 'giá rẻ', 'giá cao', 'đắt hơn', 'chiết khấu', 'cơ chế', 'khó bán'.",
     "Trả thưởng": "Nhắc CỤ THỂ đến tiền thưởng, quay số, gói quay, c2td, trả thưởng chậm của Rạng Đông.",
     "Đề xuất": "ĐỀ NGHỊ thay đổi chính sách giá, cơ chế, chiết khấu, khuyến mãi CHUNG của RĐ. Khác Trả thưởng (hỏi thưởng cụ thể).",
-    "Bảo hành": "Nói về QUY TRÌNH bảo hành, đổi trả, thời gian BH, hậu mãi — tức DỊCH VỤ. Khác Báo lỗi (nói về SP hỏng).",
+    "Bảo hành": (
+        "Nói về QUY TRÌNH bảo hành, đổi trả, thời gian BH, hậu mãi — tức DỊCH VỤ. "
+        "CHỈ gán khi khách ĐÃ MUA SP và đang yêu cầu xử lý BH cụ thể. "
+        "KHÔNG gán khi khách HỎI chính sách BH TRƯỚC khi mua (Luật 9). "
+        "Khác Báo lỗi (nói về SP hỏng)."
+    ),
     "HTPP": "Hệ thống phân phối: xung đột kênh C1/C2, tràn vùng, nhà phân phối, đại lý.",
     "Hàng hoá": "Logistics: tồn kho, thiếu hàng, giao hàng chậm, vận chuyển, đóng gói.",
     "Hàng giả": "Nghi ngờ hàng GIẢ/NHÁI, giả mạo thương hiệu. KHÔNG dùng cho SP kém CL chính hãng (đó là Báo lỗi).",
@@ -304,12 +315,84 @@ def _normalize_decision_log(log) -> list[dict]:
     return norm
 
 
+# ── Intent Override Guardrails (Luật 8-10 from system_prompt) ──
+# Final safety net to suppress false-positives when LLM misses
+# intent priority rules despite prompt instructions.
+
+_PURCHASE_INTENT_RE = re.compile(
+    r"(?:muốn\s*mua|thay\s*thế|tư\s*vấn\s*(?:loại|sản\s*phẩm|sp)"
+    r"|báo\s*giá|có\s*loại\s*nào|cần\s*mua|đặt\s*hàng"
+    r"|bên\s*mình\s*có|ship\s*cho|giao\s*cho"
+    r"|có\s*sẵn|có\s*hàng\s*không|giá\s*bao\s*nhiêu"
+    r"|mua\s*(?:lại|mới|thêm|thay))",
+    re.IGNORECASE,
+)
+
+_GUIDANCE_INTENT_RE = re.compile(
+    r"(?:hướng\s*dẫn\s*(?:lại|cho|giúp|dùm|hộ|em|anh|tôi|mình)"
+    r"|chỉ\s*(?:em|anh|tôi|mình)\s*cách"
+    r"|cài\s*(?:đặt\s*)?(?:thế\s*nào|sao|như\s*thế\s*nào)"
+    r"|kết\s*nối\s*sao|dùng\s*sao|làm\s*sao\s*để"
+    r"|cách\s*(?:reset|cài|kết\s*nối|sử\s*dụng|dùng)"
+    r"|setup|cấu\s*hình|không\s*biết\s*cách)",
+    re.IGNORECASE,
+)
+
+_PRE_PURCHASE_POLICY_RE = re.compile(
+    r"(?:bảo\s*hành\s*(?:mấy|bao\s*lâu|bao\s*nhiêu|thế\s*nào|sao)"
+    r"|chính\s*sách\s*(?:đổi|trả|bảo\s*hành))",
+    re.IGNORECASE,
+)
+
+_HARD_DEFECT_WORDS = (
+    "rò điện", "nứt vỡ", "chập cháy", "cháy nổ", "rò rỉ",
+    "phát nổ", "bốc cháy", "giật điện",
+)
+
+
+def _apply_intent_overrides(
+    text: str,
+    active_labels: list[str],
+) -> list[str]:
+    """Apply intent priority override rules as post-processing guardrails.
+
+    Luật 8:  Ý định mua hàng triệt tiêu "Báo lỗi"
+    Luật 9:  Hỏi chính sách trước mua triệt tiêu "Bảo hành"
+    Luật 10: Lỗi thao tác người dùng triệt tiêu "Báo lỗi"
+    """
+    if not text:
+        return active_labels
+    text_lower = text.lower()
+    modified = list(active_labels)
+
+    # Luật 8: Purchase intent → suppress "Báo lỗi"
+    if "Báo lỗi" in modified and _PURCHASE_INTENT_RE.search(text_lower):
+        has_hard_defect = any(w in text_lower for w in _HARD_DEFECT_WORDS)
+        if not has_hard_defect:
+            modified = [lbl for lbl in modified if lbl != "Báo lỗi"]
+
+    # Luật 10: Guidance request → suppress "Báo lỗi"
+    if "Báo lỗi" in modified and _GUIDANCE_INTENT_RE.search(text_lower):
+        modified = [lbl for lbl in modified if lbl != "Báo lỗi"]
+
+    # Luật 9: Pre-purchase policy inquiry → suppress "Bảo hành"
+    if (
+        "Bảo hành" in modified
+        and _PURCHASE_INTENT_RE.search(text_lower)
+        and _PRE_PURCHASE_POLICY_RE.search(text_lower)
+    ):
+        modified = [lbl for lbl in modified if lbl != "Bảo hành"]
+
+    return modified
+
+
 def normalize_issue_output(
     parsed: dict,
     *,
     brand_fallback: str = "",
     sentiment_fallback: str = "",
     prelim_minors: list[str] | None = None,
+    original_text: str = "",
 ) -> dict:
     """Normalize raw LLM output while preserving strict brand and label consistency."""
     if not isinstance(parsed, dict):
@@ -374,6 +457,10 @@ def normalize_issue_output(
     # Guarantee "Tin trung lập" rule: if any other label is present, remove Tin trung lập
     if "Tin trung lập" in active_labels and len(active_labels) > 1:
         active_labels = [label for label in active_labels if label != "Tin trung lập"]
+
+    # Apply intent priority override guardrails (Luật 8-10)
+    if original_text:
+        active_labels = _apply_intent_overrides(original_text, active_labels)
 
     # If no labels are present, use fallback prelims (if provided) or fallback to "Tin trung lập"
     if not active_labels:
@@ -598,6 +685,7 @@ class IssueClassifier:
                     brand_fallback="",
                     sentiment_fallback="",
                     prelim_minors=None,
+                    original_text=texts[idx] if idx < len(texts) else "",
                 )
             )
         return out

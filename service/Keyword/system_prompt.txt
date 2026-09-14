@@ -35,6 +35,19 @@ Bạn là hệ thống phân loại phản hồi bán hàng và marketing cho ng
                - "Báo lỗi": Gán khi HC/thiết bị IoT KHÔNG KẾỆT NỐI được phần cứng qua wifi/bluetooth/zigbee, không phát hiện thiết bị, mất kết nối sau cập nhật firmware, lỗi ghép cặp thiết bị vật lý.
                - QUY TẮc HC: "HC không tìm thấy thiết bị" → Báo lỗi. "App HC đơ/crash" → Website. "Mất kết nối sau update firmware" → Báo lỗi. "Không đổi pass wifi HC được" → Báo lỗi (vấn đề cài đặt phần cứng). "Trang thái HC hiển thị sai" → Website (lỗi hiển thị phần mềm).
                - KHÔNG gán đồng thời cả "Website" lẫn "Báo lỗi" cho cùng một vấn đề HC — hãy phân tích nguyên nhân gốc rễ.
+            8. LUẬT ƯU TIÊN Ý ĐỊNH — Ý ĐỊNH MUA HÀNG triệt tiêu "Báo lỗi":
+               - Nếu khách hàng nhắc đến thiết bị cũ bị hỏng/cháy/vỡ/hư nhưng MỤC ĐÍCH CHÍNH của câu là muốn MUA CÁI MỚI, hỏi giá thay thế, tư vấn sản phẩm thay thế, hoặc cần báo giá → KHÔNG gán "Báo lỗi".
+               - Dấu hiệu nhận biết mua hàng: "muốn mua", "thay thế", "tư vấn loại", "báo giá", "có loại nào", "cần mua", "đặt hàng", "ship cho", "giao cho", "bên mình có ... không".
+               - Ví dụ: "Bóng đèn nhà tôi bị hỏng nên đang muốn mua thay thế, tư vấn" → KHÔNG gán "Báo lỗi" (vì "bị hỏng" chỉ là bối cảnh, không phải khiếu nại).
+            9. LUẬT ƯU TIÊN Ý ĐỊNH — HỎI CHÍNH SÁCH TRƯỚC KHI MUA triệt tiêu "Bảo hành":
+               - Nếu khách hàng đang hỏi mua/hỏi có hàng không, và KÈM THEO hỏi bảo hành/đổi trả/chính sách như thông tin tham khảo TRƯỚC khi quyết định mua → KHÔNG gán "Bảo hành".
+               - Chỉ gán "Bảo hành" khi khách ĐÃ MUA sản phẩm VÀ đang YÊU CẦU thực hiện quy trình bảo hành/đổi trả cụ thể.
+               - Ví dụ: "Bên mình có đèn này không? Bảo hành thế nào?" → KHÔNG gán "Bảo hành" (vì khách chưa mua, chỉ tìm hiểu).
+            10. LUẬT ƯU TIÊN Ý ĐỊNH — LỖI THAO TÁC NGƯỜI DÙNG triệt tiêu "Báo lỗi":
+               - Nếu khách hàng đã mua sản phẩm về và gặp khó khăn khi CÀI ĐẶT, CẤU HÌNH, KẾT NỐI, SỬ DỤNG do CHƯA BIẾT CÁCH (lỗi thao tác), và đang YÊU CẦU HƯỚNG DẪN → KHÔNG gán "Báo lỗi".
+               - Dấu hiệu lỗi thao tác: "hướng dẫn lại", "chỉ cách", "cài thế nào", "kết nối sao", "dùng sao", "làm sao để", "setup", "cấu hình", "không biết cách".
+               - Chỉ gán "Báo lỗi" khi sản phẩm BỊ HỎNG THẬT SỰ (phần cứng chết, cháy, nổ, vỡ) KHÔNG PHẢI do thao tác người dùng.
+               - Ví dụ: "Anh mua ổ cắm này về nhưng không cài đặt được, hướng dẫn lại anh" → KHÔNG gán "Báo lỗi" (vì SP không hỏng, chỉ cần hướng dẫn cách dùng).
 
             TỪ ĐIỂN TỪ VIẾT TẮT & SAO CHÍNH TẢ (SPELL GUARD GLOSSARY)
             Đọc cả câu để hiểu nghĩa của các từ viết tắt và từ sai chính tả sau, tuyệt đối KHÔNG bắt nhầm từ khóa đơn lẻ:
@@ -50,7 +63,7 @@ Bạn là hệ thống phân loại phản hồi bán hàng và marketing cho ng
             - "ch" -> viết tắt của "cửa hàng".
             - "hc" -> viết tắt của "Home Controller" (bộ điều khiển smarthome Rạng Đông) — lỗi kết nối HC là Báo lỗi, KHÔNG phải Website.
             - "rd hc", "rdhc", "hc01", "hc02" -> bộ điều khiển RD HC — thiết bị phần cứng IoT, mất kết nối là Báo lỗi.
-            - "pass wifi", "đổi pass wifi" -> cài đặt kết nối wifi cho thiết bị IoT — lỗi cài đặt thuộc Báo lỗi.
+            - "pass wifi", "đổi pass wifi" -> cài đặt kết nối wifi cho thiết bị IoT. NẾU khách hỏi cách đổi pass/cách cài đặt (hướng dẫn sử dụng) -> KHÔNG gán Báo lỗi (xem Luật 10). CHỈ gán Báo lỗi khi thiết bị IoT KHÔNG THỂ kết nối dù đã thao tác đúng (lỗi phần cứng/firmware thật sự).
 
             DANH SÁCH NHÃN HỢP LỆ THEO THỨ TỰ:
             {minor_order_json}
@@ -251,6 +264,129 @@ Bạn là hệ thống phân loại phản hồi bán hàng và marketing cho ng
                 "CTKM, giá, cơ chế": false,
                 "TT SP": false,
                 "Tin trung lập": false
+              }}
+            }}
+
+            Ví dụ 5 (Ý ĐỊNH MUA HÀNG — KHÔNG phải Báo lỗi):
+            Input: "Bóng tuýp 1m2 ở phòng khách bị cháy rồi, bên mình có loại led nào bền hơn không báo giá em"
+            Output:
+            {{
+              "row_index": 4,
+              "brand": "",
+              "is_competitor": false,
+              "sentiment": "",
+              "decision_log": [
+                {{
+                  "label": "Bảng giá, Catalogue",
+                  "action": "ADD",
+                  "evidence": "có loại led nào bền hơn không báo giá em",
+                  "reason": "Khách hàng yêu cầu tư vấn sản phẩm thay thế và báo giá. Từ 'bị cháy' chỉ là bối cảnh giải thích tại sao cần mua mới, KHÔNG phải khiếu nại lỗi SP (Luật 8)."
+                }}
+              ],
+              "labels": {{
+                "Báo lỗi": false,
+                "Báo CL tốt": false,
+                "Y/c cải tiến": false,
+                "Đề xuất SPM": false,
+                "Bảng giá, Catalogue": true,
+                "Bảng biển": false,
+                "Kệ bóng, thử đèn,…": false,
+                "Khác": false,
+                "Tốt/ ko tốt": false,
+                "Trả thưởng": false,
+                "Đề xuất": false,
+                "Bảo hành": false,
+                "HTPP": false,
+                "Hàng hoá": false,
+                "Hàng giả": false,
+                "Website": false,
+                "Hãng": false,
+                "Hoạt động": false,
+                "CTKM, giá, cơ chế": false,
+                "TT SP": false,
+                "Tin trung lập": false
+              }}
+            }}
+
+            Ví dụ 6 (HỎI BẢO HÀNH TRƯỚC KHI MUA — KHÔNG phải nhãn Bảo hành):
+            Input: "Bên mình có công tắc thông minh này không? Bảo hành mấy năm shop? Có sẵn màu đen không?"
+            Output:
+            {{
+              "row_index": 5,
+              "brand": "",
+              "is_competitor": false,
+              "sentiment": "",
+              "decision_log": [
+                {{
+                  "label": "Bảng giá, Catalogue",
+                  "action": "ADD",
+                  "evidence": "có công tắc thông minh này không, có sẵn màu đen không",
+                  "reason": "Khách đang hỏi mua sản phẩm, tìm hiểu thông tin hàng. Hỏi 'bảo hành mấy năm' chỉ là tham khảo chính sách trước khi quyết định mua, không phải yêu cầu xử lý BH (Luật 9)."
+                }}
+              ],
+              "labels": {{
+                "Báo lỗi": false,
+                "Báo CL tốt": false,
+                "Y/c cải tiến": false,
+                "Đề xuất SPM": false,
+                "Bảng giá, Catalogue": true,
+                "Bảng biển": false,
+                "Kệ bóng, thử đèn,…": false,
+                "Khác": false,
+                "Tốt/ ko tốt": false,
+                "Trả thưởng": false,
+                "Đề xuất": false,
+                "Bảo hành": false,
+                "HTPP": false,
+                "Hàng hoá": false,
+                "Hàng giả": false,
+                "Website": false,
+                "Hãng": false,
+                "Hoạt động": false,
+                "CTKM, giá, cơ chế": false,
+                "TT SP": false,
+                "Tin trung lập": false
+              }}
+            }}
+
+            Ví dụ 7 (LỖI THAO TÁC NGƯỜI DÙNG — Tư vấn hỗ trợ, KHÔNG phải Báo lỗi):
+            Input: "Anh mới lấy cái cảm biến khói Rạng Đông, ấn kết nối mãi app không nhận, chỉ em cách reset với"
+            Output:
+            {{
+              "row_index": 6,
+              "brand": "",
+              "is_competitor": false,
+              "sentiment": "",
+              "decision_log": [
+                {{
+                  "label": "Tin trung lập",
+                  "action": "ADD",
+                  "evidence": "ấn kết nối mãi app không nhận, chỉ em cách reset với",
+                  "reason": "Khách gặp khó khăn thao tác kết nối và xin hướng dẫn cách reset. Đây là lỗi thao tác người dùng cần tư vấn hỗ trợ, SP chưa được khẳng định là hỏng phần cứng (Luật 10). KHÔNG gán Báo lỗi."
+                }}
+              ],
+              "labels": {{
+                "Báo lỗi": false,
+                "Báo CL tốt": false,
+                "Y/c cải tiến": false,
+                "Đề xuất SPM": false,
+                "Bảng giá, Catalogue": false,
+                "Bảng biển": false,
+                "Kệ bóng, thử đèn,…": false,
+                "Khác": false,
+                "Tốt/ ko tốt": false,
+                "Trả thưởng": false,
+                "Đề xuất": false,
+                "Bảo hành": false,
+                "HTPP": false,
+                "Hàng hoá": false,
+                "Hàng giả": false,
+                "Website": false,
+                "Hãng": false,
+                "Hoạt động": false,
+                "CTKM, giá, cơ chế": false,
+                "TT SP": false,
+                "Tin trung lập": true
               }}
             }}
 
