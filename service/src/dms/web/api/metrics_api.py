@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from ...settings import get_settings
 from ...time_utils import utc_now_iso
-from ..deps import get_admin_user, get_current_user
+from ..deps import get_admin_user, get_current_user, run_sync_in_threadpool
 
 logger = logging.getLogger("dms-web")
 
@@ -137,24 +137,13 @@ async def get_metrics(user: dict = Depends(get_current_user)):
         watcher_success = data.get("files_processed", 0)
         watcher_failed = data.get("files_failed", 0)
 
-    # --- Label distribution từ SQLite job results ---
+    # --- Label distribution từ SQLite (tổng hợp trực tiếp bằng SQL) ---
     job_store = get_classification_job_store()
     web_stats: dict = {}
     if job_store is not None:
         try:
             web_stats = job_store.aggregate_stats()
-            with job_store._lock, job_store._conn() as conn:
-                result_rows = conn.execute(
-                    "SELECT payload FROM classification_job_results"
-                ).fetchall()
-                for row in result_rows:
-                    try:
-                        payload = json.loads(row["payload"])
-                        ld = payload.get("label_distribution", {})
-                        for lbl, cnt in ld.items():
-                            label_distribution[lbl] = label_distribution.get(lbl, 0) + int(cnt)
-                    except Exception:
-                        pass
+            label_distribution = job_store.get_label_distribution()
         except Exception as exc:
             logger.warning("Lỗi query SQLite stats: %s", exc)
 
@@ -379,6 +368,53 @@ def _parse_log_line(line: str) -> dict | None:
     return {"timestamp": "", "level": "INFO", "message": line, "module": ""}
 
 
+def tail_log_file(file_path: Path, max_lines: int = 200, buffer_size: int = 65536) -> list[str]:
+    """Read the last `max_lines` lines of a file by seeking backwards from the end.
+
+    Efficiently handles large files (e.g. 10MB+) without loading the whole file into memory.
+    """
+    if not file_path.is_file():
+        return []
+
+    file_size = file_path.stat().st_size
+    if file_size == 0:
+        return []
+
+    lines: list[str] = []
+    with open(file_path, "rb") as f:
+        f.seek(0, 2)
+        pos = f.tell()
+        remainder = b""
+
+        while pos > 0 and len(lines) < max_lines:
+            read_size = min(buffer_size, pos)
+            pos -= read_size
+            f.seek(pos)
+            chunk = f.read(read_size) + remainder
+            parts = chunk.split(b"\n")
+            if pos > 0:
+                remainder = parts[0]
+                chunk_lines = parts[1:]
+            else:
+                remainder = b""
+                chunk_lines = parts
+
+            for raw in reversed(chunk_lines):
+                decoded = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+                if decoded:
+                    lines.append(decoded)
+                    if len(lines) >= max_lines:
+                        break
+
+        if remainder and len(lines) < max_lines:
+            decoded = remainder.decode("utf-8", errors="replace").rstrip("\r\n")
+            if decoded:
+                lines.append(decoded)
+
+    lines.reverse()
+    return lines
+
+
 @router.get("/logs")
 async def get_logs(
     level: str | None = Query(None, description="Lọc theo level: DEBUG, INFO, WARNING, ERROR"),
@@ -390,17 +426,15 @@ async def get_logs(
     if log_file is None:
         return []
 
+    fetch_lines = limit * 2 if level else limit
     try:
-        all_lines = log_file.read_text(encoding="utf-8").splitlines()
+        raw_lines = await run_sync_in_threadpool(tail_log_file, log_file, fetch_lines)
     except Exception as exc:
         logger.warning("Lỗi đọc file log %s: %s", log_file, exc)
         return []
 
-    # Take the last N lines
-    recent_lines = all_lines[-limit * 2 :] if len(all_lines) > limit * 2 else all_lines
-
     entries = []
-    for line in recent_lines:
+    for line in raw_lines:
         parsed = _parse_log_line(line)
         if parsed is None:
             continue
@@ -460,7 +494,7 @@ async def get_usage_metrics(
         date_str = ""
         if job_store and tj.get("job_id"):
             try:
-                job = job_store.get_job(tj["job_id"])
+                job = job_store.get_job(tj["job_id"], include_results=False)
                 if job:
                     filename = job.get("filename", tj["job_id"])
                     date_str = (job.get("created_at") or "")[:10]

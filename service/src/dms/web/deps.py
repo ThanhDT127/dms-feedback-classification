@@ -358,3 +358,10 @@ def get_sharepoint_sync_service():
             return None
 
     return _get_or_create("sharepoint_sync_service", _factory)
+
+
+async def run_sync_in_threadpool(func, *args, **kwargs):
+    """Execute a synchronous callable in a background worker thread."""
+    from starlette.concurrency import run_in_threadpool
+
+    return await run_in_threadpool(func, *args, **kwargs)

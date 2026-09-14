@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
+from typing import Any
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
@@ -214,12 +216,29 @@ async def get_brands(admin: dict = Depends(get_admin_user)):
         ) from exc
 
 
+# ---------- Products In-Memory Cache ----------
+
+_products_lock = threading.Lock()
+_products_cache: dict[str, Any] = {
+    "mtime": 0.0,
+    "summary": None,
+    "list": None,
+}
+
+
+def invalidate_products_cache() -> None:
+    with _products_lock:
+        _products_cache["mtime"] = 0.0
+        _products_cache["summary"] = None
+        _products_cache["list"] = None
+
+
 # ---------- Products ----------
 
 
 @router.get("/products")
 async def get_products(admin: dict = Depends(get_admin_user)):
-    """Trả về tóm tắt danh mục sản phẩm."""
+    """Trả về tóm tắt danh mục sản phẩm (sử dụng in-memory cache theo mtime)."""
     settings = deps.get_settings()
     if settings is None:
         return {"error": "Settings chưa được cấu hình"}
@@ -229,26 +248,39 @@ async def get_products(admin: dict = Depends(get_admin_user)):
         return {"error": f"Không tìm thấy file sản phẩm tại {products_path}"}
 
     try:
-        df = pd.read_excel(products_path)
+        current_mtime = products_path.stat().st_mtime
+        with _products_lock:
+            if _products_cache["mtime"] == current_mtime and _products_cache["summary"] is not None:
+                return _products_cache["summary"]
 
-        categories: list[str] = []
-        product_lines: list[str] = []
-        sample_models: list[str] = []
+        def _compute_summary():
+            df = pd.read_excel(products_path)
+            categories: list[str] = []
+            product_lines: list[str] = []
+            sample_models: list[str] = []
 
-        if "Sản phẩm" in df.columns:
-            categories = sorted(df["Sản phẩm"].dropna().unique().tolist())
-        if "Dòng SP" in df.columns:
-            product_lines = sorted(df["Dòng SP"].dropna().unique().tolist())
-        if "Model" in df.columns:
-            sample_models = df["Model"].dropna().head(20).tolist()
+            if "Sản phẩm" in df.columns:
+                categories = sorted(df["Sản phẩm"].dropna().unique().tolist())
+            if "Dòng SP" in df.columns:
+                product_lines = sorted(df["Dòng SP"].dropna().unique().tolist())
+            if "Model" in df.columns:
+                sample_models = df["Model"].dropna().head(20).tolist()
 
-        return {
-            "total_products": len(df),
-            "categories": categories,
-            "product_lines": product_lines,
-            "sample_models": sample_models,
-            "file_path": str(products_path),
-        }
+            return {
+                "total_products": len(df),
+                "categories": categories,
+                "product_lines": product_lines,
+                "sample_models": sample_models,
+                "file_path": str(products_path),
+            }
+
+        summary = await deps.run_sync_in_threadpool(_compute_summary)
+        with _products_lock:
+            if _products_cache["mtime"] != current_mtime:
+                _products_cache["mtime"] = current_mtime
+                _products_cache["list"] = None
+            _products_cache["summary"] = summary
+        return summary
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -282,7 +314,7 @@ async def save_keywords(data: dict, admin: dict = Depends(get_admin_user)):
 
 @router.get("/products/list")
 async def list_products(admin: dict = Depends(get_admin_user)):
-    """Trả về toàn bộ danh sách sản phẩm theo từng sheet trong file Excel."""
+    """Trả về toàn bộ danh sách sản phẩm theo từng sheet trong file Excel (có in-memory cache)."""
     settings = deps.get_settings()
     if settings is None:
         raise HTTPException(status_code=400, detail="Settings chưa được cấu hình")
@@ -292,22 +324,36 @@ async def list_products(admin: dict = Depends(get_admin_user)):
         raise HTTPException(status_code=404, detail="Không tìm thấy file sản phẩm Excel.")
 
     try:
-        sheets_data = {}
-        sheet_names = []
-        with pd.ExcelFile(products_path) as xl:
-            sheet_names = list(xl.sheet_names)
-            for sheet_name in sheet_names:
-                df = pd.read_excel(xl, sheet_name)
-                df = df.fillna("")
-                sheets_data[sheet_name] = {
-                    "columns": list(df.columns),
-                    "products": df.to_dict(orient="records"),
-                }
-        return {
-            "sheets": sheets_data,
-            "sheet_names": sheet_names,
-            "file_path": str(products_path),
-        }
+        current_mtime = products_path.stat().st_mtime
+        with _products_lock:
+            if _products_cache["mtime"] == current_mtime and _products_cache["list"] is not None:
+                return _products_cache["list"]
+
+        def _compute_list():
+            sheets_data = {}
+            sheet_names = []
+            with pd.ExcelFile(products_path) as xl:
+                sheet_names = list(xl.sheet_names)
+                for sheet_name in sheet_names:
+                    df = pd.read_excel(xl, sheet_name)
+                    df = df.fillna("")
+                    sheets_data[sheet_name] = {
+                        "columns": list(df.columns),
+                        "products": df.to_dict(orient="records"),
+                    }
+            return {
+                "sheets": sheets_data,
+                "sheet_names": sheet_names,
+                "file_path": str(products_path),
+            }
+
+        res = await deps.run_sync_in_threadpool(_compute_list)
+        with _products_lock:
+            if _products_cache["mtime"] != current_mtime:
+                _products_cache["mtime"] = current_mtime
+                _products_cache["summary"] = None
+            _products_cache["list"] = res
+        return res
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -333,25 +379,22 @@ async def save_products(payload: dict, admin: dict = Depends(get_admin_user)):
 
     products_path = settings.df_products_path
     try:
-        # Create parent directories if they don't exist
-        products_path.parent.mkdir(parents=True, exist_ok=True)
+        def _write_excel():
+            products_path.parent.mkdir(parents=True, exist_ok=True)
+            sheets_data = {}
+            if products_path.is_file():
+                with pd.ExcelFile(products_path) as xl:
+                    for name in xl.sheet_names:
+                        sheets_data[name] = pd.read_excel(xl, name)
 
-        # Load all existing sheets first to preserve them
-        sheets_data = {}
-        if products_path.is_file():
-            with pd.ExcelFile(products_path) as xl:
-                for name in xl.sheet_names:
-                    sheets_data[name] = pd.read_excel(xl, name)
+            sheets_data[sheet_name] = pd.DataFrame(products)
 
-        # Update the target sheet
-        sheets_data[sheet_name] = pd.DataFrame(products)
+            with pd.ExcelWriter(products_path, engine="openpyxl") as writer:
+                for name, df_sheet in sheets_data.items():
+                    df_sheet.to_excel(writer, sheet_name=name, index=False)
 
-        # Save all sheets back to excel using openpyxl engine
-        with pd.ExcelWriter(products_path, engine="openpyxl") as writer:
-            for name, df_sheet in sheets_data.items():
-                df_sheet.to_excel(writer, sheet_name=name, index=False)
-
-        # Reset dependencies so cached RAG index is re-initialized
+        await deps.run_sync_in_threadpool(_write_excel)
+        invalidate_products_cache()
         deps.reset()
         return {
             "success": True,

@@ -298,12 +298,22 @@ async def classify_file(
 
 
 @router.get("/jobs")
-async def list_jobs(request: Request, user: dict = CURRENT_USER_DEP):
+async def list_jobs(
+    request: Request,
+    limit: int | None = 50,
+    offset: int = 0,
+    include_results: bool = False,
+    user: dict = CURRENT_USER_DEP,
+):
     """List classification jobs visible to the authenticated user."""
     job_store = _get_job_store_or_503()
-    if user.get("role") == "admin":
-        return job_store.list_jobs()
-    return job_store.list_jobs(owner_username=user.get("username", ""))
+    owner = None if user.get("role") == "admin" else user.get("username", "")
+    return job_store.list_jobs(
+        owner_username=owner,
+        include_results=include_results,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/jobs/metrics")

@@ -250,6 +250,8 @@ class ClassificationJobStore:
         owner_username: str | None = None,
         include_results: bool = True,
         active_only: bool = False,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[dict]:
         where: list[str] = []
         params: list[Any] = []
@@ -261,9 +263,13 @@ class ClassificationJobStore:
             params.extend([JOB_STATUS_QUEUED, JOB_STATUS_RUNNING])
         where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
+        pagination_sql = ""
+        if limit is not None:
+            pagination_sql = f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
         with self._lock, self._conn() as conn:
             rows = conn.execute(
-                f"SELECT * FROM classification_jobs {where_sql} ORDER BY created_at DESC",
+                f"SELECT * FROM classification_jobs {where_sql} ORDER BY created_at DESC{pagination_sql}",
                 params,
             ).fetchall()
             jobs = []
@@ -763,6 +769,26 @@ class ClassificationJobStore:
             "daily_failed_counts": daily_failed_counts,
             "recent_files": recent_files,
         }
+
+    def get_label_distribution(self) -> dict[str, int]:
+        """Return label distribution directly aggregated via SQL without scanning JSON payloads."""
+        with self._lock, self._conn() as conn:
+            table_check = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='feedback_labels'"
+            ).fetchone()
+            if table_check:
+                rows = conn.execute(
+                    """
+                    SELECT label, COUNT(*) AS cnt
+                    FROM feedback_labels
+                    GROUP BY label
+                    HAVING cnt > 0
+                    ORDER BY cnt DESC
+                    """
+                ).fetchall()
+                if rows:
+                    return {row["label"]: int(row["cnt"]) for row in rows if row["label"]}
+            return {}
 
     def daily_stats(
         self,

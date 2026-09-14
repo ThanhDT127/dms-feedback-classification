@@ -656,3 +656,22 @@ class FeedbackAnalyticsRepository:
                 (row,),
             ).fetchall()
         return [str(item["label"]) for item in rows]
+
+    def get_label_distribution(self) -> dict[str, int]:
+        """Return label counts aggregated directly via SQL without loading JSON payloads."""
+        with self._lock, self._conn() as conn:
+            table_check = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='feedback_labels'"
+            ).fetchone()
+            if not table_check:
+                return {}
+            rows = conn.execute(
+                """
+                SELECT label, COUNT(*) AS cnt
+                FROM feedback_labels
+                GROUP BY label
+                HAVING cnt > 0
+                ORDER BY cnt DESC
+                """
+            ).fetchall()
+            return {row["label"]: int(row["cnt"]) for row in rows if row["label"]}

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from ...analytics import FeedbackAnalyticsRepository, ingest_managed_workbook
 from ...exceptions import SharePointError
 from ...settings import get_settings
+from ...sharepoint_cache import get_sharepoint_list_cache
 from ...time_utils import utc_from_timestamp
 from ..deps import (
     get_admin_user,
@@ -23,6 +24,7 @@ from ..deps import (
     get_feedback_analytics_repository,
     get_sharepoint_client,
     get_sharepoint_sync_service,
+    run_sync_in_threadpool,
 )
 
 logger = logging.getLogger("dms-web")
@@ -196,11 +198,13 @@ async def upload_file(
     try:
         if analytics_repository is None:
             raise RuntimeError("Kho dữ liệu analytics chưa sẵn sàng")
-        ingest_result = ingest_managed_workbook(analytics_repository, dest)
+        ingest_result = await run_sync_in_threadpool(ingest_managed_workbook, analytics_repository, dest)
         ingested_rows = ingest_result.persisted_rows
     except Exception:
         ingest_error = "Không thể đưa file vào phân tích"
         logger.exception("Không thể đưa file %s vào analytics", dest.name)
+
+    get_sharepoint_list_cache().invalidate("input")
 
     return {
         "filename": dest.name,
@@ -283,6 +287,8 @@ async def sync_sharepoint(admin: dict = Depends(get_admin_user)):
     except Exception as exc:
         logger.warning("Lỗi đẩy Output mới lên SharePoint: %s", exc)
 
+    get_sharepoint_list_cache().invalidate()
+
     return {
         "success": True,
         "synced_downloaded": stats.downloaded_inputs + stats.downloaded_outputs,
@@ -339,10 +345,19 @@ async def ingest_existing_input_file(
 
 
 @router.get("/{folder}")
-async def list_files(folder: str, user: dict = Depends(get_current_user)):
+async def list_files(
+    folder: str,
+    refresh: bool = False,
+    user: dict = Depends(get_current_user),
+):
     """Liệt kê các file trong thư mục chỉ định (Duyệt SharePoint Cloud hoặc Local Fallback)."""
     folder_lower = folder.lower()
-    files: list[dict] = []
+    cache = get_sharepoint_list_cache()
+
+    if not refresh:
+        cached = cache.get(folder_lower)
+        if cached is not None:
+            return cached
 
     # Quyết định xem có nên duyệt SharePoint không
     sp_folder_map = {
@@ -365,10 +380,16 @@ async def list_files(folder: str, user: dict = Depends(get_current_user)):
         except Exception:
             pass
 
+    seen_name_map = {
+        s_info.get("name"): s_info.get("status", "done")
+        for _fid, s_info in seen_data.items()
+        if s_info.get("name")
+    }
+
     # Nếu có kết nối SharePoint
     if sp_client is not None and sp_folder:
         try:
-            items = sp_client.list_folder_items(sp_folder)
+            items = await run_sync_in_threadpool(sp_client.list_folder_items, sp_folder)
             files = []
             for item in items:
                 name = item.get("name", "")
@@ -383,12 +404,8 @@ async def list_files(folder: str, user: dict = Depends(get_current_user)):
                 # Đối chiếu chéo từ seen_files.json theo ID hoặc Tên file
                 if item_id and item_id in seen_data:
                     status = seen_data[item_id].get("status", "done")
-                else:
-                    # Fallback theo tên file nếu không lưu ID trong seen
-                    for _fid, s_info in seen_data.items():
-                        if s_info.get("name") == name:
-                            status = s_info.get("status", "done")
-                            break
+                elif name in seen_name_map:
+                    status = seen_name_map[name]
 
                 files.append(
                     {
@@ -403,6 +420,7 @@ async def list_files(folder: str, user: dict = Depends(get_current_user)):
                         "web_url": item.get("webUrl"),
                     }
                 )
+            cache.set(folder_lower, files)
             return files
         except Exception as exc:
             logger.warning(
@@ -430,17 +448,14 @@ async def list_files(folder: str, user: dict = Depends(get_current_user)):
                 # Gán trạng thái cho file local
                 status = None
                 if folder_lower == "input":
-                    status = "new"
-                    for _fid, s_info in seen_data.items():
-                        if s_info.get("name") == item.name:
-                            status = s_info.get("status", "done")
-                            break
+                    status = seen_name_map.get(item.name, "new")
                 info["status"] = status
                 info["source"] = "local_cache"
                 info["id"] = None
                 info["web_url"] = None
                 files.append(info)
 
+    cache.set(folder_lower, files)
     return files
 
 
@@ -581,6 +596,7 @@ async def bulk_delete_files(
 
     success_count = len(deleted)
     total_count = len(filenames)
+    get_sharepoint_list_cache().invalidate(folder)
     return {
         "deleted": deleted,
         "failed": failed,
@@ -644,6 +660,7 @@ async def delete_sharepoint_files(
         except Exception as exc:
             failed.append({"name": item.name, "reason": f"Lỗi không xác định: {exc}"})
 
+    get_sharepoint_list_cache().invalidate(folder)
     return {
         "delete_scope": "sharepoint",
         "remote_deleted": remote_deleted,
@@ -696,7 +713,7 @@ async def preview_file(
 
     if sp_client is not None and sp_folder:
         try:
-            items = sp_client.list_folder_items(sp_folder)
+            items = await run_sync_in_threadpool(sp_client.list_folder_items, sp_folder)
             target_item = None
             for item in items:
                 if item.get("name") == filename:
@@ -704,9 +721,9 @@ async def preview_file(
                     break
 
             if target_item:
-                # Tải file về thư mục staging tạm thời
+                # Tải file về thư mục staging tạm thời qua threadpool
                 temp_path = _staging_download_path(filename)
-                sp_client.download_file(target_item["id"], temp_path)
+                await run_sync_in_threadpool(sp_client.download_file, target_item["id"], temp_path)
                 file_path = temp_path
                 temp_downloaded_path = temp_path
         except Exception as exc:
@@ -741,11 +758,8 @@ async def preview_file(
         # ── Excel ──
         if ext in EXCEL_EXTS:
             try:
-                df = (
-                    pd.read_excel(file_path, nrows=max_rows)
-                    if max_rows
-                    else pd.read_excel(file_path)
-                )
+                limit_rows = max_rows or 200
+                df = await run_sync_in_threadpool(pd.read_excel, file_path, nrows=limit_rows)
                 return {
                     "type": "table",
                     "filename": filename,
