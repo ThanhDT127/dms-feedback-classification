@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dms-chatbot-query-plan-v1",
+  "title": "QueryPlan",
+  "description": "Request from AI Orchestrator (Dev B) to Data Engine (Dev A). This is the INTERFACE CONTRACT between the two teams.",
+  "type": "object",
+  "required": ["pattern", "answer_shape", "original_query", "confidence"],
+  "properties": {
+    "pattern": {
+      "type": "string",
+      "enum": ["sql_template", "semantic_view", "fts5_search", "json_extract"],
+      "description": "Which execution strategy the Data Engine should use."
+    },
+    "answer_shape": {
+      "type": "string",
+      "enum": ["table", "narrative", "number", "list"],
+      "description": "How the AI layer should format the final response."
+    },
+    "original_query": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The user's question (already contextualized by Bước 0)."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Planner's confidence in the chosen pattern (0.0 - 1.0)."
+    },
+    "function_name": {
+      "type": ["string", "null"],
+      "description": "[Pattern 1] Name of the function in Function Registry.",
+      "enum": [
+        "get_overview", "get_products_top", "get_issues_by_type",
+        "get_geography", "get_daily_trend", "get_units",
+        "get_sources", "get_status_backlog", "get_feedback_detail",
+        "get_duplicates", null
+      ]
+    },
+    "params": {
+      "type": "object",
+      "description": "[Pattern 1] Parameters for the function (date_from, date_to, limit, feedback_id...).",
+      "properties": {
+        "date_from": { "type": ["string", "null"], "format": "date" },
+        "date_to": { "type": ["string", "null"], "format": "date" },
+        "limit": { "type": ["integer", "null"], "minimum": 1, "maximum": 100 },
+        "feedback_id": { "type": ["integer", "null"] },
+        "unit_name": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "sql": {
+      "type": ["string", "null"],
+      "description": "[Pattern 2] SQL query for Semantic View (must be SELECT only)."
+    },
+    "fts_query": {
+      "type": ["string", "null"],
+      "description": "[Pattern 3] Full-text search query string."
+    },
+    "fts_filters": {
+      "type": "object",
+      "description": "[Pattern 3] Additional filters for FTS5 results.",
+      "properties": {
+        "date_from": { "type": ["string", "null"], "format": "date" },
+        "date_to": { "type": ["string", "null"], "format": "date" },
+        "unit_name": { "type": ["string", "null"] },
+        "sentiment": { "type": ["string", "null"], "enum": ["Tích cực", "Trung lập", "Tiêu cực", null] }
+      },
+      "additionalProperties": true
+    },
+    "fts_limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 20,
+      "description": "[Pattern 3] Max results from FTS5 search."
+    },
+    "json_keys": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "[Pattern 4] Keys to extract from raw_data_json."
+    },
+    "json_filters": {
+      "type": "object",
+      "description": "[Pattern 4] Filters to locate the target record(s).",
+      "properties": {
+        "feedback_id": { "type": ["integer", "null"] },
+        "issue_code": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "pattern": { "const": "sql_template" } } },
+      "then": { "required": ["function_name"] }
+    },
+    {
+      "if": { "properties": { "pattern": { "const": "semantic_view" } } },
+      "then": { "required": ["sql"] }
+    },
+    {
+      "if": { "properties": { "pattern": { "const": "fts5_search" } } },
+      "then": { "required": ["fts_query"] }
+    },
+    {
+      "if": { "properties": { "pattern": { "const": "json_extract" } } },
+      "then": { "required": ["json_keys"] }
+    }
+  ]
+}
