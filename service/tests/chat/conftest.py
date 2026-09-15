@@ -19,7 +19,6 @@ from dms.chat.contract import (
 )
 from dms.chat.mock_executor import MockQueryExecutor
 
-
 # ── User Scopes ──
 
 

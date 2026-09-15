@@ -100,6 +100,7 @@ class UserStore:
         safe.setdefault("display_name", safe.get("username", ""))
         safe.setdefault("is_active", True)
         safe.setdefault("must_change_password", False)
+        safe.setdefault("unit_ids", list(user.get("unit_ids") or []))
         return safe
 
     # Dummy bcrypt hash for constant-time comparison when user not found
@@ -152,6 +153,7 @@ class UserStore:
         role: str = "user",
         display_name: str | None = None,
         is_active: bool = True,
+        unit_ids: list[str] | None = None,
     ) -> dict:
         """Create a new user.
 
@@ -169,6 +171,7 @@ class UserStore:
             "password_hash": self._hash_password(password),
             "role": role,
             "is_active": bool(is_active),
+            "unit_ids": list(unit_ids or []),
             "created_at": datetime.now(UTC).isoformat(),
         }
         data["users"].append(new_user)
@@ -187,7 +190,7 @@ class UserStore:
         return False
 
     def update_user(self, username: str, **fields) -> dict | None:
-        """Update user fields (display_name, role, is_active, password).
+        """Update user fields (display_name, role, is_active, password, unit_ids).
 
         Returns the updated user dict (without hash) or ``None`` if not found.
         """
@@ -200,6 +203,8 @@ class UserStore:
                     user["role"] = fields["role"]
                 if "is_active" in fields:
                     user["is_active"] = bool(fields["is_active"])
+                if "unit_ids" in fields:
+                    user["unit_ids"] = list(fields["unit_ids"] or [])
                 if "password" in fields and fields["password"]:
                     user["password_hash"] = self._hash_password(fields["password"])
                     user["must_change_password"] = False

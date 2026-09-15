@@ -23,9 +23,8 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
-
 
 # ═══════════════════════════════════════════════════════════════════
 # CONSTANTS — Từ codebase thật
@@ -133,7 +132,7 @@ QUERYABLE_COLUMNS: list[str] = [
 # ═══════════════════════════════════════════════════════════════════
 
 
-class QueryPattern(str, Enum):
+class QueryPattern(StrEnum):
     """Strategy Data Engine sẽ dùng để thực thi truy vấn.
 
     Mapping từ kiến trúc Figma Khối [3] RAG Planner:
@@ -149,7 +148,7 @@ class QueryPattern(str, Enum):
     JSON_EXTRACT = "json_extract"
 
 
-class AnswerShape(str, Enum):
+class AnswerShape(StrEnum):
     """Hình dạng câu trả lời cho Khối [7] Response Shaper."""
 
     TABLE = "table"           # Bảng Markdown (top products, issues by type...)
@@ -158,7 +157,7 @@ class AnswerShape(str, Enum):
     LIST = "list"             # Danh sách bullet points
 
 
-class QueryStatus(str, Enum):
+class QueryStatus(StrEnum):
     """Kết quả thực thi truy vấn."""
 
     OK = "ok"
@@ -388,7 +387,7 @@ class QueryResult:
 # ═══════════════════════════════════════════════════════════════════
 
 
-class MessageRole(str, Enum):
+class MessageRole(StrEnum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
@@ -412,6 +411,9 @@ class ChatSession:
     session_id: str
     user_id: str                         # Khớp UserStore.username
     title: str = ""
+    active_domain: str = ""              # overview | trend | drill | lookup | report
+    slots_json: str = "{}"               # Filter state: date_range, unit, product...
+    token_count: int = 0
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     expires_at: str = ""                 # TTL 7 ngày, housekeeping dọn
 

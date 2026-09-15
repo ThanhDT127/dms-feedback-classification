@@ -28,7 +28,6 @@ from dms.chat.contract import (
     QueryPattern,
     QueryPlan,
     QueryResult,
-    QueryResultMetadata,
     QueryStatus,
     UserScope,
 )

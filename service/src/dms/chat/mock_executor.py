@@ -19,7 +19,6 @@ from typing import Any
 
 from .contract import (
     FUNCTION_REGISTRY_SPEC,
-    AnswerShape,
     QueryPattern,
     QueryPlan,
     QueryResult,
@@ -27,7 +26,6 @@ from .contract import (
     QueryStatus,
     UserScope,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════
 # MOCK DATA — Dựa trên data thật và format thật của analytics/service.py
