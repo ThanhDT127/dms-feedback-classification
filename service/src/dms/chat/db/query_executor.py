@@ -172,7 +172,7 @@ class SecureQueryExecutor:
                 JOIN feedback_records r ON r.feedback_id = f.feedback_id
                 WHERE f.feedback_fts_raw MATCH ? AND r.is_active = 1
             """
-            scoped_sql = ScopePolicy.enforce_sql_where(base_sql, scope, unit_column="unit_name")
+            scoped_sql = ScopePolicy.enforce_sql_where(base_sql, scope, unit_column="r.unit_name")
             scoped_sql += f" LIMIT {limit}"
 
             rows = cursor.execute(scoped_sql, (sanitized_raw,)).fetchall()
@@ -188,7 +188,7 @@ class SecureQueryExecutor:
                     WHERE f.feedback_fts_nodau MATCH ? AND r.is_active = 1
                 """
                 scoped_fallback_sql = ScopePolicy.enforce_sql_where(
-                    fallback_sql, scope, unit_column="unit_name"
+                    fallback_sql, scope, unit_column="r.unit_name"
                 )
                 scoped_fallback_sql += f" LIMIT {limit}"
                 rows = cursor.execute(scoped_fallback_sql, (sanitized_nodau,)).fetchall()

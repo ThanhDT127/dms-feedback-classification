@@ -156,6 +156,7 @@ class ChatStore:
         """Thêm tin nhắn mới vào phiên hội thoại."""
         now_iso = datetime.now(UTC).isoformat()
         meta_str = json.dumps(metadata, ensure_ascii=False) if metadata else None
+        role_str = role.value if hasattr(role, "value") else str(role)
 
         with self._conn() as conn:
             cursor = conn.execute(
@@ -163,7 +164,7 @@ class ChatStore:
                 INSERT INTO chat_messages (session_id, role, content, metadata_json, created_at)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (session_id, role.value, content, meta_str, now_iso),
+                (session_id, role_str, content, meta_str, now_iso),
             )
             msg_id = cursor.lastrowid
             # Cập nhật updated_at cho session

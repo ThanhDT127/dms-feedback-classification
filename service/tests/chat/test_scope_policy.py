@@ -134,7 +134,13 @@ class TestScopePolicy:
         sql = "SELECT product, count FROM v_issues_current"
         scoped_sql = ScopePolicy.enforce_sql_where(sql, scope)
         assert "WHERE unit_name IN ('CN Miền Nam', 'CN Cần Thơ')" in scoped_sql
-        assert "SELECT * FROM (SELECT product, count FROM v_issues_current)" in scoped_sql
+        assert scoped_sql == "SELECT product, count FROM v_issues_current WHERE unit_name IN ('CN Miền Nam', 'CN Cần Thơ')"
+
+    def test_enforce_sql_where_user_with_existing_where(self):
+        scope = UserScope(username="user1", role="user", unit_ids=["CN Miền Nam"])
+        sql = "SELECT product FROM v_issues_current WHERE sentiment = 'Tiêu cực'"
+        scoped_sql = ScopePolicy.enforce_sql_where(sql, scope)
+        assert "(unit_name IN ('CN Miền Nam')) AND (sentiment = 'Tiêu cực')" in scoped_sql
 
     def test_enforce_sql_where_empty_scope(self):
         scope = UserScope(username="user_no_unit", role="user", unit_ids=[])

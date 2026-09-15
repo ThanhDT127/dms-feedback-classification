@@ -105,11 +105,10 @@ class ScopePolicy:
     def enforce_sql_where(
         cls, sql: str, scope: UserScope, unit_column: str = "unit_name"
     ) -> str:
-        """Bọc câu lệnh SQL bằng lớp lọc WHERE unit_name IN (...) bảo vệ tuyệt đối.
+        """Chèn điều kiện lọc đơn vị an toàn vào câu lệnh SQL SELECT.
 
-        Áp dụng mẫu bọc subquery:
-          SELECT * FROM (<sql>) AS _scoped_subquery WHERE unit_name IN (...)
-        đảm bảo không bị phá vỡ cấu trúc truy vấn ban đầu.
+        Nếu câu lệnh đã có WHERE: chèn ({condition}) AND ...
+        Nếu chưa có WHERE: chèn trước GROUP BY / HAVING / ORDER BY / LIMIT.
         """
         clean_sql = sql.strip().rstrip(";")
 
@@ -117,15 +116,32 @@ class ScopePolicy:
             return clean_sql
 
         if not scope.unit_ids:
-            return f"SELECT * FROM ({clean_sql}) AS _scoped_q WHERE 1 = 0"
+            condition = "1 = 0"
+        else:
+            quote = "'"
+            escaped_units = ", ".join(
+                quote + u.replace("'", "''") + quote for u in scope.unit_ids
+            )
+            condition = f"{unit_column} IN ({escaped_units})"
 
-        quote = "'"
-        escaped_units = ", ".join(
-            quote + u.replace("'", "''") + quote for u in scope.unit_ids
+        # Tìm vị trí WHERE
+        import re
+
+        match_where = re.search(r"\bWHERE\b", clean_sql, re.IGNORECASE)
+        if match_where:
+            pos = match_where.end()
+            return f"{clean_sql[:pos]} ({condition}) AND ({clean_sql[pos:].strip()})"
+
+        # Nếu không có WHERE, tìm vị trí trước GROUP BY / HAVING / ORDER BY / LIMIT / WINDOW
+        clause_split = re.compile(
+            r"\b(GROUP\s+BY|HAVING|ORDER\s+BY|LIMIT|WINDOW)\b", re.IGNORECASE
         )
-        condition = f"{unit_column} IN ({escaped_units})"
+        match_clause = clause_split.search(clean_sql)
+        if match_clause:
+            pos = match_clause.start()
+            return f"{clean_sql[:pos].rstrip()} WHERE {condition} {clean_sql[pos:]}"
 
-        return f"SELECT * FROM ({clean_sql}) AS _scoped_q WHERE {condition}"
+        return f"{clean_sql} WHERE {condition}"
 
     @classmethod
     def filter_rows_by_scope(
