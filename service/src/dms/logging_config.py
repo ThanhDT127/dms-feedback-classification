@@ -4,10 +4,40 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from .time_utils import utc_from_timestamp
+
+_gateway_log_lock = threading.Lock()
+
+
+class _GatewayFileHandler(RotatingFileHandler):
+    def handleError(self, record: logging.LogRecord) -> None:
+        raise OSError("Gateway audit log could not be written") from None
+
+
+def ensure_gateway_logging(log_dir: str | Path) -> None:
+    """Keep Gateway logging durable without sharing rotating files across processes."""
+    path = Path(log_dir).resolve() / f"dms-gateway-{os.getpid()}.jsonl"
+    with _gateway_log_lock:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        logger = logging.getLogger("dms.gateway")
+        for handler in logger.handlers:
+            if isinstance(handler, _GatewayFileHandler) and handler.baseFilename == str(path):
+                return
+        handler = _GatewayFileHandler(
+            path, maxBytes=10 * 1024 * 1024, backupCount=7, encoding="utf-8"
+        )
+        handler.setFormatter(JsonFormatter())
+        for previous in list(logger.handlers):
+            if isinstance(previous, _GatewayFileHandler):
+                logger.removeHandler(previous)
+                previous.close()
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
 
 
 class JsonFormatter(logging.Formatter):

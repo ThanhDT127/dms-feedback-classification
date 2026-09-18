@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+import math
 import os
 import threading
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import Field, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +30,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         populate_by_name=True,
+        hide_input_in_errors=True,
     )
 
     azure_tenant_id: str = Field("", alias="AZURE_TENANT_ID")
@@ -36,6 +40,14 @@ class Settings(BaseSettings):
     gemini_backend: str = Field("vertex", alias="GEMINI_BACKEND")
     gemini_api_key: str = Field("", alias="GEMINI_API_KEY")
     gemini_model: str = Field("gemini-2.5-flash-lite", alias="GEMINI_MODEL")
+    gateway_chat_completions_url: str = Field("", alias="GATEWAY_CHAT_COMPLETIONS_URL")
+    gateway_api_key: str = Field("", alias="GATEWAY_API_KEY", repr=False)
+    gateway_model: str = Field("", alias="GATEWAY_MODEL")
+    gateway_allow_insecure_http: bool = Field(False, alias="GATEWAY_ALLOW_INSECURE_HTTP")
+    gateway_system_user: str = Field("", alias="GATEWAY_SYSTEM_USER")
+    fallback_enabled: bool = Field(False, alias="FALLBACK_ENABLED")
+    fallback_fail_threshold: int = Field(3, alias="FALLBACK_FAIL_THRESHOLD")
+    fallback_retry_after_s: float = Field(60.0, alias="FALLBACK_RETRY_AFTER_S")
     gemini_model_pricing: str = Field(
         '{"gemini-2.5-flash": {"input": 0.30, "output": 2.50}, "gemini-2.0-flash": {"input": 0.10, "output": 0.40}, "gemini-2.5-flash-lite": {"input": 0.025, "output": 0.30}, "gemini-3.5-flash": {"input": 1.50, "output": 9.00}, "gemini-3.1-flash-lite": {"input": 0.025, "output": 0.10}}',
         alias="GEMINI_MODEL_PRICING",
@@ -127,9 +139,9 @@ class Settings(BaseSettings):
             raise ValueError("Missing required settings: " + ", ".join(sorted(missing)))
 
         backend = self.gemini_backend.lower().strip()
-        if backend not in {"vertex", "apikey"}:
+        if backend not in {"vertex", "apikey", "gateway"}:
             raise ValueError(
-                f"Unsupported GEMINI_BACKEND: {self.gemini_backend!r}. Use 'vertex' or 'apikey'."
+                "Unsupported GEMINI_BACKEND. Use 'vertex', 'apikey' or 'gateway'."
             )
         self.gemini_backend = backend
 
@@ -140,6 +152,55 @@ class Settings(BaseSettings):
             raise ValueError("GCP_PROJECT_ID is required when GEMINI_BACKEND=vertex")
         if backend == "apikey" and not self.gemini_api_key:
             raise ValueError("GEMINI_API_KEY is required when GEMINI_BACKEND=apikey")
+        if backend == "gateway":
+            url = self.gateway_chat_completions_url
+            try:
+                parsed = urlsplit(url)
+                valid_url = (
+                    parsed.scheme in {"https", "http"}
+                    and bool(parsed.hostname)
+                    and parsed.port != 0
+                    and parsed.username is None
+                    and parsed.password is None
+                    and not any(char.isspace() for char in url)
+                    and not any(char in url for char in "?#\\")
+                )
+            except ValueError:
+                valid_url = False
+            if not valid_url:
+                raise ValueError("GATEWAY_CHAT_COMPLETIONS_URL must be a valid inference URL")
+            if parsed.scheme == "http" and not self.gateway_allow_insecure_http:
+                raise ValueError("GATEWAY_ALLOW_INSECURE_HTTP is required for HTTP")
+            if (
+                not self.gateway_api_key
+                or any(char.isspace() for char in self.gateway_api_key)
+                or any(char in self.gateway_api_key for char in "{}<>")
+            ):
+                raise ValueError("GATEWAY_API_KEY must be a nonempty, literal token")
+            if not self.gateway_model or any(char.isspace() for char in self.gateway_model):
+                raise ValueError("GATEWAY_MODEL must be a nonempty, exact alias")
+            if self.max_retry < 1 or self.fallback_fail_threshold < 1:
+                raise ValueError("max_retry and FALLBACK_FAIL_THRESHOLD must be positive")
+            if self.fallback_enabled and self.fallback_fail_threshold > self.max_retry:
+                raise ValueError("FALLBACK_FAIL_THRESHOLD must not exceed max_retry")
+            for name in ("fallback_retry_after_s", "gemini_timeout_seconds", "base_wait"):
+                value = getattr(self, name)
+                minimum_ok = value >= 0 if name == "base_wait" else value > 0
+                if not math.isfinite(value) or not minimum_ok:
+                    raise ValueError(f"{name} must be finite and within its valid range")
+            if self.fallback_enabled:
+                try:
+                    direct_ready = all((
+                        self.gcp_project_id.strip(), self.gcp_location.strip(),
+                        self.gemini_model, self.gcp_service_account_json,
+                    )) and Path(self.gcp_service_account_json).is_file()
+                except (OSError, ValueError):
+                    direct_ready = False
+                if not direct_ready:
+                    self.fallback_enabled = False
+                    logging.getLogger("dms-watcher").warning(
+                        "Gateway fallback disabled: required direct Vertex configuration/file missing"
+                    )
 
         self.environment = (self.environment or "development").strip().lower()
 

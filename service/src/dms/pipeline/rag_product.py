@@ -11,6 +11,7 @@ import pandas as pd
 from rank_bm25 import BM25Okapi
 from unidecode import unidecode
 
+from ..exceptions import GatewayError
 from ..gemini_client import GeminiClient
 from ..settings import Settings
 
@@ -161,7 +162,9 @@ class RAGProductMatcher:
             out.append("NONE")
         return out[:n_expected]
 
-    def llm_extract_batch(self, texts: list[str]) -> list[str]:
+    def llm_extract_batch(
+        self, texts: list[str], *, actor: str | None = None, job_id: str | None = None
+    ) -> list[str]:
         joined = "\n".join([f"{i + 1}. {t}" for i, t in enumerate(texts)])
         prompt = dedent(
             f"""
@@ -187,10 +190,17 @@ class RAGProductMatcher:
         ).strip()
 
         try:
-            resp = self.gemini.generate(prompt)
+            gateway_kwargs = (
+                {"actor": actor, "job_id": job_id, "operation": "rag_extract"}
+                if self.settings.gemini_backend == "gateway"
+                else {}
+            )
+            resp = self.gemini.generate(prompt, **gateway_kwargs)
             self._last_usage = resp.usage
             return self._parse_llm_numbered(resp.text, len(texts))
         except Exception as exc:
+            if isinstance(exc, GatewayError):
+                raise
             logger.warning("LLM extract error after provider retries: %s", exc)
         return ["NONE"] * len(texts)
 
@@ -256,8 +266,13 @@ class RAGProductMatcher:
             out.append(item)
         return out
 
-    def retrieve_batch(self, texts: list[str]) -> list[dict]:
-        exts = self.llm_extract_batch(texts)
+    def retrieve_batch(
+        self, texts: list[str], *, actor: str | None = None, job_id: str | None = None
+    ) -> list[dict]:
+        gateway_kwargs = (
+            {"actor": actor, "job_id": job_id} if self.settings.gemini_backend == "gateway" else {}
+        )
+        exts = self.llm_extract_batch(texts, **gateway_kwargs)
         out = []
         for _, extracted in zip(texts, exts, strict=False):
             if extracted == "NONE":

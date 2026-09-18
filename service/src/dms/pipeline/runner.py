@@ -18,7 +18,7 @@ from ..analytics.input_reader import (
     detect_header_and_textcol as detect_header_and_textcol,  # noqa: F401
 )
 from ..analytics.input_reader import read_feedback_workbook
-from ..exceptions import PipelineCancelled, PipelineError
+from ..exceptions import GatewayError, PipelineCancelled, PipelineError
 from ..gemini_client import GeminiClient
 from ..metrics import MetricsCollector
 from ..settings import Settings
@@ -66,14 +66,24 @@ class PipelineRunner:
         self,
         batch_texts: list[str],
         cancellation_check: Callable[[], bool] | None = None,
+        *,
+        actor: str | None = None,
+        job_id: str | None = None,
     ) -> list[dict]:
         if cancellation_check is not None and cancellation_check():
             raise PipelineCancelled("Classification job was cancelled.")
         try:
-            return self.rag.retrieve_batch(batch_texts)
+            gateway_kwargs = (
+                {"actor": actor, "job_id": job_id}
+                if self.settings.gemini_backend == "gateway"
+                else {}
+            )
+            return self.rag.retrieve_batch(batch_texts, **gateway_kwargs)
         except Exception as exc:
             if cancellation_check is not None and cancellation_check():
                 raise PipelineCancelled("Classification job was cancelled.") from exc
+            if isinstance(exc, GatewayError):
+                raise
             logger.warning("RAG error after provider retries: %s", exc)
         return [
             {
@@ -96,8 +106,11 @@ class PipelineRunner:
         progress_callback: Callable[..., Any] | None = None,
         cancellation_check: Callable[[], bool] | None = None,
         job_id: str | None = None,
+        *,
+        actor: str | None = None,
     ) -> dict:
         try:
+            gateway_kwargs = {"actor": actor} if self.settings.gemini_backend == "gateway" else {}
             return self._run_pipeline(
                 input_path,
                 output_path,
@@ -105,8 +118,9 @@ class PipelineRunner:
                 progress_callback,
                 cancellation_check,
                 job_id=job_id,
+                **gateway_kwargs,
             )
-        except PipelineCancelled:
+        except (PipelineCancelled, GatewayError):
             raise
         except Exception as exc:
             raise PipelineError(str(exc)) from exc
@@ -119,8 +133,13 @@ class PipelineRunner:
         progress_callback: Callable[..., Any] | None = None,
         cancellation_check: Callable[[], bool] | None = None,
         job_id: str | None = None,
+        *,
+        actor: str | None = None,
     ) -> dict:
         self._current_job_id = job_id
+        gateway_kwargs = (
+            {"actor": actor, "job_id": job_id} if self.settings.gemini_backend == "gateway" else {}
+        )
         input_path = Path(input_path)
         output_path = Path(output_path)
         ckpt_path = Path(ckpt_path)
@@ -187,10 +206,10 @@ class PipelineRunner:
                     pass
             if cancellation_check is not None and cancellation_check():
                 raise PipelineCancelled("Classification job was cancelled.")
-            rag_batch = self._run_rag_with_retry(batch, cancellation_check)
+            rag_batch = self._run_rag_with_retry(batch, cancellation_check, **gateway_kwargs)
 
             # Track RAG usage
-            rag_usage = self.rag._last_usage
+            rag_usage = self.rag._last_usage if not gateway_kwargs else {}
             if rag_usage:
                 rag_cost = calculate_cost(
                     self.settings.gemini_model,
@@ -238,32 +257,37 @@ class PipelineRunner:
                     batch,
                     matched_products=rag_batch,
                     cancellation_check=cancellation_check,
+                    **gateway_kwargs,
                 )
-                usage = self.issue_classifier._last_usage
-                cost = calculate_cost(
-                    self.settings.gemini_model,
-                    usage.get("prompt_tokens", 0),
-                    usage.get("completion_tokens", 0),
-                    self._pricing_config,
-                )
-                self.metrics.record_gemini_call(
-                    prompt_tokens=usage.get("prompt_tokens", 0),
-                    completion_tokens=usage.get("completion_tokens", 0),
-                    cost_usd=cost,
-                )
-                if self.usage_tracker:
-                    self.usage_tracker.record(
-                        model=self.settings.gemini_model,
-                        call_type="classify_batch",
+                # Gateway usage is recorded at the client for every attempt/repair.
+                if not gateway_kwargs:
+                    usage = self.issue_classifier._last_usage
+                    cost = calculate_cost(
+                        self.settings.gemini_model,
+                        usage.get("prompt_tokens", 0),
+                        usage.get("completion_tokens", 0),
+                        self._pricing_config,
+                    )
+                    self.metrics.record_gemini_call(
                         prompt_tokens=usage.get("prompt_tokens", 0),
                         completion_tokens=usage.get("completion_tokens", 0),
-                        total_tokens=usage.get("total_tokens", 0),
-                        estimated_cost_usd=cost,
-                        job_id=self._current_job_id,
+                        cost_usd=cost,
                     )
+                    if self.usage_tracker:
+                        self.usage_tracker.record(
+                            model=self.settings.gemini_model,
+                            call_type="classify_batch",
+                            prompt_tokens=usage.get("prompt_tokens", 0),
+                            completion_tokens=usage.get("completion_tokens", 0),
+                            total_tokens=usage.get("total_tokens", 0),
+                            estimated_cost_usd=cost,
+                            job_id=self._current_job_id,
+                        )
             except PipelineCancelled:
                 raise
             except Exception as exc:
+                if isinstance(exc, GatewayError):
+                    raise
                 logger.error(
                     "Issue classifier batch error: %s -> retrying %d rows individually",
                     exc,
@@ -279,11 +303,14 @@ class PipelineRunner:
                             [text],
                             matched_products=[rag_item],
                             cancellation_check=cancellation_check,
+                            **gateway_kwargs,
                         )
                         issue_list.append(single_result[0] if single_result else {})
                     except PipelineCancelled:
                         raise
                     except Exception as row_exc:
+                        if isinstance(row_exc, GatewayError):
+                            raise
                         logger.warning(
                             "Single-row retry at batch offset %d failed: %s", row_idx, row_exc
                         )

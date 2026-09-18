@@ -72,7 +72,14 @@ def run_all():
         t0 = time.time()
         try:
             results = runner.run_pipeline(
-                input_path=input_path, output_path=output_path, ckpt_path=ckpt_path
+                input_path=input_path,
+                output_path=output_path,
+                ckpt_path=ckpt_path,
+                **(
+                    {"actor": runtime_settings.gateway_system_user}
+                    if runtime_settings.gemini_backend == "gateway"
+                    else {}
+                ),
             )
             elapsed = time.time() - t0
             print(f"[OK] {fname}: {results['total_rows']} rows in {elapsed:.1f}s")

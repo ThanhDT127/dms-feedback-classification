@@ -38,10 +38,12 @@ async def get_settings(admin: dict = Depends(get_admin_user)):
     secret_keys = {
         "azure_client_secret",
         "gemini_api_key",
+        "gateway_api_key",
         "jwt_secret_key",
         "default_admin_password",
         "AZURE_CLIENT_SECRET",
         "GEMINI_API_KEY",
+        "GATEWAY_API_KEY",
         "JWT_SECRET_KEY",
         "DEFAULT_ADMIN_PASSWORD",
     }
@@ -179,13 +181,24 @@ async def test_connection(admin: dict = Depends(get_admin_user)):
 
     try:
         t0 = time.time()
-        response = gemini.generate("Trả lời đúng 1 từ: xin chào", temperature=0.0)
+        gateway_mode = (
+            getattr(getattr(gemini, "settings", None), "gemini_backend", None) == "gateway"
+        )
+        request_context = (
+            {"actor": admin.get("username"), "operation": "connection_test"} if gateway_mode else {}
+        )
+        response = gemini.generate(
+            "Trả lời đúng 1 từ: xin chào", temperature=0.0, **request_context
+        )
         elapsed_ms = round((time.time() - t0) * 1000)
+        route = getattr(response, "route", None)
 
         return {
             "success": True,
             "message": f"Kết nối thành công. Phản hồi: {response.text[:100]}",
             "response_time_ms": elapsed_ms,
+            "route": route,
+            "gateway_verified": route == "gateway",
         }
     except Exception as exc:
         elapsed_ms = round((time.time() - t0) * 1000)
@@ -310,6 +323,13 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
                 raise ValueError(
                     f"Xác thực kết nối Gemini thất bại. Khóa API hoặc tài khoản dịch vụ không hoạt động. Chi tiết lỗi: {exc}"
                 ) from exc
+
+        if settings.gemini_backend == "gateway":
+            return {
+                "success": True,
+                "connection_verified": False,
+                "message": "Đã lưu cấu hình. Chưa gọi model; dùng Kiểm tra kết nối để xác minh Gateway.",
+            }
 
         return {
             "success": True,

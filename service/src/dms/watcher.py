@@ -17,6 +17,7 @@ from .analytics import (
 from .classification_jobs import ClassificationJobStore
 from .cleanup import RuntimeCleanup
 from .config_assets import ConfigAssetSyncService
+from .exceptions import GatewayError
 from .metrics import MetricsCollector
 from .notification import NotificationService
 from .pipeline.issue_classifier import get_label_config_snapshot
@@ -223,11 +224,16 @@ class Watcher:
             for message in result.errors:
                 logger.warning("%s", message)
         if result.reload_required:
-            if self.runner_factory is None:
+            if self.settings.gemini_backend == "gateway":
+                self.pipeline_runner = self._build_gateway_runner(
+                    self.config_asset_sync.get_runtime_settings()
+                )
+            elif self.runner_factory is None:
                 raise RuntimeError(
                     "Config asset reload requested but no runner factory is configured"
                 )
-            self.pipeline_runner = self.runner_factory()
+            else:
+                self.pipeline_runner = self.runner_factory()
             logger.info("Reloaded pipeline dependencies from refreshed config assets")
 
     def _write_daily_summary(self, date_str: str) -> None:
@@ -340,12 +346,16 @@ class Watcher:
                     self.job_store.append_results(watcher_job_id, new_results)
 
             logger.info("Processing: %s", file_name)
+            gateway_kwargs = (
+                {"actor": "system_watcher"} if self.settings.gemini_backend == "gateway" else {}
+            )
             result = self.pipeline_runner.run_pipeline(
                 local_input,
                 local_output,
                 local_ckpt,
                 progress_callback=progress_callback,
                 job_id=watcher_job_id or file_name,
+                **gateway_kwargs,
             )
 
             logger.info("Uploading results for: %s", file_name)
@@ -414,16 +424,23 @@ class Watcher:
             entry["last_error"] = error_msg
             entry["last_attempt"] = utc_now_iso()
 
-            is_final = entry["failures"] >= MAX_FILE_RETRIES
+            non_retryable = isinstance(exc, GatewayError) and not exc.retryable
+            is_final = non_retryable or entry["failures"] >= MAX_FILE_RETRIES
+            if non_retryable:
+                entry["lastModifiedDateTime"] = file_info.get("lastModifiedDateTime", "")
             self.metrics.record_retry_failure(file_name, error_type, str(exc), is_final=is_final)
 
             if self.analytics_repository is not None and watcher_job_id is not None:
                 self.analytics_repository.mark_job_unfinished_failed(watcher_job_id)
             if self.job_store is not None and watcher_job_id is not None:
                 error_label = (
-                    f"FINAL: {error_msg} (max {MAX_FILE_RETRIES} retries exceeded)"
-                    if is_final
-                    else error_msg
+                    f"FINAL: {error_msg}"
+                    if non_retryable
+                    else (
+                        f"FINAL: {error_msg} (max {MAX_FILE_RETRIES} retries exceeded)"
+                        if is_final
+                        else error_msg
+                    )
                 )
                 self.job_store.fail_job(watcher_job_id, error=error_label)
 
@@ -437,7 +454,7 @@ class Watcher:
 
             if is_final:
                 entry["status"] = "failed"
-                logger.error("Max retries reached for %s; marking as failed", file_name)
+                logger.error("Terminal failure for %s; marking as failed", file_name)
                 if getattr(self.settings, "notify_on_error", True):
                     self.notification_service.send_error(
                         file_name,
@@ -458,6 +475,22 @@ class Watcher:
             self._save_seen(seen)
             return False
 
+    def _build_gateway_runner(self, settings: Settings) -> PipelineRunner:
+        """Publish a new client and immutable-by-convention settings snapshot."""
+        from .gemini_client import GeminiClient
+        from .pipeline.rag_product import RAGProductMatcher
+
+        snapshot = settings.model_copy(deep=True)
+        tracker = self.pipeline_runner.usage_tracker
+        gemini = GeminiClient(snapshot, usage_tracker=tracker)
+        return PipelineRunner(
+            gemini=gemini,
+            rag=RAGProductMatcher(snapshot, gemini),
+            metrics=self.metrics,
+            settings=snapshot,
+            usage_tracker=tracker,
+        )
+
     def reload_settings(self) -> None:
         """Reload settings from disk and update dependent services in-place."""
         from .settings import get_settings
@@ -466,6 +499,50 @@ class Watcher:
             get_settings.cache_clear()
         try:
             new_settings = get_settings()
+
+            if "gateway" in (self.settings.gemini_backend, new_settings.gemini_backend):
+                client_fields = (
+                    "gemini_backend",
+                    "gemini_model",
+                    "gemini_api_key",
+                    "gateway_chat_completions_url",
+                    "gateway_api_key",
+                    "gateway_model",
+                    "gateway_allow_insecure_http",
+                    "gateway_system_user",
+                    "fallback_enabled",
+                    "fallback_fail_threshold",
+                    "fallback_retry_after_s",
+                    "gcp_project_id",
+                    "gcp_location",
+                    "gcp_service_account_json",
+                    "max_retry",
+                    "base_wait",
+                    "gemini_timeout_seconds",
+                    "gemini_temperature",
+                )
+                changed = any(
+                    getattr(self.settings, field) != getattr(new_settings, field)
+                    for field in client_fields
+                )
+                if changed:
+                    old_runner = self.pipeline_runner
+                    snapshot = new_settings.model_copy(
+                        update={
+                            "keyword_dir_override": old_runner.settings.keyword_dir_override,
+                            "model_dir_override": old_runner.settings.model_dir_override,
+                        }
+                    )
+                    self.pipeline_runner = self._build_gateway_runner(snapshot)
+                    logger.info("Watcher replaced LLM client after configuration change")
+                # Never mutate settings retained by an old runner/client snapshot.
+                self.settings = new_settings
+                self.sharepoint_client.settings = new_settings
+                self.notification_service.settings = new_settings
+                if self.config_asset_sync is not None:
+                    self.config_asset_sync.settings = new_settings
+                self.cleanup.settings = new_settings
+                return
 
             # Save original configuration values to compare
             old_backend = self.settings.gemini_backend
