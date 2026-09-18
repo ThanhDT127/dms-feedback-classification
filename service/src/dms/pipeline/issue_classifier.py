@@ -10,7 +10,7 @@ from collections.abc import Callable
 
 from unidecode import unidecode
 
-from ..exceptions import PipelineCancelled
+from ..exceptions import GatewayError, PipelineCancelled
 from ..gemini_client import GeminiClient
 from ..prompt_renderer import render_issue_classifier_prompt
 from ..settings import Settings
@@ -416,17 +416,29 @@ class IssueClassifier:
             return {}
 
     def _llm_json_call(
-        self, prompt: str, cancellation_check: Callable[[], bool] | None = None
+        self,
+        prompt: str,
+        cancellation_check: Callable[[], bool] | None = None,
+        *,
+        actor: str | None = None,
+        job_id: str | None = None,
     ) -> str:
         if cancellation_check is not None and cancellation_check():
             raise PipelineCancelled("Classification job was cancelled.")
         try:
-            resp = self.gemini.generate_json(prompt, temperature=0.0)
+            gateway_kwargs = (
+                {"actor": actor, "job_id": job_id, "operation": "classify_batch"}
+                if self.settings.gemini_backend == "gateway"
+                else {}
+            )
+            resp = self.gemini.generate_json(prompt, temperature=0.0, **gateway_kwargs)
             self._last_usage = resp.usage
             return resp.text
         except Exception as exc:
             if cancellation_check is not None and cancellation_check():
                 raise PipelineCancelled("Classification job was cancelled.") from exc
+            if isinstance(exc, GatewayError):
+                raise
             logger.error("Pure-LLM issue classifier fail: %s", exc)
         return ""
 
@@ -437,6 +449,9 @@ class IssueClassifier:
         debug: bool = False,
         cancellation_check: Callable[[], bool] | None = None,
         _retry_depth: int = 0,
+        *,
+        actor: str | None = None,
+        job_id: str | None = None,
     ) -> list[dict]:
         if not texts:
             return []
@@ -491,7 +506,10 @@ class IssueClassifier:
             rendered_prompt.sha256,
         )
 
-        raw = self._llm_json_call(prompt, cancellation_check=cancellation_check)
+        gateway_kwargs = (
+            {"actor": actor, "job_id": job_id} if self.settings.gemini_backend == "gateway" else {}
+        )
+        raw = self._llm_json_call(prompt, cancellation_check=cancellation_check, **gateway_kwargs)
         if debug:
             preview = raw[:800] + ("..." if len(raw) > 800 else "")
             logger.debug("RAW pure-LLM issue classifier response: %s", preview or "∅")
@@ -544,6 +562,7 @@ class IssueClassifier:
                     debug=debug,
                     cancellation_check=cancellation_check,
                     _retry_depth=_retry_depth + 1,
+                    **gateway_kwargs,
                 )
                 for j, orig_idx in enumerate(missing_indices):
                     if j < len(retry_results):
@@ -551,6 +570,8 @@ class IssueClassifier:
             except PipelineCancelled:
                 raise
             except Exception as exc:
+                if isinstance(exc, GatewayError):
+                    raise
                 logger.warning("Mini-batch retry failed: %s", exc)
 
         # Re-check for still-missing slots
@@ -572,12 +593,15 @@ class IssueClassifier:
                         debug=debug,
                         cancellation_check=cancellation_check,
                         _retry_depth=_retry_depth + 1,
+                        **gateway_kwargs,
                     )
                     if single_result:
                         slots[idx] = single_result[0]
                 except PipelineCancelled:
                     raise
                 except Exception as exc:
+                    if isinstance(exc, GatewayError):
+                        raise
                     logger.warning("Single-row retry for index %d failed: %s", idx, exc)
 
         # --- Phase 4: Final fallback for any remaining None slots ---
