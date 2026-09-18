@@ -519,13 +519,16 @@ class IssueClassifier:
         if cancellation_check is not None and cancellation_check():
             raise PipelineCancelled("Classification job was cancelled.")
         try:
-            resp = self.gemini.generate_json(
-                prompt,
-                temperature=0.0,
-                actor=actor if self.settings.gemini_backend == "gateway" else None,
-                job_id=job_id if self.settings.gemini_backend == "gateway" else None,
-                operation="classify_batch",
-            )
+            if self.settings.gemini_backend == "gateway":
+                resp = self.gemini.generate_json(
+                    prompt,
+                    temperature=0.0,
+                    actor=actor,
+                    job_id=job_id,
+                    operation="classify_batch",
+                )
+            else:
+                resp = self.gemini.generate_json(prompt, temperature=0.0)
             self._last_usage = resp.usage
             return resp.text
         except Exception as exc:
@@ -600,12 +603,15 @@ class IssueClassifier:
             rendered_prompt.sha256,
         )
 
-        raw = self._llm_json_call(
-            prompt,
-            cancellation_check=cancellation_check,
-            actor=actor if self.settings.gemini_backend == "gateway" else None,
-            job_id=job_id if self.settings.gemini_backend == "gateway" else None,
-        )
+        if self.settings.gemini_backend == "gateway":
+            raw = self._llm_json_call(
+                prompt,
+                cancellation_check=cancellation_check,
+                actor=actor,
+                job_id=job_id,
+            )
+        else:
+            raw = self._llm_json_call(prompt, cancellation_check=cancellation_check)
         if debug:
             preview = raw[:800] + ("..." if len(raw) > 800 else "")
             logger.debug("RAW pure-LLM issue classifier response: %s", preview or "∅")
@@ -652,15 +658,24 @@ class IssueClassifier:
                 [matched_products[i] for i in missing_indices] if matched_products else None
             )
             try:
-                retry_results = self.classify_batch(
-                    retry_texts,
-                    matched_products=retry_products,
-                    debug=debug,
-                    cancellation_check=cancellation_check,
-                    _retry_depth=_retry_depth + 1,
-                    actor=actor,
-                    job_id=job_id,
-                )
+                if self.settings.gemini_backend == "gateway":
+                    retry_results = self.classify_batch(
+                        retry_texts,
+                        matched_products=retry_products,
+                        debug=debug,
+                        cancellation_check=cancellation_check,
+                        _retry_depth=_retry_depth + 1,
+                        actor=actor,
+                        job_id=job_id,
+                    )
+                else:
+                    retry_results = self.classify_batch(
+                        retry_texts,
+                        matched_products=retry_products,
+                        debug=debug,
+                        cancellation_check=cancellation_check,
+                        _retry_depth=_retry_depth + 1,
+                    )
                 for j, orig_idx in enumerate(missing_indices):
                     if j < len(retry_results):
                         slots[orig_idx] = retry_results[j]
@@ -684,15 +699,24 @@ class IssueClassifier:
                 if cancellation_check is not None and cancellation_check():
                     raise PipelineCancelled("Classification job was cancelled.")
                 try:
-                    single_result = self.classify_batch(
-                        [texts[idx]],
-                        matched_products=[matched_products[idx]] if matched_products else None,
-                        debug=debug,
-                        cancellation_check=cancellation_check,
-                        _retry_depth=_retry_depth + 1,
-                        actor=actor,
-                        job_id=job_id,
-                    )
+                    if self.settings.gemini_backend == "gateway":
+                        single_result = self.classify_batch(
+                            [texts[idx]],
+                            matched_products=[matched_products[idx]] if matched_products else None,
+                            debug=debug,
+                            cancellation_check=cancellation_check,
+                            _retry_depth=_retry_depth + 1,
+                            actor=actor,
+                            job_id=job_id,
+                        )
+                    else:
+                        single_result = self.classify_batch(
+                            [texts[idx]],
+                            matched_products=[matched_products[idx]] if matched_products else None,
+                            debug=debug,
+                            cancellation_check=cancellation_check,
+                            _retry_depth=_retry_depth + 1,
+                        )
                     if single_result:
                         slots[idx] = single_result[0]
                 except PipelineCancelled:

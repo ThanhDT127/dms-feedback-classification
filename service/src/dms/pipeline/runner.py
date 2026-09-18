@@ -253,15 +253,20 @@ class PipelineRunner:
                 raise PipelineCancelled("Classification job was cancelled.")
             try:
                 # Call pure-LLM classify_batch directly using RAG products as hints
-                issue_list = self.issue_classifier.classify_batch(
-                    batch,
-                    matched_products=rag_batch,
-                    cancellation_check=cancellation_check,
-                    actor=actor if self.settings.gemini_backend == "gateway" else None,
-                    job_id=self._current_job_id
-                    if self.settings.gemini_backend == "gateway"
-                    else None,
-                )
+                if self.settings.gemini_backend == "gateway":
+                    issue_list = self.issue_classifier.classify_batch(
+                        batch,
+                        matched_products=rag_batch,
+                        cancellation_check=cancellation_check,
+                        actor=actor,
+                        job_id=self._current_job_id,
+                    )
+                else:
+                    issue_list = self.issue_classifier.classify_batch(
+                        batch,
+                        matched_products=rag_batch,
+                        cancellation_check=cancellation_check,
+                    )
                 # Gateway usage is recorded at the client for every attempt/repair.
                 if not gateway_kwargs:
                     usage = self.issue_classifier._last_usage
@@ -302,15 +307,20 @@ class PipelineRunner:
                     if cancellation_check is not None and cancellation_check():
                         raise PipelineCancelled("Classification job was cancelled.") from exc
                     try:
-                        single_result = self.issue_classifier.classify_batch(
-                            [text],
-                            matched_products=[rag_item],
-                            cancellation_check=cancellation_check,
-                            actor=actor if self.settings.gemini_backend == "gateway" else None,
-                            job_id=self._current_job_id
-                            if self.settings.gemini_backend == "gateway"
-                            else None,
-                        )
+                        if self.settings.gemini_backend == "gateway":
+                            single_result = self.issue_classifier.classify_batch(
+                                [text],
+                                matched_products=[rag_item],
+                                cancellation_check=cancellation_check,
+                                actor=actor,
+                                job_id=self._current_job_id,
+                            )
+                        else:
+                            single_result = self.issue_classifier.classify_batch(
+                                [text],
+                                matched_products=[rag_item],
+                                cancellation_check=cancellation_check,
+                            )
                         issue_list.append(single_result[0] if single_result else {})
                     except PipelineCancelled:
                         raise

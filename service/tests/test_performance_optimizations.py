@@ -21,6 +21,10 @@ from dms.web.app import create_app
 def app_client(settings, monkeypatch):
     """Test client with admin auth and initialized settings."""
     settings.ensure_runtime_dirs()
+    from dms.settings import get_settings_provider
+
+    get_settings_provider().set_for_tests(settings)
+    monkeypatch.setattr("dms.web.deps.get_settings", lambda: settings)
     monkeypatch.setattr("dms.web.api.metrics_api._work_dir", lambda: settings.work_dir)
     monkeypatch.setattr("dms.web.api.metrics_api._log_dir", lambda: settings.log_dir)
     app = create_app()

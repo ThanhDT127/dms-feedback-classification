@@ -190,12 +190,12 @@ class RAGProductMatcher:
         ).strip()
 
         try:
-            resp = self.gemini.generate(
-                prompt,
-                actor=actor if self.settings.gemini_backend == "gateway" else None,
-                job_id=job_id if self.settings.gemini_backend == "gateway" else None,
-                operation="rag_extract",
-            )
+            if self.settings.gemini_backend == "gateway":
+                resp = self.gemini.generate(
+                    prompt, actor=actor, job_id=job_id, operation="rag_extract"
+                )
+            else:
+                resp = self.gemini.generate(prompt)
             self._last_usage = resp.usage
             return self._parse_llm_numbered(resp.text, len(texts))
         except Exception as exc:
