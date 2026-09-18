@@ -345,8 +345,14 @@ _PRE_PURCHASE_POLICY_RE = re.compile(
 )
 
 _HARD_DEFECT_WORDS = (
-    "rò điện", "nứt vỡ", "chập cháy", "cháy nổ", "rò rỉ",
-    "phát nổ", "bốc cháy", "giật điện",
+    "rò điện",
+    "nứt vỡ",
+    "chập cháy",
+    "cháy nổ",
+    "rò rỉ",
+    "phát nổ",
+    "bốc cháy",
+    "giật điện",
 )
 
 
@@ -513,12 +519,13 @@ class IssueClassifier:
         if cancellation_check is not None and cancellation_check():
             raise PipelineCancelled("Classification job was cancelled.")
         try:
-            gateway_kwargs = (
-                {"actor": actor, "job_id": job_id, "operation": "classify_batch"}
-                if self.settings.gemini_backend == "gateway"
-                else {}
+            resp = self.gemini.generate_json(
+                prompt,
+                temperature=0.0,
+                actor=actor if self.settings.gemini_backend == "gateway" else None,
+                job_id=job_id if self.settings.gemini_backend == "gateway" else None,
+                operation="classify_batch",
             )
-            resp = self.gemini.generate_json(prompt, temperature=0.0, **gateway_kwargs)
             self._last_usage = resp.usage
             return resp.text
         except Exception as exc:
@@ -593,10 +600,12 @@ class IssueClassifier:
             rendered_prompt.sha256,
         )
 
-        gateway_kwargs = (
-            {"actor": actor, "job_id": job_id} if self.settings.gemini_backend == "gateway" else {}
+        raw = self._llm_json_call(
+            prompt,
+            cancellation_check=cancellation_check,
+            actor=actor if self.settings.gemini_backend == "gateway" else None,
+            job_id=job_id if self.settings.gemini_backend == "gateway" else None,
         )
-        raw = self._llm_json_call(prompt, cancellation_check=cancellation_check, **gateway_kwargs)
         if debug:
             preview = raw[:800] + ("..." if len(raw) > 800 else "")
             logger.debug("RAW pure-LLM issue classifier response: %s", preview or "∅")
@@ -649,7 +658,8 @@ class IssueClassifier:
                     debug=debug,
                     cancellation_check=cancellation_check,
                     _retry_depth=_retry_depth + 1,
-                    **gateway_kwargs,
+                    actor=actor,
+                    job_id=job_id,
                 )
                 for j, orig_idx in enumerate(missing_indices):
                     if j < len(retry_results):
@@ -680,7 +690,8 @@ class IssueClassifier:
                         debug=debug,
                         cancellation_check=cancellation_check,
                         _retry_depth=_retry_depth + 1,
-                        **gateway_kwargs,
+                        actor=actor,
+                        job_id=job_id,
                     )
                     if single_result:
                         slots[idx] = single_result[0]

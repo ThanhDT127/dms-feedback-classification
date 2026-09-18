@@ -198,7 +198,9 @@ async def upload_file(
     try:
         if analytics_repository is None:
             raise RuntimeError("Kho dữ liệu analytics chưa sẵn sàng")
-        ingest_result = await run_sync_in_threadpool(ingest_managed_workbook, analytics_repository, dest)
+        ingest_result = await run_sync_in_threadpool(
+            ingest_managed_workbook, analytics_repository, dest
+        )
         ingested_rows = ingest_result.persisted_rows
     except Exception:
         ingest_error = "Không thể đưa file vào phân tích"

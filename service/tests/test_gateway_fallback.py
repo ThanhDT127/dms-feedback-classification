@@ -10,8 +10,11 @@ from dms.gemini_client import GeminiClient, GeminiResponse
 def fallback_client(tmp_path, monkeypatch, **overrides):
     credential = tmp_path / "dummy.json"
     credential.write_text("{}")
-    options = dict(fallback_enabled=True, gcp_project_id="dummy-project",
-                   gcp_service_account_json=str(credential))
+    options = dict(
+        fallback_enabled=True,
+        gcp_project_id="dummy-project",
+        gcp_service_account_json=str(credential),
+    )
     options.update(overrides)
     audit = Audit()
     client = GeminiClient(gateway_settings(tmp_path, **options), usage_tracker=audit)
@@ -19,8 +22,9 @@ def fallback_client(tmp_path, monkeypatch, **overrides):
 
     def direct_request(*args):
         direct.append(args)
-        return GeminiResponse("direct", {"prompt_tokens": 2}, route="direct_vertex",
-                              model_actual="direct-model")
+        return GeminiResponse(
+            "direct", {"prompt_tokens": 2}, route="direct_vertex", model_actual="direct-model"
+        )
 
     monkeypatch.setattr(client, "_direct_request", direct_request, raising=False)
     return client, audit, direct
@@ -48,9 +52,11 @@ def test_threshold_on_final_attempt_rescues_same_helper(tmp_path, monkeypatch, h
 def test_direct_failure_is_one_attempt_per_new_helper(tmp_path, monkeypatch):
     client, audit, direct = fallback_client(tmp_path, monkeypatch)
     monkeypatch.setattr(client, "_gateway_request", unreachable)
+
     def fail(*args):
         direct.append(1)
         raise RuntimeError("secret direct error")
+
     monkeypatch.setattr(client, "_direct_request", fail)
     for _ in range(2):
         with pytest.raises(GatewayError) as caught:
@@ -60,10 +66,15 @@ def test_direct_failure_is_one_attempt_per_new_helper(tmp_path, monkeypatch):
     assert client._direct_attempted == 2 and client._direct_succeeded == 0
 
 
-@pytest.mark.parametrize("overrides", [
-    {"fallback_fail_threshold": 0}, {"fallback_fail_threshold": 4},
-    {"fallback_retry_after_s": float("inf")}, {"fallback_retry_after_s": 0},
-])
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"fallback_fail_threshold": 0},
+        {"fallback_fail_threshold": 4},
+        {"fallback_retry_after_s": float("inf")},
+        {"fallback_retry_after_s": 0},
+    ],
+)
 def test_runtime_fallback_threshold_validation(tmp_path, monkeypatch, overrides):
     client, audit, direct = fallback_client(tmp_path, monkeypatch, **overrides)
     monkeypatch.setattr(client, "_gateway_request", unreachable)
@@ -74,8 +85,9 @@ def test_runtime_fallback_threshold_validation(tmp_path, monkeypatch, overrides)
 
 
 def test_missing_direct_file_disables_only_fallback(tmp_path, monkeypatch, caplog):
-    client, audit, direct = fallback_client(tmp_path, monkeypatch,
-                                          gcp_service_account_json=str(tmp_path / "missing.json"))
+    client, audit, direct = fallback_client(
+        tmp_path, monkeypatch, gcp_service_account_json=str(tmp_path / "missing.json")
+    )
     monkeypatch.setattr(client, "_gateway_request", unreachable)
     with pytest.raises(GatewayError) as caught:
         client.generate("prompt", actor="alice")
@@ -90,8 +102,10 @@ def test_probe_policy_and_second_incident(tmp_path, monkeypatch, helper, probe_e
     monkeypatch.setattr("dms.gemini_client.time.monotonic", lambda: clock[0])
     client, audit, direct = fallback_client(tmp_path, monkeypatch)
     monkeypatch.setattr(client, "_gateway_request", unreachable)
+
     def call():
         return getattr(client, helper)("prompt", actor="alice")
+
     call()
     first = client._incident_id
     clock[0] = 69
@@ -99,12 +113,17 @@ def test_probe_policy_and_second_incident(tmp_path, monkeypatch, helper, probe_e
     assert len(direct) == 2
     clock[0] = 70
     probes = []
+
     def probe(*args):
         probes.append(args)
         if probe_error:
-            raise GatewayError(probe_error, retryable=probe_error in {"quota", "unreachable"},
-                               outcome_unknown=probe_error == "outcome_unknown")
+            raise GatewayError(
+                probe_error,
+                retryable=probe_error in {"quota", "unreachable"},
+                outcome_unknown=probe_error == "outcome_unknown",
+            )
         return GeminiResponse("recovered", route="gateway")
+
     monkeypatch.setattr(client, "_gateway_request", probe)
     if probe_error in {"auth", "quota", "outcome_unknown"}:
         with pytest.raises(GatewayError):
@@ -128,6 +147,7 @@ def test_probe_policy_and_second_incident(tmp_path, monkeypatch, helper, probe_e
 def test_single_flight_probe_does_not_hold_network_lock(tmp_path, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
+
     clock = [0.0]
     monkeypatch.setattr("dms.gemini_client.time.monotonic", lambda: clock[0])
     client, audit, direct = fallback_client(tmp_path, monkeypatch)
@@ -136,11 +156,13 @@ def test_single_flight_probe_does_not_hold_network_lock(tmp_path, monkeypatch):
     clock[0] = 60
     entered, release = Event(), Event()
     probes = []
+
     def probe(*args):
         probes.append(1)
         entered.set()
         assert release.wait(5)
         return GeminiResponse("recovered", route="gateway")
+
     monkeypatch.setattr(client, "_gateway_request", probe)
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(client.generate, "probe", actor="alice")
@@ -157,14 +179,17 @@ def test_single_flight_probe_does_not_hold_network_lock(tmp_path, monkeypatch):
 def test_late_gateway_success_cannot_close_new_incident(tmp_path, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
+
     client, audit, direct = fallback_client(tmp_path, monkeypatch)
     entered, release = Event(), Event()
+
     def request(config, prompt, *args):
         if prompt == "late":
             entered.set()
             assert release.wait(5)
             return GeminiResponse("late", route="gateway")
         return unreachable()
+
     monkeypatch.setattr(client, "_gateway_request", request)
     with ThreadPoolExecutor(max_workers=1) as pool:
         late = pool.submit(client.generate, "late", actor="alice")
@@ -179,7 +204,9 @@ def test_late_gateway_success_cannot_close_new_incident(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("json_mode", [False, True])
-def test_direct_sdk_lazy_singleton_explicit_credentials_and_no_retries(tmp_path, monkeypatch, json_mode):
+def test_direct_sdk_lazy_singleton_explicit_credentials_and_no_retries(
+    tmp_path, monkeypatch, json_mode
+):
     from types import SimpleNamespace
 
     client, audit, direct = fallback_client(tmp_path, monkeypatch)
@@ -187,20 +214,34 @@ def test_direct_sdk_lazy_singleton_explicit_credentials_and_no_retries(tmp_path,
     monkeypatch.delattr(client, "_direct_request")
     initialized, requests_seen = [], []
     credentials = object()
+
     def generate_content(**kwargs):
         requests_seen.append(kwargs)
-        return SimpleNamespace(text="direct-text", model_version="direct-actual",
-                               usage_metadata=SimpleNamespace(prompt_token_count=3,
-                                   candidates_token_count=2, total_token_count=8,
-                                   thoughts_token_count=3, cached_content_token_count=1))
+        return SimpleNamespace(
+            text="direct-text",
+            model_version="direct-actual",
+            usage_metadata=SimpleNamespace(
+                prompt_token_count=3,
+                candidates_token_count=2,
+                total_token_count=8,
+                thoughts_token_count=3,
+                cached_content_token_count=1,
+            ),
+        )
+
     def construct(**kwargs):
         initialized.append(kwargs)
         return SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
+
     import google.genai
     import google.oauth2.service_account
+
     monkeypatch.setattr(google.genai, "Client", construct)
-    monkeypatch.setattr(google.oauth2.service_account.Credentials, "from_service_account_file",
-                        lambda *a, **kw: credentials)
+    monkeypatch.setattr(
+        google.oauth2.service_account.Credentials,
+        "from_service_account_file",
+        lambda *a, **kw: credentials,
+    )
     monkeypatch.setattr(client, "_gateway_request", unreachable)
     helper = client.generate_json if json_mode else client.generate
     for _ in range(2):
@@ -214,7 +255,9 @@ def test_direct_sdk_lazy_singleton_explicit_credentials_and_no_retries(tmp_path,
     assert options["http_options"].timeout == 300
     assert requests_seen[0]["model"] == "direct-model"
     assert requests_seen[0]["config"].temperature == 0.2
-    assert requests_seen[0]["config"].response_mime_type == ("application/json" if json_mode else None)
+    assert requests_seen[0]["config"].response_mime_type == (
+        "application/json" if json_mode else None
+    )
     assert response.usage["completion_tokens"] == 2
     assert response.usage["completion_tokens_details"]["reasoning_tokens"] == 3
     assert response.usage["prompt_tokens_details"]["cached_tokens"] == 1
@@ -225,6 +268,7 @@ def test_direct_sdk_lazy_singleton_explicit_credentials_and_no_retries(tmp_path,
 def test_late_direct_response_does_not_count_in_next_incident(tmp_path, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Event
+
     clock = [0.0]
     monkeypatch.setattr("dms.gemini_client.time.monotonic", lambda: clock[0])
     client, audit, direct = fallback_client(tmp_path, monkeypatch)
@@ -232,18 +276,22 @@ def test_late_direct_response_does_not_count_in_next_incident(tmp_path, monkeypa
     client.generate("open", actor="alice")
     old = client._incident_id
     entered, release = Event(), Event()
+
     def delayed(config, prompt, *args):
         if prompt == "late":
             entered.set()
             assert release.wait(5)
         return GeminiResponse("direct", route="direct_vertex")
+
     monkeypatch.setattr(client, "_direct_request", delayed)
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(client.generate, "late", actor="alice")
         try:
             assert entered.wait(2)
             clock[0] = 60
-            monkeypatch.setattr(client, "_gateway_request", lambda *a: GeminiResponse("recovered", route="gateway"))
+            monkeypatch.setattr(
+                client, "_gateway_request", lambda *a: GeminiResponse("recovered", route="gateway")
+            )
             client.generate("recover", actor="alice")
             monkeypatch.setattr(client, "_gateway_request", unreachable)
             client.generate("reopen", actor="alice")
@@ -257,11 +305,14 @@ def test_late_direct_response_does_not_count_in_next_incident(tmp_path, monkeypa
 def test_simultaneous_threshold_opens_one_incident(tmp_path, monkeypatch, caplog):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
+
     client, audit, direct = fallback_client(tmp_path, monkeypatch, fallback_fail_threshold=1)
     barrier = Barrier(3)
+
     def fail(*args):
         barrier.wait(3)
         unreachable()
+
     monkeypatch.setattr(client, "_gateway_request", fail)
     with ThreadPoolExecutor(max_workers=3) as pool:
         futures = [pool.submit(client.generate, "prompt", actor="alice") for _ in range(3)]
@@ -273,10 +324,18 @@ def test_simultaneous_threshold_opens_one_incident(tmp_path, monkeypatch, caplog
 
 def test_quota_between_unreachable_attempts_does_not_reset_counter(tmp_path, monkeypatch):
     client, audit, direct = fallback_client(tmp_path, monkeypatch)
-    faults = iter([GatewayError("unreachable", retryable=True), GatewayError("quota", retryable=True),
-                   GatewayError("unreachable", retryable=True), GatewayError("unreachable", retryable=True)])
+    faults = iter(
+        [
+            GatewayError("unreachable", retryable=True),
+            GatewayError("quota", retryable=True),
+            GatewayError("unreachable", retryable=True),
+            GatewayError("unreachable", retryable=True),
+        ]
+    )
+
     def request(*args):
         raise next(faults)
+
     monkeypatch.setattr(client, "_gateway_request", request)
     with pytest.raises(GatewayError):
         client.generate("first", actor="alice")
@@ -287,10 +346,12 @@ def test_quota_between_unreachable_attempts_does_not_reset_counter(tmp_path, mon
 def test_direct_response_parse_failure_preserves_usage(tmp_path, monkeypatch):
     client, audit, direct = fallback_client(tmp_path, monkeypatch)
     monkeypatch.setattr(client, "_gateway_request", unreachable)
+
     def malformed(*args):
         error = GatewayError("response", outcome_unknown=True)
         error.usage = {"prompt_tokens": 4}
         raise error
+
     monkeypatch.setattr(client, "_direct_request", malformed)
     with pytest.raises(GatewayError):
         client.generate("prompt", actor="alice")

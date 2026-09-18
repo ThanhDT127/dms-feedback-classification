@@ -257,7 +257,10 @@ class PipelineRunner:
                     batch,
                     matched_products=rag_batch,
                     cancellation_check=cancellation_check,
-                    **gateway_kwargs,
+                    actor=actor if self.settings.gemini_backend == "gateway" else None,
+                    job_id=self._current_job_id
+                    if self.settings.gemini_backend == "gateway"
+                    else None,
                 )
                 # Gateway usage is recorded at the client for every attempt/repair.
                 if not gateway_kwargs:
@@ -303,7 +306,10 @@ class PipelineRunner:
                             [text],
                             matched_products=[rag_item],
                             cancellation_check=cancellation_check,
-                            **gateway_kwargs,
+                            actor=actor if self.settings.gemini_backend == "gateway" else None,
+                            job_id=self._current_job_id
+                            if self.settings.gemini_backend == "gateway"
+                            else None,
                         )
                         issue_list.append(single_result[0] if single_result else {})
                     except PipelineCancelled:

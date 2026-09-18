@@ -379,6 +379,7 @@ async def save_products(payload: dict, admin: dict = Depends(get_admin_user)):
 
     products_path = settings.df_products_path
     try:
+
         def _write_excel():
             products_path.parent.mkdir(parents=True, exist_ok=True)
             sheets_data = {}

@@ -346,16 +346,13 @@ class Watcher:
                     self.job_store.append_results(watcher_job_id, new_results)
 
             logger.info("Processing: %s", file_name)
-            gateway_kwargs = (
-                {"actor": "system_watcher"} if self.settings.gemini_backend == "gateway" else {}
-            )
             result = self.pipeline_runner.run_pipeline(
                 local_input,
                 local_output,
                 local_ckpt,
                 progress_callback=progress_callback,
                 job_id=watcher_job_id or file_name,
-                **gateway_kwargs,
+                actor="system_watcher" if self.settings.gemini_backend == "gateway" else None,
             )
 
             logger.info("Uploading results for: %s", file_name)

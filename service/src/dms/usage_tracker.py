@@ -38,25 +38,42 @@ _CREATE_INDEXES_SQL = [
 
 _AUDIT_COLUMNS = {
     "event_kind": "TEXT NOT NULL DEFAULT 'legacy'",
-    "operation_id": "TEXT", "attempt_id": "TEXT", "actor": "TEXT",
-    "route": "TEXT", "response_id": "TEXT", "incident_id": "TEXT",
-    "model_requested": "TEXT", "model_actual": "TEXT", "outcome": "TEXT",
-    "error_category": "TEXT", "usage_known": "INTEGER",
-    "actual_prompt_tokens": "INTEGER", "actual_completion_tokens": "INTEGER",
-    "actual_total_tokens": "INTEGER", "actual_cost_usd": "REAL",
+    "operation_id": "TEXT",
+    "attempt_id": "TEXT",
+    "actor": "TEXT",
+    "route": "TEXT",
+    "response_id": "TEXT",
+    "incident_id": "TEXT",
+    "model_requested": "TEXT",
+    "model_actual": "TEXT",
+    "outcome": "TEXT",
+    "error_category": "TEXT",
+    "usage_known": "INTEGER",
+    "actual_prompt_tokens": "INTEGER",
+    "actual_completion_tokens": "INTEGER",
+    "actual_total_tokens": "INTEGER",
+    "actual_cost_usd": "REAL",
     "usage_json": "TEXT",
 }
 
-_TOKEN_FIELDS = ("prompt_tokens", "completion_tokens", "total_tokens",
-                 "thinking_tokens", "cached_tokens", "reasoning_tokens")
+_TOKEN_FIELDS = (
+    "prompt_tokens",
+    "completion_tokens",
+    "total_tokens",
+    "thinking_tokens",
+    "cached_tokens",
+    "reasoning_tokens",
+)
 
 # A partially unknown total is unknown, not a misleading subtotal or free usage.
 _ACCOUNTING_TOTALS_SQL = ", ".join(
     f"CASE WHEN COUNT(*) = 0 THEN 0 WHEN COUNT({column}) = COUNT(*) "
     f"THEN SUM({column}) END AS {alias}"
     for column, alias in (
-        ("prompt_tokens", "total_prompt"), ("completion_tokens", "total_completion"),
-        ("total_tokens", "total_tokens"), ("estimated_cost_usd", "total_cost"),
+        ("prompt_tokens", "total_prompt"),
+        ("completion_tokens", "total_completion"),
+        ("total_tokens", "total_tokens"),
+        ("estimated_cost_usd", "total_cost"),
     )
 )
 
@@ -97,9 +114,12 @@ class UsageTracker:
         self._db_path = Path(db_path)
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
-        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA busy_timeout=5000")
+        self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False, timeout=30.0)
+        self._conn.execute("PRAGMA busy_timeout=30000")
+        try:
+            self._conn.execute("PRAGMA journal_mode=WAL")
+        except sqlite3.OperationalError:
+            pass
         self._init_db()
 
     def _init_db(self) -> None:
@@ -110,7 +130,9 @@ class UsageTracker:
             columns = {r[1] for r in self._conn.execute("PRAGMA table_info(gemini_usage_log)")}
             for name, definition in _AUDIT_COLUMNS.items():
                 if name not in columns:
-                    self._conn.execute(f"ALTER TABLE gemini_usage_log ADD COLUMN {name} {definition}")
+                    self._conn.execute(
+                        f"ALTER TABLE gemini_usage_log ADD COLUMN {name} {definition}"
+                    )
             for idx_sql in _CREATE_INDEXES_SQL:
                 self._conn.execute(idx_sql)
             self._conn.execute(
@@ -173,12 +195,24 @@ class UsageTracker:
             self._conn.commit()
 
     def record_attempt(
-        self, *, event_kind: str, operation_id: str, attempt_id: str,
-        actor: str, job_id: str | None, route: str, incident_id: str | None,
-        model_requested: str, model_actual: str | None = None, outcome: str,
-        error_category: str | None = None, response_id: str | None = None,
-        usage: dict | None = None, estimated_cost_usd: float | None = None,
-        call_type: str = "generate", duration_ms: int | None = None,
+        self,
+        *,
+        event_kind: str,
+        operation_id: str,
+        attempt_id: str,
+        actor: str,
+        job_id: str | None,
+        route: str,
+        incident_id: str | None,
+        model_requested: str,
+        model_actual: str | None = None,
+        outcome: str,
+        error_category: str | None = None,
+        response_id: str | None = None,
+        usage: dict | None = None,
+        estimated_cost_usd: float | None = None,
+        call_type: str = "generate",
+        duration_ms: int | None = None,
     ) -> None:
         """Persist one immutable event; duplicate attempt/event pairs are no-ops.
 
@@ -187,17 +221,26 @@ class UsageTracker:
         """
         if event_kind not in {"attempt_started", "attempt_finished"}:
             raise ValueError("Invalid attempt event_kind")
-        for name, value in (("operation_id", operation_id), ("attempt_id", attempt_id),
-                            ("actor", actor), ("route", route), ("outcome", outcome),
-                            ("model_requested", model_requested)):
+        for name, value in (
+            ("operation_id", operation_id),
+            ("attempt_id", attempt_id),
+            ("actor", actor),
+            ("route", route),
+            ("outcome", outcome),
+            ("model_requested", model_requested),
+        ):
             if not isinstance(value, str) or not value.strip() or any(ord(c) < 32 for c in value):
                 raise ValueError(f"Invalid attempt {name}")
         if error_category is not None and not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", error_category):
             raise ValueError("Invalid attempt error_category")
-        values = {key: usage[key] for key in _TOKEN_FIELDS
-                  if usage is not None and usage.get(key) is not None}
-        if any(type(value) is not int or value < 0 or value > 2**63 - 1
-               for value in values.values()):
+        values = {
+            key: usage[key]
+            for key in _TOKEN_FIELDS
+            if usage is not None and usage.get(key) is not None
+        }
+        if any(
+            type(value) is not int or value < 0 or value > 2**63 - 1 for value in values.values()
+        ):
             raise ValueError("Attempt usage must contain nonnegative integer counters")
         if estimated_cost_usd is not None and (
             not math.isfinite(estimated_cost_usd) or estimated_cost_usd < 0
@@ -219,13 +262,31 @@ class UsageTracker:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(attempt_id, event_kind) DO NOTHING
                 """,
-                (utc_now_iso(), model_actual or model_requested, call_type, job_id,
-                 duration_ms, int(outcome == "success"), event_kind, operation_id,
-                 attempt_id, actor, route, incident_id, model_requested, model_actual,
-                 outcome, error_category, response_id, int(bool(values)),
-                 values.get("prompt_tokens"), values.get("completion_tokens"),
-                 values.get("total_tokens"), estimated_cost_usd,
-                 json.dumps(values) if values else None),
+                (
+                    utc_now_iso(),
+                    model_actual or model_requested,
+                    call_type,
+                    job_id,
+                    duration_ms,
+                    int(outcome == "success"),
+                    event_kind,
+                    operation_id,
+                    attempt_id,
+                    actor,
+                    route,
+                    incident_id,
+                    model_requested,
+                    model_actual,
+                    outcome,
+                    error_category,
+                    response_id,
+                    int(bool(values)),
+                    values.get("prompt_tokens"),
+                    values.get("completion_tokens"),
+                    values.get("total_tokens"),
+                    estimated_cost_usd,
+                    json.dumps(values) if values else None,
+                ),
             )
 
     def query_attempts(self) -> list[dict]:

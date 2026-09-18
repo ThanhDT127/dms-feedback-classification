@@ -1,4 +1,4 @@
-﻿"""Tests for performance optimizations across all tabs (OpenSpec change optimize-all-tabs-performance)."""
+"""Tests for performance optimizations across all tabs (OpenSpec change optimize-all-tabs-performance)."""
 
 from __future__ import annotations
 
@@ -65,7 +65,9 @@ def test_tail_log_file_exceeds_max_lines(tmp_path: Path):
 def test_tail_log_file_large_file_performance(tmp_path: Path):
     """Should tail a multi-megabyte log file in under 50ms using reverse seek."""
     large_log = tmp_path / "large.log"
-    chunk = ("2026-09-14 12:00:00 [INFO] Worker batch classification event payload data here\n" * 100).encode("utf-8")
+    chunk = (
+        "2026-09-14 12:00:00 [INFO] Worker batch classification event payload data here\n" * 100
+    ).encode("utf-8")
     with open(large_log, "wb") as f:
         for _ in range(250):  # ~2.5 MB
             f.write(chunk)
@@ -143,13 +145,11 @@ def test_sql_label_distribution_fast(tmp_path: Path):
             )
             """
         )
-        data = [
-            (i, "Cháy bóng", "Lỗi kỹ thuật", "2026-09-14T00:00:00") for i in range(150)
-        ] + [
-            (i + 200, "Vỡ hỏng", "Vận chuyển", "2026-09-14T00:00:00") for i in range(80)
-        ] + [
-            (i + 400, "Đèn nhấp nháy", "Chất lượng", "2026-09-14T00:00:00") for i in range(40)
-        ]
+        data = (
+            [(i, "Cháy bóng", "Lỗi kỹ thuật", "2026-09-14T00:00:00") for i in range(150)]
+            + [(i + 200, "Vỡ hỏng", "Vận chuyển", "2026-09-14T00:00:00") for i in range(80)]
+            + [(i + 400, "Đèn nhấp nháy", "Chất lượng", "2026-09-14T00:00:00") for i in range(40)]
+        )
         conn.executemany("INSERT INTO feedback_labels VALUES (?, ?, ?, ?)", data)
         conn.commit()
 

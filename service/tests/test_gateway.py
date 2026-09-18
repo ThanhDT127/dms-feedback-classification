@@ -12,14 +12,25 @@ from dms.gemini_client import GeminiClient
 
 
 def gateway_settings(tmp_path, url="http://127.0.0.1:1/chat", **overrides):
-    values = dict(gemini_backend="gateway", gateway_chat_completions_url=url,
-                  gateway_api_key="dummy-key", gateway_model="Alias-EXACT",
-                  gateway_allow_insecure_http=True, max_retry=3, base_wait=0,
-                  gemini_timeout_seconds=0.3, fallback_enabled=False,
-                  fallback_fail_threshold=3, fallback_retry_after_s=60,
-                  gcp_project_id="", gcp_location="global",
-                  gcp_service_account_json="", gemini_model="direct-model",
-                  work_dir=tmp_path, log_dir=tmp_path / "logs")
+    values = dict(
+        gemini_backend="gateway",
+        gateway_chat_completions_url=url,
+        gateway_api_key="dummy-key",
+        gateway_model="Alias-EXACT",
+        gateway_allow_insecure_http=True,
+        max_retry=3,
+        base_wait=0,
+        gemini_timeout_seconds=0.3,
+        fallback_enabled=False,
+        fallback_fail_threshold=3,
+        fallback_retry_after_s=60,
+        gcp_project_id="",
+        gcp_location="global",
+        gcp_service_account_json="",
+        gemini_model="direct-model",
+        work_dir=tmp_path,
+        log_dir=tmp_path / "logs",
+    )
     values.update(overrides)
     return SimpleNamespace(**values)
 
@@ -41,8 +52,13 @@ def endpoint(responses):
             pass
 
         def do_POST(self):
-            seen.append((self.path, dict(self.headers),
-                         json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
+            seen.append(
+                (
+                    self.path,
+                    dict(self.headers),
+                    json.loads(self.rfile.read(int(self.headers["Content-Length"]))),
+                )
+            )
             status, body, headers = responses.pop(0)
             self.send_response(status)
             for key, value in headers.items():
@@ -62,10 +78,17 @@ def endpoint(responses):
 
 
 def completion(text="hello"):
-    return {"id": "response-1", "model": "actual-model",
-            "choices": [{"message": {"content": text}}],
-            "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5,
-                      "completion_tokens_details": {"reasoning_tokens": 1}}}
+    return {
+        "id": "response-1",
+        "model": "actual-model",
+        "choices": [{"message": {"content": text}}],
+        "usage": {
+            "prompt_tokens": 3,
+            "completion_tokens": 2,
+            "total_tokens": 5,
+            "completion_tokens_details": {"reasoning_tokens": 1},
+        },
+    }
 
 
 @pytest.mark.parametrize("helper", ["generate", "generate_json"])
@@ -73,8 +96,9 @@ def test_wire_identity_and_attempt_audit(tmp_path, helper):
     audit = Audit()
     with endpoint([(200, completion(), {})]) as (url, seen):
         client = GeminiClient(gateway_settings(tmp_path, url), usage_tracker=audit)
-        response = getattr(client, helper)("private prompt", temperature=0.2,
-                                           actor="alice", job_id="job-1", operation="classify")
+        response = getattr(client, helper)(
+            "private prompt", temperature=0.2, actor="alice", job_id="job-1", operation="classify"
+        )
     path, headers, body = seen[0]
     assert path == "/exact/chat"
     assert headers["Authorization"] == "Bearer dummy-key"
@@ -82,7 +106,9 @@ def test_wire_identity_and_attempt_audit(tmp_path, helper):
     assert body["model"] == "Alias-EXACT"
     assert body["messages"] == [{"role": "user", "content": "private prompt"}]
     assert body["temperature"] == 0.2
-    assert body.get("response_format") == ({"type": "json_object"} if helper == "generate_json" else None)
+    assert body.get("response_format") == (
+        {"type": "json_object"} if helper == "generate_json" else None
+    )
     assert response.text == "hello"
     assert response.usage == completion()["usage"]
     assert response.route == "gateway"
@@ -98,15 +124,24 @@ def test_wire_identity_and_attempt_audit(tmp_path, helper):
     assert "private prompt" not in repr(audit.events)
 
 
-@pytest.mark.parametrize("status,category,unknown", [
-    (400, "request", False), (401, "auth", False), (403, "auth", False),
-    (404, "request", False), (422, "request", False), (302, "redirect", False),
-    (500, "outcome_unknown", True), (503, "outcome_unknown", True),
-    (200, "response", True),
-])
+@pytest.mark.parametrize(
+    "status,category,unknown",
+    [
+        (400, "request", False),
+        (401, "auth", False),
+        (403, "auth", False),
+        (404, "request", False),
+        (422, "request", False),
+        (302, "redirect", False),
+        (500, "outcome_unknown", True),
+        (503, "outcome_unknown", True),
+        (200, "response", True),
+    ],
+)
 @pytest.mark.parametrize("helper", ["generate", "generate_json"])
 def test_unsafe_errors_never_replay_and_are_sanitized(tmp_path, status, category, unknown, helper):
     from dms import exceptions
+
     error_type = getattr(exceptions, "GatewayError", exceptions.GeminiError)
     audit = Audit()
     with endpoint([(status, {"private": "secret-response"}, {"Location": "/leak"})]) as (url, seen):
@@ -122,18 +157,27 @@ def test_unsafe_errors_never_replay_and_are_sanitized(tmp_path, status, category
     assert "secret" not in str(caught.value) + repr(audit.events)
 
 
-@pytest.mark.parametrize("overrides,actor,category", [
-    ({}, None, "identity"), ({}, "bad\r\nactor", "identity"),
-    ({"gateway_api_key": " key "}, "alice", "configuration"),
-    ({"gateway_api_key": "${TOKEN}"}, "alice", "configuration"),
-    ({"gateway_allow_insecure_http": False}, "alice", "configuration"),
-    ({"gateway_chat_completions_url": "http://user:pw@127.0.0.1/chat"}, "alice", "configuration"),
-    ({"gateway_model": ""}, "alice", "configuration"),
-    ({"max_retry": 0}, "alice", "configuration"),
-    ({"gemini_timeout_seconds": float("nan")}, "alice", "configuration"),
-])
+@pytest.mark.parametrize(
+    "overrides,actor,category",
+    [
+        ({}, None, "identity"),
+        ({}, "bad\r\nactor", "identity"),
+        ({"gateway_api_key": " key "}, "alice", "configuration"),
+        ({"gateway_api_key": "${TOKEN}"}, "alice", "configuration"),
+        ({"gateway_allow_insecure_http": False}, "alice", "configuration"),
+        (
+            {"gateway_chat_completions_url": "http://user:pw@127.0.0.1/chat"},
+            "alice",
+            "configuration",
+        ),
+        ({"gateway_model": ""}, "alice", "configuration"),
+        ({"max_retry": 0}, "alice", "configuration"),
+        ({"gemini_timeout_seconds": float("nan")}, "alice", "configuration"),
+    ],
+)
 def test_validation_blocks_before_network(tmp_path, monkeypatch, overrides, actor, category):
     from dms import exceptions
+
     error_type = getattr(exceptions, "GatewayError", exceptions.GeminiError)
     client = GeminiClient(gateway_settings(tmp_path, **overrides), usage_tracker=Audit())
     calls = []
@@ -147,6 +191,7 @@ def test_validation_blocks_before_network(tmp_path, monkeypatch, overrides, acto
 @pytest.mark.parametrize("failure_event", ["attempt_started", "attempt_finished"])
 def test_audit_failure_never_replays(tmp_path, failure_event):
     from dms import exceptions
+
     error_type = getattr(exceptions, "GatewayError", exceptions.GeminiError)
 
     class BrokenAudit(Audit):
@@ -167,6 +212,7 @@ def test_audit_failure_never_replays(tmp_path, failure_event):
 @pytest.mark.parametrize("helper", ["generate", "generate_json"])
 def test_quota_retries_are_bounded_with_unique_attempts(tmp_path, monkeypatch, helper):
     from dms.exceptions import GatewayError
+
     waits = []
     monkeypatch.setattr("dms.gemini_client.time.sleep", waits.append)
     audit = Audit()
@@ -184,6 +230,7 @@ def test_real_refused_connection_has_presend_budget(tmp_path, monkeypatch):
     import socket
 
     from dms.exceptions import GatewayError
+
     waits = []
     monkeypatch.setattr("dms.gemini_client.time.sleep", waits.append)
     with socket.socket() as sock:
@@ -198,15 +245,21 @@ def test_real_refused_connection_has_presend_budget(tmp_path, monkeypatch):
     assert len(audit.events) == 6 and len(waits) == 2
 
 
-@pytest.mark.parametrize("kind,category,retryable", [
-    ("ConnectTimeout", "unreachable", True), ("ReadTimeout", "outcome_unknown", False),
-    ("ConnectionError", "outcome_unknown", False), ("SSLError", "configuration", False),
-    ("ProxyError", "configuration", False),
-])
+@pytest.mark.parametrize(
+    "kind,category,retryable",
+    [
+        ("ConnectTimeout", "unreachable", True),
+        ("ReadTimeout", "outcome_unknown", False),
+        ("ConnectionError", "outcome_unknown", False),
+        ("SSLError", "configuration", False),
+        ("ProxyError", "configuration", False),
+    ],
+)
 def test_transport_fault_classification(tmp_path, monkeypatch, kind, category, retryable):
     import requests
 
     from dms.exceptions import GatewayError
+
     calls = []
 
     def fail(*args, **kwargs):
@@ -224,6 +277,7 @@ def test_transport_fault_classification(tmp_path, monkeypatch, kind, category, r
 
 def test_parse_failure_keeps_valid_usage(tmp_path):
     from dms.exceptions import GatewayError
+
     body = completion()
     body["choices"] = []
     audit = Audit()
@@ -239,8 +293,10 @@ def test_parse_failure_keeps_valid_usage(tmp_path):
 def test_required_logging_failure_blocks_request(tmp_path, monkeypatch):
     import dms.logging_config as logging_config
     from dms.exceptions import GatewayError
+
     def broken(*args):
         raise OSError("secret path")
+
     monkeypatch.setattr(logging_config, "ensure_gateway_logging", broken)
     client = GeminiClient(gateway_settings(tmp_path), usage_tracker=Audit())
     calls = []
@@ -252,24 +308,32 @@ def test_required_logging_failure_blocks_request(tmp_path, monkeypatch):
 
 def test_standalone_usage_is_persisted_in_existing_database(tmp_path):
     import sqlite3
+
     with endpoint([(200, completion(), {})]) as (url, seen):
         client = GeminiClient(gateway_settings(tmp_path, url))
         client.generate("prompt", actor="alice", job_id="job-1")
     with sqlite3.connect(tmp_path / "classification_jobs.db") as db:
-        rows = db.execute("SELECT event_kind, actor, route, response_id FROM gemini_usage_log ORDER BY id").fetchall()
-    assert rows == [("attempt_started", "alice", "gateway", None),
-                    ("attempt_finished", "alice", "gateway", "response-1")]
+        rows = db.execute(
+            "SELECT event_kind, actor, route, response_id FROM gemini_usage_log ORDER BY id"
+        ).fetchall()
+    assert rows == [
+        ("attempt_started", "alice", "gateway", None),
+        ("attempt_finished", "alice", "gateway", "response-1"),
+    ]
 
 
 @pytest.mark.parametrize("failed_message", ["attempt_started", "attempt_finished"])
 def test_log_write_failure_is_typed_and_never_replayed(tmp_path, monkeypatch, failed_message):
     from dms.exceptions import GatewayError
     from dms.gemini_client import gateway_logger
+
     original = gateway_logger.info
+
     def log(message, **kwargs):
         if message == failed_message:
             raise OSError("private disk failure")
         original(message, **kwargs)
+
     monkeypatch.setattr(gateway_logger, "info", log)
     with endpoint([(200, completion(), {})]) as (url, seen):
         client = GeminiClient(gateway_settings(tmp_path, url), usage_tracker=Audit())
@@ -283,8 +347,9 @@ def test_log_write_failure_is_typed_and_never_replayed(tmp_path, monkeypatch, fa
 def test_finished_callback_uses_same_persisted_event(tmp_path):
     callbacks, audit = [], Audit()
     with endpoint([(200, completion(), {})]) as (url, seen):
-        client = GeminiClient(gateway_settings(tmp_path, url), usage_tracker=audit,
-                              on_attempt=callbacks.append)
+        client = GeminiClient(
+            gateway_settings(tmp_path, url), usage_tracker=audit, on_attempt=callbacks.append
+        )
         client.generate("prompt", actor="alice")
     assert callbacks == [audit.events[-1]]
 

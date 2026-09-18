@@ -47,9 +47,9 @@ def pipeline(settings, tmp_path):
     settings.rate_gap_sec = 0
     settings.llm_batch_size = 10
     settings.keyword_dir.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(
-        [{"Model": "AT10 8W", "Dòng SP": "Bulb", "Sản phẩm": "LED"}]
-    ).to_excel(settings.df_products_path, index=False)
+    pd.DataFrame([{"Model": "AT10 8W", "Dòng SP": "Bulb", "Sản phẩm": "LED"}]).to_excel(
+        settings.df_products_path, index=False
+    )
     input_path = tmp_path / "input.xlsx"
     pd.DataFrame({"Nội dung phản hồi": ["first", "second"]}).to_excel(input_path, index=False)
 
@@ -67,11 +67,13 @@ def pipeline(settings, tmp_path):
 
 
 def test_gateway_pipeline_passes_explicit_metadata_through_json_repair(pipeline):
-    client = RecordingClient([
-        "1. NONE\n2. NONE",
-        json.dumps([{"row_index": 0, "labels": {"Báo lỗi": True}}]),
-        json.dumps([{"row_index": 0, "labels": {"Báo CL tốt": True}}]),
-    ])
+    client = RecordingClient(
+        [
+            "1. NONE\n2. NONE",
+            json.dumps([{"row_index": 0, "labels": {"Báo lỗi": True}}]),
+            json.dumps([{"row_index": 0, "labels": {"Báo CL tốt": True}}]),
+        ]
+    )
     runner, paths = pipeline(client)
 
     result = runner.run_pipeline(*paths, actor="owner", job_id="job-1")
@@ -79,8 +81,24 @@ def test_gateway_pipeline_passes_explicit_metadata_through_json_repair(pipeline)
     assert result["processed_rows"] == 2
     assert client.calls == [
         ("text", {"actor": "owner", "job_id": "job-1", "operation": "rag_extract"}),
-        ("json", {"temperature": 0.0, "actor": "owner", "job_id": "job-1", "operation": "classify_batch"}),
-        ("json", {"temperature": 0.0, "actor": "owner", "job_id": "job-1", "operation": "classify_batch"}),
+        (
+            "json",
+            {
+                "temperature": 0.0,
+                "actor": "owner",
+                "job_id": "job-1",
+                "operation": "classify_batch",
+            },
+        ),
+        (
+            "json",
+            {
+                "temperature": 0.0,
+                "actor": "owner",
+                "job_id": "job-1",
+                "operation": "classify_batch",
+            },
+        ),
     ]
 
 
@@ -141,19 +159,31 @@ def test_legacy_helpers_accept_old_client_signatures_and_fail_soft(settings):
 
 
 @pytest.mark.parametrize("retryable", [False, True])
-def test_worker_preserves_gateway_retry_policy_and_job_metadata(pipeline, settings, tmp_path, retryable):
-    client = RecordingClient([GatewayError("unreachable" if retryable else "auth", retryable=retryable)])
+def test_worker_preserves_gateway_retry_policy_and_job_metadata(
+    pipeline, settings, tmp_path, retryable
+):
+    client = RecordingClient(
+        [GatewayError("unreachable" if retryable else "auth", retryable=retryable)]
+    )
     runner, paths = pipeline(client)
     settings.upload_input_to_sharepoint = False
     settings.classification_retry_count = 1
     store = ClassificationJobStore(tmp_path / "jobs.db")
     store.create_job(
-        job_id="job-1", owner_username="owner", owner_role="user", filename="input.xlsx",
-        mode="single", input_path=paths[0], output_path=paths[1],
+        job_id="job-1",
+        owner_username="owner",
+        owner_role="user",
+        filename="input.xlsx",
+        mode="single",
+        input_path=paths[0],
+        output_path=paths[1],
     )
     job = store.claim_next_job(worker_id="test", global_running_limit=1, per_user_running_limit=1)
     worker = ClassificationWorkerManager(
-        settings=settings, job_store=store, runner_factory=lambda: runner, sharepoint_factory=lambda: None,
+        settings=settings,
+        job_store=store,
+        runner_factory=lambda: runner,
+        sharepoint_factory=lambda: None,
     )
 
     worker._process_job(job)
@@ -175,7 +205,11 @@ def test_watcher_gateway_failure_retry_policy(settings, retryable):
     pipeline.run_pipeline.side_effect = GatewayError(
         "unreachable" if retryable else "outcome_unknown", retryable=retryable
     )
-    file_info = {"id": "file-1", "name": "input.xlsx", "lastModifiedDateTime": "2026-01-01T00:00:00Z"}
+    file_info = {
+        "id": "file-1",
+        "name": "input.xlsx",
+        "lastModifiedDateTime": "2026-01-01T00:00:00Z",
+    }
     sharepoint = Mock()
     sharepoint.list_files.return_value = [file_info]
     watcher = Watcher(
@@ -191,23 +225,28 @@ def test_watcher_gateway_failure_retry_policy(settings, retryable):
     sharepoint.upload_output.assert_not_called()
 
 
-@pytest.mark.parametrize("field,value", [
-    ("gateway_chat_completions_url", "https://gateway.invalid/new"),
-    ("gateway_api_key", "new-test-key"),
-    ("gateway_model", "new-alias"),
-    ("gateway_allow_insecure_http", True),
-    ("fallback_enabled", True),
-    ("fallback_fail_threshold", 2),
-    ("fallback_retry_after_s", 90.0),
-    ("gcp_project_id", "new-project"),
-    ("gcp_location", "new-region"),
-    ("gcp_service_account_json", "unused-test-credential.json"),
-    ("gemini_model", "gemini-2.5-pro"),
-    ("max_retry", 4),
-    ("base_wait", 9.0),
-    ("gemini_timeout_seconds", 90.0),
-])
-def test_watcher_gateway_reload_replaces_client_snapshot(pipeline, settings, monkeypatch, field, value):
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("gateway_chat_completions_url", "https://gateway.invalid/new"),
+        ("gateway_api_key", "new-test-key"),
+        ("gateway_model", "new-alias"),
+        ("gateway_allow_insecure_http", True),
+        ("fallback_enabled", True),
+        ("fallback_fail_threshold", 2),
+        ("fallback_retry_after_s", 90.0),
+        ("gcp_project_id", "new-project"),
+        ("gcp_location", "new-region"),
+        ("gcp_service_account_json", "unused-test-credential.json"),
+        ("gemini_model", "gemini-2.5-pro"),
+        ("max_retry", 4),
+        ("base_wait", 9.0),
+        ("gemini_timeout_seconds", 90.0),
+    ],
+)
+def test_watcher_gateway_reload_replaces_client_snapshot(
+    pipeline, settings, monkeypatch, field, value
+):
     from dms.gemini_client import GeminiClient
 
     runner, _ = pipeline(GeminiClient(settings))
@@ -240,8 +279,13 @@ def test_gateway_asset_refresh_does_not_restore_stale_factory_client(pipeline, s
     snapshot = settings.model_copy(update={"gateway_model": "refreshed-alias"})
     sync.get_runtime_settings.return_value = snapshot
     watcher = Watcher(
-        Mock(), runner, Mock(), runner.metrics, snapshot,
-        config_asset_sync=sync, runner_factory=lambda: runner,
+        Mock(),
+        runner,
+        Mock(),
+        runner.metrics,
+        snapshot,
+        config_asset_sync=sync,
+        runner_factory=lambda: runner,
     )
 
     watcher._sync_config_assets()

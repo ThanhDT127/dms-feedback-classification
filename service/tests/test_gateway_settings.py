@@ -39,26 +39,29 @@ def test_gateway_only_defaults_preserve_exact_alias_without_google_credentials()
     assert settings.gcp_service_account_json == ""
 
 
-@pytest.mark.parametrize("overrides", [
-    {"gateway_chat_completions_url": ""},
-    {"gateway_chat_completions_url": "http://gateway.example/exact"},
-    {"gateway_chat_completions_url": "ftp://gateway.example/exact"},
-    {"gateway_chat_completions_url": "https:///exact"},
-    {"gateway_chat_completions_url": "https://user:password@gateway.example/exact"},
-    {"gateway_chat_completions_url": "https://gateway.example/exact?key=secret"},
-    {"gateway_chat_completions_url": "https://gateway.example/exact#fragment"},
-    {"gateway_chat_completions_url": " https://gateway.example/exact"},
-    {"gateway_chat_completions_url": "https://gateway.example:invalid/exact"},
-    {"gateway_chat_completions_url": "https://gateway.example/exact\\other"},
-    {"gateway_api_key": ""},
-    {"gateway_api_key": "synthetic key"},
-    {"gateway_api_key": "synthetic-key\n"},
-    {"gateway_api_key": "${SYNTHETIC_KEY}"},
-    {"gateway_api_key": "{{SYNTHETIC_KEY}}"},
-    {"gateway_api_key": "<SYNTHETIC_KEY>"},
-    {"gateway_model": ""},
-    {"gateway_model": " Alias "},
-])
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"gateway_chat_completions_url": ""},
+        {"gateway_chat_completions_url": "http://gateway.example/exact"},
+        {"gateway_chat_completions_url": "ftp://gateway.example/exact"},
+        {"gateway_chat_completions_url": "https:///exact"},
+        {"gateway_chat_completions_url": "https://user:password@gateway.example/exact"},
+        {"gateway_chat_completions_url": "https://gateway.example/exact?key=secret"},
+        {"gateway_chat_completions_url": "https://gateway.example/exact#fragment"},
+        {"gateway_chat_completions_url": " https://gateway.example/exact"},
+        {"gateway_chat_completions_url": "https://gateway.example:invalid/exact"},
+        {"gateway_chat_completions_url": "https://gateway.example/exact\\other"},
+        {"gateway_api_key": ""},
+        {"gateway_api_key": "synthetic key"},
+        {"gateway_api_key": "synthetic-key\n"},
+        {"gateway_api_key": "${SYNTHETIC_KEY}"},
+        {"gateway_api_key": "{{SYNTHETIC_KEY}}"},
+        {"gateway_api_key": "<SYNTHETIC_KEY>"},
+        {"gateway_model": ""},
+        {"gateway_model": " Alias "},
+    ],
+)
 def test_gateway_rejects_invalid_configuration_without_secret_disclosure(overrides):
     with pytest.raises(ValidationError) as caught:
         make_settings(**overrides)
@@ -88,21 +91,24 @@ def test_gateway_explicit_http_and_environment_aliases(monkeypatch):
     assert settings.gateway_system_user == "approved-cli-actor"
 
 
-@pytest.mark.parametrize("overrides", [
-    {"fallback_fail_threshold": 0},
-    {"fallback_fail_threshold": 1.5},
-    {"fallback_enabled": True, "fallback_fail_threshold": 4},
-    {"fallback_retry_after_s": 0},
-    {"fallback_retry_after_s": float("inf")},
-    {"fallback_retry_after_s": float("nan")},
-    {"max_retry": 0},
-    {"base_wait": -1},
-    {"base_wait": float("inf")},
-    {"base_wait": float("nan")},
-    {"gemini_timeout_seconds": 0},
-    {"gemini_timeout_seconds": float("inf")},
-    {"gemini_timeout_seconds": float("nan")},
-])
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"fallback_fail_threshold": 0},
+        {"fallback_fail_threshold": 1.5},
+        {"fallback_enabled": True, "fallback_fail_threshold": 4},
+        {"fallback_retry_after_s": 0},
+        {"fallback_retry_after_s": float("inf")},
+        {"fallback_retry_after_s": float("nan")},
+        {"max_retry": 0},
+        {"base_wait": -1},
+        {"base_wait": float("inf")},
+        {"base_wait": float("nan")},
+        {"gemini_timeout_seconds": 0},
+        {"gemini_timeout_seconds": float("inf")},
+        {"gemini_timeout_seconds": float("nan")},
+    ],
+)
 def test_gateway_rejects_invalid_retry_budget(overrides):
     with pytest.raises(ValidationError):
         make_settings(**overrides)
@@ -116,12 +122,18 @@ def test_fallback_missing_direct_configuration_is_disabled_with_safe_warning(cap
     assert "synthetic-gateway-key" not in caplog.text
 
 
-@pytest.mark.parametrize("missing", ["gcp_project_id", "gcp_location", "gemini_model", "gcp_service_account_json"])
+@pytest.mark.parametrize(
+    "missing", ["gcp_project_id", "gcp_location", "gemini_model", "gcp_service_account_json"]
+)
 def test_fallback_requires_explicit_direct_configuration(tmp_path, missing):
     credential = tmp_path / "offline-credential.json"
     credential.write_text("not a credential; settings must never read this", encoding="utf-8")
-    direct = dict(gcp_project_id="project", gcp_location="global", gemini_model="direct-model",
-                  gcp_service_account_json=str(credential))
+    direct = dict(
+        gcp_project_id="project",
+        gcp_location="global",
+        gemini_model="direct-model",
+        gcp_service_account_json=str(credential),
+    )
     direct[missing] = ""
     assert make_settings(fallback_enabled=True, **direct).fallback_enabled is False
 
@@ -136,8 +148,14 @@ def test_fallback_checks_only_file_existence_without_loading_credentials(tmp_pat
 
 
 def test_legacy_configuration_ignores_gateway_and_fallback_policy():
-    settings = make_settings(gemini_backend="vertex", gcp_project_id="project",
-                             gateway_chat_completions_url="", gateway_api_key="",
-                             gateway_model="", fallback_enabled=True, max_retry=1)
+    settings = make_settings(
+        gemini_backend="vertex",
+        gcp_project_id="project",
+        gateway_chat_completions_url="",
+        gateway_api_key="",
+        gateway_model="",
+        fallback_enabled=True,
+        max_retry=1,
+    )
     assert settings.gemini_backend == "vertex"
     assert Settings.model_fields["gemini_backend"].default == "vertex"
