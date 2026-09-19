@@ -516,10 +516,9 @@ class Watcher:
                     "max_retry",
                     "base_wait",
                     "gemini_timeout_seconds",
-                    "gemini_temperature",
                 )
                 changed = any(
-                    getattr(self.settings, field) != getattr(new_settings, field)
+                    getattr(self.settings, field, None) != getattr(new_settings, field, None)
                     for field in client_fields
                 )
                 if changed:
