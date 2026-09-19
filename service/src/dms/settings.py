@@ -187,24 +187,10 @@ class Settings(BaseSettings):
                 if not math.isfinite(value) or not minimum_ok:
                     raise ValueError(f"{name} must be finite and within its valid range")
             if self.fallback_enabled:
-                try:
-                    direct_ready = (
-                        all(
-                            (
-                                self.gcp_project_id.strip(),
-                                self.gcp_location.strip(),
-                                self.gemini_model,
-                                self.gcp_service_account_json,
-                            )
-                        )
-                        and Path(self.gcp_service_account_json).is_file()
-                    )
-                except (OSError, ValueError):
-                    direct_ready = False
-                if not direct_ready:
+                if not self.gemini_api_key.strip():
                     self.fallback_enabled = False
                     logging.getLogger("dms-watcher").warning(
-                        "Gateway fallback disabled: required direct Vertex configuration/file missing"
+                        "Gateway fallback disabled: required AI Studio API key is missing"
                     )
 
         self.environment = (self.environment or "development").strip().lower()

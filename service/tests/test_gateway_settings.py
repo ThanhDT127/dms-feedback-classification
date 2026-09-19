@@ -138,13 +138,14 @@ def test_fallback_requires_explicit_direct_configuration(tmp_path, missing):
     assert make_settings(fallback_enabled=True, **direct).fallback_enabled is False
 
 
-def test_fallback_checks_only_file_existence_without_loading_credentials(tmp_path):
-    credential = tmp_path / "offline-credential.json"
-    credential.write_text("not a credential; no parsing permitted", encoding="utf-8")
-    direct = dict(gcp_project_id="project", gcp_service_account_json=str(credential))
-    assert make_settings(fallback_enabled=True, **direct).fallback_enabled is True
-    credential.unlink()
-    assert make_settings(fallback_enabled=True, **direct).fallback_enabled is False
+def test_fallback_requires_ai_studio_api_key_without_loading_it(caplog):
+    settings = make_settings(fallback_enabled=True, gemini_api_key="synthetic-ai-studio-key")
+    assert settings.fallback_enabled is True
+    assert "synthetic-ai-studio-key" not in caplog.text
+
+    settings = make_settings(fallback_enabled=True, gemini_api_key="")
+    assert settings.fallback_enabled is False
+    assert "AI Studio" in caplog.text
 
 
 def test_legacy_configuration_ignores_gateway_and_fallback_policy():

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 import pytest
 from test_gateway import Audit, gateway_settings
 
@@ -8,12 +10,9 @@ from dms.gemini_client import GeminiClient, GeminiResponse
 
 
 def fallback_client(tmp_path, monkeypatch, **overrides):
-    credential = tmp_path / "dummy.json"
-    credential.write_text("{}")
     options = dict(
         fallback_enabled=True,
-        gcp_project_id="dummy-project",
-        gcp_service_account_json=str(credential),
+        gemini_api_key="synthetic-ai-studio-key",
     )
     options.update(overrides)
     audit = Audit()
@@ -23,7 +22,7 @@ def fallback_client(tmp_path, monkeypatch, **overrides):
     def direct_request(*args):
         direct.append(args)
         return GeminiResponse(
-            "direct", {"prompt_tokens": 2}, route="direct_vertex", model_actual="direct-model"
+            "direct", {"prompt_tokens": 2}, route="direct_apikey", model_actual="direct-model"
         )
 
     monkeypatch.setattr(client, "_direct_request", direct_request, raising=False)
@@ -41,7 +40,7 @@ def test_threshold_on_final_attempt_rescues_same_helper(tmp_path, monkeypatch, h
     result = getattr(client, helper)("prompt", actor="alice")
     assert result.text == "direct" and len(direct) == 1
     starts = [e for e in audit.events if e["event_kind"] == "attempt_started"]
-    assert [e["route"] for e in starts] == ["gateway"] * 3 + ["direct_vertex"]
+    assert [e["route"] for e in starts] == ["gateway"] * 3 + ["direct_apikey"]
     assert len({e["operation_id"] for e in starts}) == 1
     assert starts[-1]["incident_id"]
     getattr(client, helper)("second", actor="alice")
@@ -85,9 +84,7 @@ def test_runtime_fallback_threshold_validation(tmp_path, monkeypatch, overrides)
 
 
 def test_missing_direct_file_disables_only_fallback(tmp_path, monkeypatch, caplog):
-    client, audit, direct = fallback_client(
-        tmp_path, monkeypatch, gcp_service_account_json=str(tmp_path / "missing.json")
-    )
+    client, audit, direct = fallback_client(tmp_path, monkeypatch, gemini_api_key="")
     monkeypatch.setattr(client, "_gateway_request", unreachable)
     with pytest.raises(GatewayError) as caught:
         client.generate("prompt", actor="alice")
@@ -212,57 +209,37 @@ def test_direct_sdk_lazy_singleton_explicit_credentials_and_no_retries(
     client, audit, direct = fallback_client(tmp_path, monkeypatch)
     # Exercise the real direct boundary, not the fault-injection seam.
     monkeypatch.delattr(client, "_direct_request")
-    initialized, requests_seen = [], []
-    credentials = object()
+    configured, models, requests_seen = [], [], []
 
-    def generate_content(**kwargs):
-        requests_seen.append(kwargs)
-        return SimpleNamespace(
-            text="direct-text",
-            model_version="direct-actual",
-            usage_metadata=SimpleNamespace(
-                prompt_token_count=3,
-                candidates_token_count=2,
-                total_token_count=8,
-                thoughts_token_count=3,
-                cached_content_token_count=1,
-            ),
-        )
+    def configure(api_key):
+        configured.append(api_key)
 
-    def construct(**kwargs):
-        initialized.append(kwargs)
-        return SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
+    class FakeModel:
+        def generate_content(self, prompt, generation_config=None):
+            requests_seen.append((prompt, generation_config))
+            return SimpleNamespace(text="direct-text", usage_metadata=SimpleNamespace(
+                prompt_token_count=3, candidates_token_count=2, total_token_count=5
+            ))
 
-    import google.genai
-    import google.oauth2.service_account
-
-    monkeypatch.setattr(google.genai, "Client", construct)
-    monkeypatch.setattr(
-        google.oauth2.service_account.Credentials,
-        "from_service_account_file",
-        lambda *a, **kw: credentials,
+    fake_module = SimpleNamespace(
+        configure=configure,
+        GenerativeModel=lambda model: (models.append(model) or FakeModel()),
     )
+    monkeypatch.setitem(sys.modules, "google.generativeai", fake_module)
+
     monkeypatch.setattr(client, "_gateway_request", unreachable)
     helper = client.generate_json if json_mode else client.generate
     for _ in range(2):
         response = helper("prompt", temperature=0.2, actor="alice")
-        assert response.route == "direct_vertex" and response.response_id is None
-    assert len(initialized) == 1 and len(requests_seen) == 2
-    options = initialized[0]
-    assert options["vertexai"] is True and options["credentials"] is credentials
-    assert options["project"] == "dummy-project" and options["location"] == "global"
-    assert options["http_options"].retry_options.attempts == 1
-    assert options["http_options"].timeout == 300
-    assert requests_seen[0]["model"] == "direct-model"
-    assert requests_seen[0]["config"].temperature == 0.2
-    assert requests_seen[0]["config"].response_mime_type == (
+        assert response.route == "direct_apikey" and response.response_id is None
+    assert configured == ["synthetic-ai-studio-key"] and models == ["direct-model"]
+    assert len(requests_seen) == 2
+    assert requests_seen[0][1]["temperature"] == 0.2
+    assert requests_seen[0][1].get("response_mime_type") == (
         "application/json" if json_mode else None
     )
-    assert response.usage["completion_tokens"] == 2
-    assert response.usage["completion_tokens_details"]["reasoning_tokens"] == 3
-    assert response.usage["prompt_tokens_details"]["cached_tokens"] == 1
+    assert response.usage == {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5}
     assert audit.events[-1]["model_requested"] == "Alias-EXACT"
-    assert audit.events[-1]["model_actual"] == "direct-actual"
 
 
 def test_late_direct_response_does_not_count_in_next_incident(tmp_path, monkeypatch):
@@ -281,7 +258,7 @@ def test_late_direct_response_does_not_count_in_next_incident(tmp_path, monkeypa
         if prompt == "late":
             entered.set()
             assert release.wait(5)
-        return GeminiResponse("direct", route="direct_vertex")
+        return GeminiResponse("direct", route="direct_apikey")
 
     monkeypatch.setattr(client, "_direct_request", delayed)
     with ThreadPoolExecutor(max_workers=1) as pool:
@@ -317,7 +294,7 @@ def test_simultaneous_threshold_opens_one_incident(tmp_path, monkeypatch, caplog
     with ThreadPoolExecutor(max_workers=3) as pool:
         futures = [pool.submit(client.generate, "prompt", actor="alice") for _ in range(3)]
         assert [f.result(5).text for f in futures] == ["direct"] * 3
-    assert len({e["incident_id"] for e in audit.events if e["route"] == "direct_vertex"}) == 1
+    assert len({e["incident_id"] for e in audit.events if e["route"] == "direct_apikey"}) == 1
     assert sum(r.message == "fallback_open" for r in caplog.records) == 1
     assert client._direct_attempted == client._direct_succeeded == 3
 
@@ -340,7 +317,7 @@ def test_quota_between_unreachable_attempts_does_not_reset_counter(tmp_path, mon
     with pytest.raises(GatewayError):
         client.generate("first", actor="alice")
     assert client._unreachable == 2 and not direct
-    assert client.generate("second", actor="alice").route == "direct_vertex"
+    assert client.generate("second", actor="alice").route == "direct_apikey"
 
 
 def test_direct_response_parse_failure_preserves_usage(tmp_path, monkeypatch):

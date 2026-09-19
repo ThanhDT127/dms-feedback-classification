@@ -289,83 +289,39 @@ class GeminiClient:
     def _fallback_available(config):
         if not getattr(config, "fallback_enabled", False):
             return False
-        available = bool(
-            config.gcp_project_id
-            and config.gcp_location
-            and config.gemini_model
-            and config.gcp_service_account_json
-            and Path(config.gcp_service_account_json).is_file()
-        )
+        available = bool(config.gemini_api_key and config.gemini_model)
         if not available:
-            gateway_logger.warning("fallback_disabled_missing_direct_configuration")
+            gateway_logger.warning("fallback_disabled_missing_ai_studio_configuration")
         return available
 
     def _direct_attempt(self, config, event, incident, prompt, temperature, json_mode, actor):
         event = dict(
-            event, route="direct_vertex", incident_id=incident, attempt_id=uuid.uuid4().hex
+            event, route="direct_apikey", incident_id=incident, attempt_id=uuid.uuid4().hex
         )
         return self._attempt(config, event, prompt, temperature, json_mode, actor)
 
     def _direct_request(self, config, prompt, temperature, json_mode):
-        from google import genai
-        from google.genai import types
-        from google.oauth2 import service_account
+        import google.generativeai as genai_legacy
 
         with self._init_lock:
             if self._direct_client is None:
-                credentials = service_account.Credentials.from_service_account_file(
-                    config.gcp_service_account_json,
-                    scopes=["https://www.googleapis.com/auth/cloud-platform"],
-                )
-                self._direct_client = genai.Client(
-                    vertexai=True,
-                    project=config.gcp_project_id,
-                    location=config.gcp_location,
-                    credentials=credentials,
-                    http_options=types.HttpOptions(
-                        timeout=max(1, int(config.gemini_timeout_seconds * 1000)),
-                        retry_options=types.HttpRetryOptions(attempts=1),
-                    ),
-                )
-        options = {}
-        if temperature is not None:
-            options["temperature"] = temperature
+                genai_legacy.configure(api_key=config.gemini_api_key)
+                self._direct_client = genai_legacy.GenerativeModel(config.gemini_model)
+        generation_config = {"temperature": temperature} if temperature is not None else {}
         if json_mode:
-            options["response_mime_type"] = "application/json"
-        response = self._direct_client.models.generate_content(
-            model=config.gemini_model,
-            contents=prompt,
-            config=types.GenerateContentConfig(**options),
+            generation_config["response_mime_type"] = "application/json"
+        response = self._call_with_timeout(
+            self._direct_client.generate_content,
+            prompt,
+            generation_config=generation_config or None,
         )
-        usage: dict[str, Any] = {}
-        metadata = getattr(response, "usage_metadata", None)
-        if metadata is not None:
-            for source, target in (
-                ("prompt_token_count", "prompt_tokens"),
-                ("candidates_token_count", "completion_tokens"),
-                ("total_token_count", "total_tokens"),
-            ):
-                value = getattr(metadata, source, None)
-                if type(value) is int and value >= 0:
-                    usage[target] = value
-            for source, group, target in (
-                ("thoughts_token_count", "completion_tokens_details", "reasoning_tokens"),
-                ("cached_content_token_count", "prompt_tokens_details", "cached_tokens"),
-            ):
-                value = getattr(metadata, source, None)
-                if type(value) is int and value >= 0:
-                    usage[group] = {target: value}
+        usage = _extract_usage(response)
         text = getattr(response, "text", None)
         if not isinstance(text, str) or not text.strip():
             error = GatewayError("response", outcome_unknown=True)
             error.usage = usage or None
             raise error
-        return GeminiResponse(
-            text=text.strip(),
-            usage=usage,
-            route="direct_vertex",
-            model_actual=_response_token(getattr(response, "model_version", None)),
-        )
+        return GeminiResponse(text=text.strip(), usage=usage, route="direct_apikey")
 
     def _audit(self, config, **event):
         try:
@@ -389,7 +345,7 @@ class GeminiClient:
     def _attempt(self, config, event, prompt, temperature, json_mode, actor):
         self._audit(config, event_kind="attempt_started", outcome="started", **event)
         start = time.monotonic()
-        direct = event["route"] == "direct_vertex"
+        direct = event["route"] == "direct_apikey"
         if direct:
             with self._state_lock:
                 if event["incident_id"] == self._incident_id:
