@@ -1,0 +1,42 @@
+{"id": "fts01", "question": "Tìm phản hồi đèn chập chờn", "search_terms": ["chập chờn"], "filters": {}, "expected_feedback_ids": [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 160], "tags": []}
+{"id": "fts02", "question": "Phản hồi về phích nước giữ nhiệt", "search_terms": ["phích nước giữ nhiệt"], "filters": {}, "expected_feedback_ids": [122, 123], "tags": []}
+{"id": "fts03", "question": "Có ai phàn nàn giao hàng chậm không", "search_terms": ["giao hàng chậm"], "filters": {}, "expected_feedback_ids": [117], "tags": []}
+{"id": "fts04", "question": "Tìm phản hồi đèn không sáng", "search_terms": ["không sáng"], "filters": {}, "expected_feedback_ids": [115, 120, 121], "tags": []}
+{"id": "fts05", "question": "Phản hồi về vỏ đèn nóng", "search_terms": ["nóng"], "filters": {}, "expected_feedback_ids": [131, 132], "tags": []}
+{"id": "fts06", "question": "Tìm phản hồi website", "search_terms": ["website"], "filters": {}, "expected_feedback_ids": [136, 137], "tags": []}
+{"id": "fts07", "question": "Tìm phản hồi bảo hành chờ lâu", "search_terms": ["bảo hành"], "filters": {}, "expected_feedback_ids": [129, 130], "tags": []}
+{"id": "fts08", "question": "Đèn bị ố vàng", "search_terms": ["ố vàng"], "filters": {}, "expected_feedback_ids": [158], "tags": []}
+{"id": "fts09", "question": "Tìm phản hồi mỏi mắt", "search_terms": ["mỏi mắt"], "filters": {}, "expected_feedback_ids": [111, 148], "tags": []}
+{"id": "fts10", "question": "Phản hồi chập chờn của Nha Trang", "search_terms": ["chập chờn"], "filters": {"unit_name": "Nha Trang"}, "expected_feedback_ids": [106, 109, 112], "tags": []}
+{"id": "fts11", "question": "Phản hồi tích cực về phích nước", "search_terms": ["phích nước"], "filters": {"sentiment": "Tích cực"}, "expected_feedback_ids": [123], "tags": []}
+{"id": "fts12", "question": "Tìm phản hồi đèn nhấp nháy", "search_terms": ["nhấp nháy"], "filters": {}, "expected_feedback_ids": [127, 128], "tags": []}
+{"id": "fts13", "question": "Chấn lưu kêu rè", "search_terms": ["chấn lưu kêu"], "filters": {}, "expected_feedback_ids": [134], "tags": []}
+{"id": "fts14", "question": "Đèn pha bị vào nước", "search_terms": ["vào nước"], "filters": {}, "expected_feedback_ids": [153], "tags": []}
+{"id": "fts15", "question": "Tìm phản hồi dây điện ngắn", "search_terms": ["dây điện ngắn"], "filters": {}, "expected_feedback_ids": [149], "tags": []}
+{"id": "fts16", "question": "tim phan hoi den chap chon", "search_terms": ["den chap chon"], "filters": {}, "expected_feedback_ids": [101, 102, 103, 104, 105, 106, 107, 108, 109, 111, 112, 113, 114, 160], "tags": ["no_diacritics"]}
+{"id": "fts17", "question": "phan hoi phich nuoc giu nhiet", "search_terms": ["phich nuoc giu nhiet"], "filters": {}, "expected_feedback_ids": [122, 123], "tags": ["no_diacritics"]}
+{"id": "fts18", "question": "giao hang cham", "search_terms": ["giao hang cham"], "filters": {}, "expected_feedback_ids": [117], "tags": ["no_diacritics"]}
+{"id": "fts19", "question": "den khong sang", "search_terms": ["den khong sang"], "filters": {}, "expected_feedback_ids": [120, 121, 121], "tags": ["no_diacritics"]}
+{"id": "fts20", "question": "tim phan hoi website", "search_terms": ["website"], "filters": {}, "expected_feedback_ids": [136, 137], "tags": ["no_diacritics"]}
+{"id": "fts21", "question": "bao hanh cho lau", "search_terms": ["bao hanh"], "filters": {}, "expected_feedback_ids": [129, 130], "tags": ["no_diacritics"]}
+{"id": "fts22", "question": "den nhap nhay dimmer", "search_terms": ["den nhap nhay"], "filters": {}, "expected_feedback_ids": [128], "tags": ["no_diacritics"]}
+{"id": "fts23", "question": "chan luu keu re re", "search_terms": ["chan luu keu"], "filters": {}, "expected_feedback_ids": [134], "tags": ["no_diacritics"]}
+{"id": "fts24", "question": "vo den nong bat thuong", "search_terms": ["vo den nong"], "filters": {}, "expected_feedback_ids": [132], "tags": ["no_diacritics"]}
+{"id": "fts25", "question": "o cam dien bi chay den", "search_terms": ["o cam dien chay"], "filters": {}, "expected_feedback_ids": [133], "tags": ["no_diacritics"]}
+{"id": "fts26", "question": "den ngu ban dem qua sang", "search_terms": ["den ngu"], "filters": {}, "expected_feedback_ids": [150], "tags": ["no_diacritics"]}
+{"id": "fts27", "question": "doi tra den rang dong", "search_terms": ["doi tra den rang dong"], "filters": {}, "expected_feedback_ids": [115], "tags": ["no_diacritics", "d_letter"]}
+{"id": "fts28", "question": "tim phan hoi dai ly tu van", "search_terms": ["dai ly tu van"], "filters": {}, "expected_feedback_ids": [152], "tags": ["no_diacritics", "d_letter"]}
+{"id": "fts29", "question": "Tìm phản hồi đổi trả", "search_terms": ["đổi trả"], "filters": {}, "expected_feedback_ids": [115, 116], "tags": ["d_letter"]}
+{"id": "fts30", "question": "den doi mau bi do", "search_terms": ["den doi mau"], "filters": {}, "expected_feedback_ids": [147], "tags": ["no_diacritics", "d_letter"]}
+{"id": "fts31", "question": "Đèn đường không tự bật", "search_terms": ["đèn đường"], "filters": {}, "expected_feedback_ids": [135], "tags": ["d_letter"]}
+{"id": "fts32", "question": "Đại lý ở TP.HCM giao chậm", "search_terms": ["TP.HCM"], "filters": {}, "expected_feedback_ids": [117], "tags": ["special"]}
+{"id": "fts33", "question": "Giao hàng từ 2/9 chưa nhận", "search_terms": ["giao hàng", "2/9"], "filters": {}, "expected_feedback_ids": [118], "tags": ["special"]}
+{"id": "fts34", "question": "Quạt tích điện OR đèn sạc", "search_terms": ["quạt tích điện OR đèn sạc"], "filters": {}, "expected_feedback_ids": [125], "tags": ["special"]}
+{"id": "fts35", "question": "đèn sạc NOT working", "search_terms": ["đèn sạc NOT working"], "filters": {}, "expected_feedback_ids": [126], "tags": ["special"]}
+{"id": "fts36", "question": "Đèn LED Bulb 9W bị đen chân", "search_terms": ["LED Bulb 9W đen chân"], "filters": {}, "expected_feedback_ids": [140], "tags": ["special"]}
+{"id": "fts37", "question": "Website \"đặt hàng\" lỗi thanh toán (khẩn)", "search_terms": ["\"đặt hàng\" lỗi thanh toán"], "filters": {}, "expected_feedback_ids": [136], "tags": ["special"]}
+{"id": "fts38", "question": "Đèn led chập chờn ban đêm", "search_terms": ["đèn led chập chờn ban đêm"], "filters": {}, "expected_feedback_ids": [107, 110, 160], "tags": ["relax"]}
+{"id": "fts39", "question": "Phích nước bị rò nước nắp lỏng khi đổ đầy", "search_terms": ["phích nước rò nước nắp lỏng đổ đầy"], "filters": {}, "expected_feedback_ids": [116, 156], "tags": ["relax"]}
+{"id": "fts40", "question": "Bóng đèn không sáng dù thay pin mới tinh", "search_terms": ["bóng đèn không sáng thay pin mới tinh"], "filters": {}, "expected_feedback_ids": [121], "tags": ["relax"]}
+{"id": "fts41", "question": "Đèn cảm biến bật tắt thất thường ngoài hành lang", "search_terms": ["đèn cảm biến bật tắt thất thường hành lang"], "filters": {}, "expected_feedback_ids": [144], "tags": ["relax"]}
+{"id": "fts42", "question": "Nhân viên tư vấn nhiệt tình vui vẻ", "search_terms": ["tư vấn nhiệt tình vui vẻ"], "filters": {}, "expected_feedback_ids": [152], "tags": ["relax"]}

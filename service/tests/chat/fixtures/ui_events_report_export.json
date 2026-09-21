@@ -1,0 +1,243 @@
+{
+  "name": "report_export",
+  "question": "Xuất báo cáo tuần trước ra Excel",
+  "note": "Báo cáo theo phần: Điểm chính, phần có dữ liệu, phần lỗi, khối export (b10)",
+  "events": [
+    {
+      "seq": 1,
+      "type": "status",
+      "data": {
+        "stage": "understanding",
+        "text": "Đang đọc câu hỏi"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "status",
+      "data": {
+        "stage": "planning",
+        "text": "Đang xác định số liệu cần lấy"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "status",
+      "data": {
+        "stage": "querying",
+        "text": "Đang truy vấn dữ liệu"
+      }
+    },
+    {
+      "seq": 4,
+      "type": "data_block",
+      "data": {
+        "block_id": "report.highlights",
+        "kind": "kpi",
+        "title": "Điểm chính",
+        "subtitle": "",
+        "chart_hint": "none",
+        "section": {
+          "id": "highlights",
+          "title": "Điểm chính",
+          "index": 0
+        },
+        "payload": {
+          "items": [
+            {
+              "key": "highlight_1",
+              "label": "",
+              "available": true,
+              "value": null,
+              "display": "Số vấn đề tăng 23% so với 31/08/2026 – 06/09/2026.",
+              "display_text": "Số vấn đề tăng 23% so với 31/08/2026 – 06/09/2026."
+            },
+            {
+              "key": "highlight_2",
+              "label": "",
+              "available": true,
+              "value": null,
+              "display": "Đèn LED Bulb chiếm 34,1% số vấn đề.",
+              "display_text": "Đèn LED Bulb chiếm 34,1% số vấn đề."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "seq": 5,
+      "type": "data_block",
+      "data": {
+        "block_id": "s1.get_overview",
+        "kind": "kpi",
+        "title": "Tổng quan",
+        "subtitle": "07/09/2026 – 13/09/2026 · Truyền thống Vùng 1",
+        "chart_hint": "none",
+        "section": {
+          "id": "overview",
+          "title": "Tổng quan",
+          "index": 1
+        },
+        "payload": {
+          "items": [
+            {
+              "key": "total_issues",
+              "label": "Tổng số vấn đề",
+              "available": true,
+              "value": 1230,
+              "display": "1.230",
+              "denominator": null,
+              "excluded_missing_issue_code": null,
+              "comparison": {
+                "available": true,
+                "value": 1000,
+                "display": "1.000",
+                "change_percent": 23.0,
+                "change_display": "tăng 23%",
+                "direction": "up"
+              }
+            },
+            {
+              "key": "processed_issues",
+              "label": "Đã xử lý",
+              "available": true,
+              "value": 900,
+              "display": "900",
+              "denominator": 1230,
+              "excluded_missing_issue_code": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "seq": 6,
+      "type": "commentary",
+      "data": {
+        "sentence_index": 1,
+        "section": {
+          "id": "overview",
+          "title": "Tổng quan",
+          "index": 1
+        },
+        "text": "Số vấn đề tăng 23% so với kỳ trước."
+      }
+    },
+    {
+      "seq": 7,
+      "type": "data_block",
+      "data": {
+        "block_id": "s2.get_products",
+        "kind": "ranking",
+        "title": "Sản phẩm bị phản hồi nhiều",
+        "subtitle": "07/09/2026 – 13/09/2026 · Truyền thống Vùng 1",
+        "chart_hint": "bar",
+        "section": {
+          "id": "products",
+          "title": "Sản phẩm bị phản hồi nhiều",
+          "index": 2
+        },
+        "payload": {
+          "items": [
+            {
+              "rank": 1,
+              "label": "Đèn LED Bulb",
+              "value": 420,
+              "display": "420",
+              "percent": 34.1,
+              "percent_display": "34,1%"
+            },
+            {
+              "rank": 2,
+              "label": "Đèn LED Tube",
+              "value": 210,
+              "display": "210",
+              "percent": 17.0,
+              "percent_display": "17,0%"
+            }
+          ],
+          "total_rows": 2,
+          "truncated": false,
+          "total_issues": 1230,
+          "total_display": "1.230",
+          "label_title": "Sản phẩm",
+          "value_title": "Số vấn đề"
+        }
+      }
+    },
+    {
+      "seq": 8,
+      "type": "commentary",
+      "data": {
+        "sentence_index": 2,
+        "section": {
+          "id": "products",
+          "title": "Sản phẩm bị phản hồi nhiều",
+          "index": 2
+        },
+        "text": "Đèn LED Bulb bị phản hồi nhiều nhất, chiếm 34,1% tổng số."
+      }
+    },
+    {
+      "seq": 9,
+      "type": "data_block",
+      "data": {
+        "block_id": "report.geography",
+        "kind": "table",
+        "title": "Phân bổ theo địa bàn",
+        "subtitle": "Không lấy được dữ liệu",
+        "chart_hint": "none",
+        "section": {
+          "id": "geography",
+          "title": "Phân bổ theo địa bàn",
+          "index": 3
+        },
+        "payload": {
+          "columns": [],
+          "rows": [],
+          "total_rows": 0,
+          "truncated": false
+        }
+      }
+    },
+    {
+      "seq": 10,
+      "type": "data_block",
+      "data": {
+        "block_id": "report.export",
+        "kind": "export",
+        "title": "File Excel",
+        "subtitle": "",
+        "chart_hint": "none",
+        "payload": {
+          "export_id": "0123456789abcdef0123456789abcdef",
+          "filename": "bao-cao-tuan_2026-09-07_2026-09-13.xlsx",
+          "size_bytes": 24576,
+          "expires_at": "2026-09-16T10:00:00+00:00",
+          "rows_exported": 12,
+          "truncated": false
+        }
+      }
+    },
+    {
+      "seq": 11,
+      "type": "suggestions",
+      "data": {
+        "items": [
+          "Sản phẩm nào bị phản hồi nhiều nhất tuần trước?",
+          "Xu hướng phản hồi theo ngày tuần trước"
+        ]
+      }
+    },
+    {
+      "seq": 12,
+      "type": "done",
+      "data": {
+        "status": "partial",
+        "summary": "Báo cáo tuần 07/09/2026 – 13/09/2026",
+        "commentary_status": "full",
+        "dropped_sentences": 0,
+        "request_id": "req-report-1"
+      }
+    }
+  ]
+}

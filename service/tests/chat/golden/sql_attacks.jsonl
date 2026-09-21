@@ -1,0 +1,49 @@
+{"id": "r01_trailing_dash_comment", "sql": "SELECT unit_name, issue_code FROM v_issues_current_scoped --", "expected_code": "SQL_COMMENT", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "r01_comment_hides_filter", "sql": "SELECT issue_code FROM v_issues_current_scoped WHERE unit_name = 'Truyền thống Vùng 1' -- AND 1=0", "expected_code": "SQL_COMMENT", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "block_comment", "sql": "SELECT issue_code /* bỏ scope */ FROM v_issues_current_scoped", "expected_code": "SQL_COMMENT", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "newline_comment", "sql": "SELECT issue_code FROM v_issues_current_scoped --x\nWHERE 1=1", "expected_code": "SQL_COMMENT", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "r02_subquery_base_table", "sql": "SELECT (SELECT group_concat(content) FROM feedback_records) FROM v_issues_current_scoped", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "subquery_in_where_base", "sql": "SELECT COUNT(*) AS n FROM v_issues_current_scoped WHERE feedback_id IN (SELECT feedback_id FROM feedback_records)", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "join_base_table", "sql": "SELECT r.content FROM v_issues_current_scoped i JOIN feedback_records r ON r.feedback_id = i.feedback_id", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "cte_reads_base", "sql": "WITH x AS (SELECT * FROM feedback_records) SELECT COUNT(*) AS n FROM x", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "unscoped_view", "sql": "SELECT COUNT(*) AS n FROM v_issues_current", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "schema_qualified_view", "sql": "SELECT COUNT(*) AS n FROM main.v_issues_current_scoped", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "base_labels_table", "sql": "SELECT label FROM feedback_labels", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "jobs_table", "sql": "SELECT * FROM classification_jobs", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "chat_table", "sql": "SELECT content FROM chat_messages", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "sqlite_master", "sql": "SELECT name FROM sqlite_master", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "sqlite_master_quoted_upper", "sql": "SELECT sql FROM \"SQLITE_MASTER\"", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "sqlite_temp_master", "sql": "SELECT name FROM temp.sqlite_temp_master", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "sqlite_schema", "sql": "SELECT name FROM sqlite_schema", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "union_sqlite_master", "sql": "SELECT unit_name FROM v_issues_current_scoped UNION SELECT name FROM sqlite_master", "expected_code": null, "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "union_all_same_view", "sql": "SELECT unit_name FROM v_issues_current_scoped UNION ALL SELECT unit_name FROM v_issues_current_scoped", "expected_code": "SQL_NOT_SELECT", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "except", "sql": "SELECT unit_name FROM v_issues_current_scoped EXCEPT SELECT unit_name FROM v_issues_current_scoped", "expected_code": "SQL_NOT_SELECT", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "intersect", "sql": "SELECT unit_name FROM v_issues_current_scoped INTERSECT SELECT unit_name FROM v_issues_current_scoped", "expected_code": "SQL_NOT_SELECT", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "pragma", "sql": "PRAGMA table_info(v_issues_current_scoped)", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "pragma_writable", "sql": "PRAGMA query_only = OFF", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "attach", "sql": "ATTACH DATABASE '/tmp/x.db' AS x", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "detach", "sql": "DETACH DATABASE main", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "multi_delete", "sql": "SELECT 1; DELETE FROM v_issues_current_scoped", "expected_code": "SQL_MULTI_STATEMENT", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "multi_drop", "sql": "SELECT COUNT(*) AS n FROM v_issues_current_scoped; DROP TABLE feedback_records", "expected_code": "SQL_MULTI_STATEMENT", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "insert", "sql": "INSERT INTO v_issues_current_scoped (issue_code) VALUES ('x')", "expected_code": "SQL_NOT_SELECT", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "update", "sql": "UPDATE v_issues_current_scoped SET unit_name = 'x'", "expected_code": "SQL_NOT_SELECT", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "delete", "sql": "DELETE FROM v_issues_current_scoped", "expected_code": "SQL_NOT_SELECT", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "create_view", "sql": "CREATE TEMP VIEW x AS SELECT * FROM feedback_records", "expected_code": null, "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "vacuum_into", "sql": "VACUUM INTO '/tmp/copy.db'", "expected_code": null, "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "recursive_cte", "sql": "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT x FROM c", "expected_code": null, "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "load_extension", "sql": "SELECT load_extension('/tmp/evil.so')", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "readfile", "sql": "SELECT readfile('/etc/passwd')", "expected_code": "SQL_TABLE_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "randomblob", "sql": "SELECT randomblob(1000000000) AS x FROM v_issues_current_scoped", "expected_code": "SQL_FUNCTION_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "sqlite_version", "sql": "SELECT sqlite_version() AS v FROM v_issues_current_scoped", "expected_code": "SQL_FUNCTION_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "unit_out_of_scope", "sql": "SELECT COUNT(*) AS n FROM v_issues_current_scoped WHERE unit_name = 'Nha Trang'", "expected_code": "SQL_UNIT_OUT_OF_SCOPE", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "unit_out_of_scope_in_list", "sql": "SELECT COUNT(*) AS n FROM v_issues_current_scoped WHERE unit_name IN ('Truyền thống Vùng 1', 'Nha Trang')", "expected_code": "SQL_UNIT_OUT_OF_SCOPE", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "unit_out_of_scope_reversed", "sql": "SELECT COUNT(*) AS n FROM v_issues_current_scoped WHERE 'Nha Trang' = unit_name", "expected_code": "SQL_UNIT_OUT_OF_SCOPE", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "raw_data_json", "sql": "SELECT raw_data_json FROM v_issues_current_scoped", "expected_code": "SQL_COLUMN_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "json_extract_disabled", "sql": "SELECT json_extract(raw_data_json, '$.\"Tỉnh\"') AS tinh FROM v_issues_current_scoped", "expected_code": "SQL_COLUMN_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "normalized_content", "sql": "SELECT normalized_content FROM v_issues_current_scoped", "expected_code": "SQL_COLUMN_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "content_dump", "sql": "SELECT content FROM v_issues_current_scoped", "expected_code": "SQL_COLUMN_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "content_like", "sql": "SELECT COUNT(*) AS n FROM v_issues_current_scoped WHERE content LIKE '%đèn%'", "expected_code": "SQL_COLUMN_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "bm25_score", "sql": "SELECT bm25_score FROM v_issues_current_scoped", "expected_code": "SQL_COLUMN_FORBIDDEN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "star_outer", "sql": "SELECT * FROM v_issues_current_scoped", "expected_code": "SQL_COLUMN_UNKNOWN", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "deep_nesting", "sql": "SELECT (SELECT (SELECT (SELECT (SELECT COUNT(*) FROM v_issues_current_scoped) ) ) ) AS n", "expected_code": "SQL_TOO_COMPLEX", "scope_units": ["Truyền thống Vùng 1"]}
+{"id": "too_many_joins", "sql": "SELECT COUNT(*) AS n FROM v_issues_current_scoped a JOIN v_issue_labels_scoped b ON b.feedback_id = a.feedback_id JOIN v_issue_labels_scoped c ON c.feedback_id = a.feedback_id JOIN v_issue_labels_scoped d ON d.feedback_id = a.feedback_id", "expected_code": "SQL_TOO_COMPLEX", "scope_units": ["Truyền thống Vùng 1"]}

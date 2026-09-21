@@ -1,0 +1,170 @@
+{
+  "name": "donut",
+  "question": "Loại vấn đề nào nhiều nhất tháng 8?",
+  "note": "ranking chart_hint=donut",
+  "events": [
+    {
+      "seq": 1,
+      "type": "status",
+      "data": {
+        "stage": "understanding",
+        "text": "Đang đọc câu hỏi"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "status",
+      "data": {
+        "stage": "planning",
+        "text": "Đang xác định số liệu cần lấy"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "status",
+      "data": {
+        "stage": "querying",
+        "text": "Đang truy vấn dữ liệu"
+      }
+    },
+    {
+      "seq": 4,
+      "type": "data_block",
+      "data": {
+        "block_id": "s1.get_issue_types",
+        "kind": "ranking",
+        "title": "Phân bổ theo loại vấn đề",
+        "subtitle": "01/08/2026 – 31/08/2026",
+        "payload": {
+          "items": [
+            {
+              "rank": 1,
+              "label": "Báo lỗi",
+              "value": 78,
+              "display": "78",
+              "percent": 27.18,
+              "percent_display": "27,2%"
+            },
+            {
+              "rank": 2,
+              "label": "Báo CL tốt",
+              "value": 52,
+              "display": "52",
+              "percent": 18.12,
+              "percent_display": "18,1%"
+            },
+            {
+              "rank": 3,
+              "label": "Y/c cải tiến",
+              "value": 35,
+              "display": "35",
+              "percent": 12.2,
+              "percent_display": "12,2%"
+            },
+            {
+              "rank": 4,
+              "label": "Hàng hoá",
+              "value": 28,
+              "display": "28",
+              "percent": 9.76,
+              "percent_display": "9,8%"
+            },
+            {
+              "rank": 5,
+              "label": "Bảo hành",
+              "value": 25,
+              "display": "25",
+              "percent": 8.71,
+              "percent_display": "8,7%"
+            },
+            {
+              "rank": 6,
+              "label": "Đề xuất SPM",
+              "value": 22,
+              "display": "22",
+              "percent": 7.67,
+              "percent_display": "7,7%"
+            },
+            {
+              "rank": 7,
+              "label": "HTPP",
+              "value": 18,
+              "display": "18",
+              "percent": 6.27,
+              "percent_display": "6,3%"
+            },
+            {
+              "rank": 8,
+              "label": "Hãng",
+              "value": 15,
+              "display": "15",
+              "percent": 5.23,
+              "percent_display": "5,2%"
+            },
+            {
+              "rank": 9,
+              "label": "Khác",
+              "value": 14,
+              "display": "14",
+              "percent": 4.88,
+              "percent_display": "4,9%"
+            }
+          ],
+          "total_rows": 9,
+          "truncated": false,
+          "total_issues": 287,
+          "total_display": "287",
+          "membership_count": null,
+          "excluded_missing_issue_code": 12
+        },
+        "chart_hint": "donut"
+      }
+    },
+    {
+      "seq": 5,
+      "type": "status",
+      "data": {
+        "stage": "writing",
+        "text": "Đang viết nhận định"
+      }
+    },
+    {
+      "seq": 6,
+      "type": "commentary",
+      "data": {
+        "sentence_index": 1,
+        "text": "Báo lỗi là loại vấn đề phổ biến nhất."
+      }
+    },
+    {
+      "seq": 7,
+      "type": "commentary",
+      "data": {
+        "sentence_index": 2,
+        "text": "Kết thúc nhận định."
+      }
+    },
+    {
+      "seq": 8,
+      "type": "suggestions",
+      "data": {
+        "items": [
+          "Cho xem các phản hồi cần ưu tiên xử lý.",
+          "Sản phẩm nào gặp loại vấn đề này nhiều nhất?",
+          "Tình trạng xử lý và tồn đọng trong 01/08/2026 – 31/08/2026 thế nào?"
+        ]
+      }
+    },
+    {
+      "seq": 9,
+      "type": "done",
+      "data": {
+        "status": "ok",
+        "summary": "Phân bổ theo loại vấn đề 01/08/2026 – 31/08/2026. Báo lỗi, 78, 27,2%. Báo lỗi là loại vấn đề phổ biến nhất",
+        "commentary_status": "full",
+        "dropped_sentences": 1,
+        "request_id": "syn13"
+      }
+    }
+  ]
+}

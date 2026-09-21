@@ -1,0 +1,157 @@
+{"id": "ov01", "question": "Tổng quan phản hồi tháng 8/2026", "expected_intent": "OVERVIEW", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2026-08-01", "date_to": "2026-08-31"}}
+{"id": "ov02", "question": "Tháng này có bao nhiêu vấn đề?", "expected_intent": "OVERVIEW", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2026-09-01", "date_to": "2026-09-15"}}
+{"id": "ov03", "question": "tong quan phan hoi cua Nha Trang quy 3", "expected_intent": "OVERVIEW", "expected_function": "get_overview", "expected_params_subset": {"unit_name": "Nha Trang", "date_from": "2026-07-01"}, "tags": ["no_diacritics"]}
+{"id": "ov04", "question": "Tỉ lệ vấn đề đã xử lý năm nay là bao nhiêu?", "expected_intent": "OVERVIEW", "expected_function": "get_overview"}
+{"id": "ov05", "question": "Có bao nhiêu phản hồi trùng lặp trong tuần trước?", "expected_intent": "OVERVIEW", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2026-09-07", "date_to": "2026-09-13"}}
+{"id": "ov06", "question": "Cho tôi số liệu KPI chính của Biên Hòa", "expected_intent": "OVERVIEW", "expected_function": "get_overview", "expected_params_subset": {"unit_name": "Biên Hòa"}}
+{"id": "ov07", "question": "tinh hinh phan hoi hom qua", "expected_intent": "OVERVIEW", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2026-09-14", "date_to": "2026-09-14"}, "tags": ["no_diacritics"]}
+{"id": "tr01", "question": "Xu hướng báo lỗi 3 tháng gần nhất?", "expected_intent": "TREND", "expected_function": "get_daily_trend", "expected_params_subset": {"date_from": "2026-06-16", "date_to": "2026-09-15"}}
+{"id": "tr02", "question": "Số phản hồi theo từng ngày trong tháng 8", "expected_intent": "TREND", "expected_function": "get_daily_trend", "expected_params_subset": {"date_from": "2026-08-01"}}
+{"id": "tr03", "question": "Diễn biến phản hồi tiêu cực 7 ngày qua", "expected_intent": "TREND", "expected_function": "get_daily_trend", "expected_params_subset": {"date_from": "2026-09-09"}}
+{"id": "tr04", "question": "xu huong phan hoi cua Ho Chi Minh thang nay", "expected_intent": "TREND", "expected_function": "get_daily_trend", "tags": ["no_diacritics"]}
+{"id": "tr05", "question": "Ngày nào trong tuần trước có nhiều phản hồi nhất?", "expected_intent": "TREND", "expected_function": "get_daily_trend"}
+{"id": "tr06", "question": "Phản hồi tăng hay giảm dần trong quý 3?", "expected_intent": "TREND", "expected_function": "get_daily_trend"}
+{"id": "cp01", "question": "So sánh Q2 vs Q3", "expected_intent": "COMPARISON", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2026-04-01", "compare_from": "2026-07-01"}}
+{"id": "cp02", "question": "Tháng 8 so với tháng 7 thì số vấn đề thay đổi thế nào?", "expected_intent": "COMPARISON", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2026-08-01", "compare_from": "2026-07-01"}}
+{"id": "cp03", "question": "So với tháng trước, KPI tháng này tăng hay giảm?", "expected_intent": "COMPARISON", "expected_function": "get_comparison", "expected_params_subset": {"period": "month"}}
+{"id": "cp04", "question": "so sanh quy nay voi quy truoc", "expected_intent": "COMPARISON", "expected_function": "get_comparison", "expected_params_subset": {"period": "quarter"}, "tags": ["no_diacritics"]}
+{"id": "cp05", "question": "Năm nay so với năm ngoái phản hồi nhiều hơn không?", "expected_intent": "COMPARISON"}
+{"id": "cp06", "question": "So sánh TV1 với Nha Trang tháng 8", "expected_intent": "COMPARISON", "tags": ["mixed_units"]}
+{"id": "pr01", "question": "Top 5 sản phẩm bị phản hồi nhiều nhất tháng 8", "expected_intent": "DRILL_PRODUCT", "expected_function": "get_products"}
+{"id": "pr02", "question": "Sản phẩm nào có nhiều phản hồi nhất năm 2025?", "expected_intent": "DRILL_PRODUCT", "expected_function": "get_products", "expected_params_subset": {"date_from": "2025-01-01", "date_to": "2025-12-31"}}
+{"id": "pr03", "question": "phan bo phan hoi theo san pham quy 3", "expected_intent": "DRILL_PRODUCT", "expected_function": "get_products", "tags": ["no_diacritics"]}
+{"id": "pr04", "question": "Đèn LED Bulb chiếm bao nhiêu phần trăm phản hồi?", "expected_intent": "DRILL_PRODUCT", "expected_function": "get_products"}
+{"id": "pr05", "question": "Những dòng sản phẩm nào bị báo lỗi nhiều ở Nha Trang?", "expected_intent": "DRILL_PRODUCT", "expected_function": "get_products", "expected_params_subset": {"unit_name": "Nha Trang"}}
+{"id": "pr06", "question": "Sản phẩm của Biên Hòa và TV2 bị phàn nàn nhiều nhất là gì?", "expected_intent": "DRILL_PRODUCT", "expected_function": "get_products", "tags": ["mixed_units"]}
+{"id": "un01", "question": "Đơn vị nào có nhiều phản hồi nhất tháng 8?", "expected_intent": "DRILL_UNIT", "expected_function": "get_units"}
+{"id": "un02", "question": "Phân bổ phản hồi theo chi nhánh năm nay", "expected_intent": "DRILL_UNIT", "expected_function": "get_units"}
+{"id": "un03", "question": "don vi nao nhieu van de nhat quy 3", "expected_intent": "DRILL_UNIT", "expected_function": "get_units", "tags": ["no_diacritics"]}
+{"id": "un04", "question": "Ma trận đơn vị theo loại vấn đề tháng này", "expected_intent": "DRILL_UNIT", "expected_function": "get_unit_issue_type_matrix"}
+{"id": "un05", "question": "Mỗi đơn vị gặp những loại vấn đề gì nhiều nhất?", "expected_intent": "DRILL_UNIT", "expected_function": "get_unit_issue_type_matrix"}
+{"id": "un06", "question": "Xếp hạng các vùng theo số phản hồi tuần trước", "expected_intent": "DRILL_UNIT", "expected_function": "get_units"}
+{"id": "ge01", "question": "Tỉnh nào phản hồi nhiều nhất năm 2025?", "expected_intent": "DRILL_GEOGRAPHY", "expected_function": "get_geography"}
+{"id": "ge02", "question": "Khu vực nào có nhiều phản hồi tiêu cực tháng 8?", "expected_intent": "DRILL_GEOGRAPHY", "expected_function": "get_geography"}
+{"id": "ge03", "question": "phan hoi theo tinh thanh thang nay", "expected_intent": "DRILL_GEOGRAPHY", "expected_function": "get_geography", "tags": ["no_diacritics"]}
+{"id": "ge04", "question": "Quận huyện nào ở Hà Nội có nhiều phản hồi nhất?", "expected_intent": "DRILL_GEOGRAPHY", "expected_function": "get_geography", "expected_params_subset": {"province": "Hà Nội"}}
+{"id": "ge05", "question": "Top 10 tỉnh có nhiều vấn đề quý 3", "expected_intent": "DRILL_GEOGRAPHY", "expected_function": "get_geography"}
+{"id": "ge06", "question": "Hà Nội chiếm bao nhiêu phần trăm số phản hồi?", "expected_intent": "DRILL_GEOGRAPHY", "expected_function": "get_geography"}
+{"id": "is01", "question": "Có bao nhiêu vấn đề về Bảo hành tháng 8?", "expected_intent": "DRILL_ISSUE", "expected_function": "get_issue_types"}
+{"id": "is02", "question": "Loại vấn đề nào nhiều nhất năm nay?", "expected_intent": "DRILL_ISSUE", "expected_function": "get_issue_types"}
+{"id": "is03", "question": "Phân bổ theo nhóm vấn đề chính tháng này", "expected_intent": "DRILL_ISSUE", "expected_function": "get_groups"}
+{"id": "is04", "question": "Còn bao nhiêu vấn đề chưa xử lý?", "expected_intent": "DRILL_ISSUE", "expected_function": "get_status_backlog"}
+{"id": "is05", "question": "Những vấn đề nào cần ưu tiên xử lý tuần này?", "expected_intent": "DRILL_ISSUE", "expected_function": "get_priority_issues"}
+{"id": "is06", "question": "ty le ton dong van de cua TV1", "expected_intent": "DRILL_ISSUE", "expected_function": "get_status_backlog", "tags": ["no_diacritics"]}
+{"id": "is07", "question": "Tóm tắt các vấn đề nổi cộm tháng 8", "expected_intent": "DRILL_ISSUE", "expected_function": "get_issue_types"}
+{"id": "lf01", "question": "Cho tôi xem các phản hồi về Bảo hành tháng 8", "expected_intent": "LOOKUP_FEEDBACK", "expected_function": "get_issues"}
+{"id": "lf02", "question": "Liệt kê phản hồi tiêu cực của Nha Trang tuần trước", "expected_intent": "LOOKUP_FEEDBACK", "expected_function": "get_issues"}
+{"id": "lf03", "question": "xem danh sach phan hoi chua xu ly hom nay", "expected_intent": "LOOKUP_FEEDBACK", "expected_function": "get_issues", "tags": ["no_diacritics"]}
+{"id": "lf04", "question": "Hiển thị 10 phản hồi mới nhất về Đèn LED Tube", "expected_intent": "LOOKUP_FEEDBACK", "expected_function": "get_issues"}
+{"id": "lf05", "question": "Các phản hồi từ nguồn Zalo tháng này", "expected_intent": "LOOKUP_FEEDBACK", "expected_function": "get_issues"}
+{"id": "lf06", "question": "Xem phản hồi của TV1 và Nha Trang về hàng giả", "expected_intent": "LOOKUP_FEEDBACK", "expected_function": "get_issues", "tags": ["mixed_units"]}
+{"id": "fi01", "question": "Phản hồi mã NT-0012 nằm ở file nào?", "expected_intent": "LOOKUP_FILE"}
+{"id": "fi02", "question": "Liệt kê phản hồi trong file DMS_T8.xlsx", "expected_intent": "LOOKUP_FILE"}
+{"id": "fi03", "question": "phan hoi nay o dong nao trong file excel", "expected_intent": "LOOKUP_FILE", "tags": ["no_diacritics"]}
+{"id": "fi04", "question": "Cho tôi biết phản hồi về đèn chập chờn lấy từ file nào", "expected_intent": "LOOKUP_FILE"}
+{"id": "fi05", "question": "Dòng số mấy trong file gốc chứa phản hồi mã TV1-0033?", "expected_intent": "LOOKUP_FILE"}
+{"id": "si01", "question": "Tìm phản hồi giống mã NT-0012", "expected_intent": "LOOKUP_SIMILAR"}
+{"id": "si02", "question": "Có phản hồi nào tương tự cái thứ 2 không?", "expected_intent": "LOOKUP_SIMILAR"}
+{"id": "si03", "question": "tim cac phan hoi giong phan hoi vua roi", "expected_intent": "LOOKUP_SIMILAR", "tags": ["no_diacritics"]}
+{"id": "si04", "question": "Những phản hồi nào có nội dung gần giống phản hồi mã BH-0101?", "expected_intent": "LOOKUP_SIMILAR"}
+{"id": "si05", "question": "Gom các phản hồi trùng ý với phản hồi đèn chập chờn ở trên", "expected_intent": "LOOKUP_SIMILAR"}
+{"id": "rd01", "question": "Báo cáo hôm nay", "expected_intent": "REPORT_DAILY"}
+{"id": "rd02", "question": "Làm báo cáo ngày hôm qua cho tôi", "expected_intent": "REPORT_DAILY"}
+{"id": "rd03", "question": "bao cao ngay 14/09", "expected_intent": "REPORT_DAILY", "tags": ["no_diacritics"]}
+{"id": "rd04", "question": "Tổng hợp báo cáo cuối ngày của Nha Trang", "expected_intent": "REPORT_DAILY"}
+{"id": "rd05", "question": "Gửi tôi báo cáo trong ngày", "expected_intent": "REPORT_DAILY"}
+{"id": "rw01", "question": "Báo cáo tuần trước", "expected_intent": "REPORT_WEEKLY"}
+{"id": "rw02", "question": "Làm báo cáo tuần này", "expected_intent": "REPORT_WEEKLY"}
+{"id": "rw03", "question": "bao cao tuan cua TV2", "expected_intent": "REPORT_WEEKLY", "tags": ["no_diacritics"]}
+{"id": "rw04", "question": "Tổng hợp báo cáo hàng tuần", "expected_intent": "REPORT_WEEKLY"}
+{"id": "rw05", "question": "Báo cáo tuần 2 tháng 9", "expected_intent": "REPORT_WEEKLY"}
+{"id": "rc01", "question": "Làm báo cáo từ 01/08 đến 15/08", "expected_intent": "REPORT_CUSTOM"}
+{"id": "rc02", "question": "Báo cáo quý 3 về sản phẩm và địa lý", "expected_intent": "REPORT_CUSTOM"}
+{"id": "rc03", "question": "bao cao tu thang 6 den thang 8", "expected_intent": "REPORT_CUSTOM", "tags": ["no_diacritics"]}
+{"id": "rc04", "question": "Lập báo cáo 6 tháng đầu năm cho Biên Hòa", "expected_intent": "REPORT_CUSTOM"}
+{"id": "rc05", "question": "Báo cáo tháng 8 cho ban giám đốc", "expected_intent": "REPORT_CUSTOM"}
+{"id": "re01", "question": "Xuất Excel báo cáo tháng 8", "expected_intent": "REPORT_EXPORT"}
+{"id": "re02", "question": "Tải file kết quả vừa rồi", "expected_intent": "REPORT_EXPORT"}
+{"id": "re03", "question": "xuat bao cao tuan truoc ra excel", "expected_intent": "REPORT_EXPORT", "tags": ["no_diacritics"]}
+{"id": "re04", "question": "Cho tôi file Excel danh sách phản hồi tiêu cực tháng này", "expected_intent": "REPORT_EXPORT"}
+{"id": "re05", "question": "Export kết quả so sánh ở trên", "expected_intent": "REPORT_EXPORT"}
+{"id": "he01", "question": "Nhãn Báo lỗi nghĩa là gì?", "expected_intent": "HELP"}
+{"id": "he02", "question": "Trợ lý này dùng như thế nào?", "expected_intent": "HELP"}
+{"id": "he03", "question": "Bạn có thể trả lời những câu hỏi gì?", "expected_intent": "HELP"}
+{"id": "he04", "question": "nhan HTPP la gi", "expected_intent": "HELP", "tags": ["no_diacritics"]}
+{"id": "he05", "question": "Định nghĩa nhãn Tin trung lập", "expected_intent": "HELP"}
+{"id": "he06", "question": "Hướng dẫn tôi cách hỏi về dữ liệu", "expected_intent": "HELP"}
+{"id": "st01", "question": "Thời tiết Hà Nội ngày mai thế nào?", "expected_state": "OUT_OF_DOMAIN"}
+{"id": "st02", "question": "Giá vàng hôm nay bao nhiêu?", "expected_state": "OUT_OF_DOMAIN"}
+{"id": "st03", "question": "Viết cho tôi một bài thơ về mùa thu", "expected_state": "OUT_OF_DOMAIN"}
+{"id": "st04", "question": "ai la tong thong my", "expected_state": "OUT_OF_DOMAIN", "tags": ["no_diacritics"]}
+{"id": "st05", "question": "Tính giúp tôi 15% của 2 triệu", "expected_state": "OUT_OF_DOMAIN"}
+{"id": "st06", "question": "Công thức nấu phở bò", "expected_state": "OUT_OF_DOMAIN"}
+{"id": "st07", "question": "Cái đó thì sao?", "expected_state": "CLARIFY"}
+{"id": "st08", "question": "Cho tôi số liệu", "expected_state": "CLARIFY"}
+{"id": "st09", "question": "ok", "expected_state": "CLARIFY", "tags": ["no_diacritics"]}
+{"id": "st10", "question": "nhiều không", "expected_state": "CLARIFY"}
+{"id": "st11", "question": "Còn bên kia?", "expected_state": "CLARIFY"}
+{"id": "st12", "question": "Xem giúp tôi cái hôm trước", "expected_state": "CLARIFY"}
+{"id": "ft01", "question": "Tìm phản hồi đèn chập chờn tháng 8", "expected_intent": "LOOKUP_FEEDBACK", "expected_pattern": "fts5_search", "expected_terms": ["chập chờn"], "milestone": "M3"}
+{"id": "ft02", "question": "tim phan hoi doi tra den rang dong", "expected_intent": "LOOKUP_FEEDBACK", "expected_pattern": "fts5_search", "expected_terms": ["doi tra"], "milestone": "M3", "tags": ["no_diacritics"]}
+{"id": "ft03", "question": "Có khách nào phàn nàn giao hàng chậm ở TP.HCM không?", "expected_intent": "LOOKUP_FEEDBACK", "expected_pattern": "fts5_search", "expected_terms": ["giao hàng"], "milestone": "M3"}
+{"id": "ft04", "question": "Tìm phản hồi nhắc tới phích nước bị rò", "expected_intent": "LOOKUP_FEEDBACK", "expected_pattern": "fts5_search", "expected_terms": ["rò"], "milestone": "M3"}
+{"id": "ft05", "question": "Phản hồi nào nói đèn bị nóng chảy vỏ nhựa?", "expected_intent": "LOOKUP_FEEDBACK", "expected_pattern": "fts5_search", "expected_terms": ["nóng chảy"], "milestone": "M3"}
+{"id": "ft06", "question": "tim phan hoi ve den nhap nhay ban dem cua TV1", "expected_intent": "LOOKUP_FEEDBACK", "expected_pattern": "fts5_search", "expected_terms": ["nhap nhay"], "milestone": "M3", "tags": ["no_diacritics"]}
+{"id": "ft07", "question": "Khách viết gì về website không đăng nhập được?", "expected_intent": "LOOKUP_FEEDBACK", "expected_pattern": "fts5_search", "expected_terms": ["đăng nhập"], "milestone": "M3"}
+{"id": "ft08", "question": "Tìm phản hồi có cụm đèn OR quạt tích điện", "expected_intent": "LOOKUP_FEEDBACK", "expected_pattern": "fts5_search", "expected_terms": ["quạt"], "milestone": "M3"}
+{"id": "ft09", "question": "Phản hồi về vận chuyển làm vỡ bóng đèn nằm ở file nào?", "expected_intent": "LOOKUP_FILE", "expected_pattern": "fts5_search", "expected_terms": ["vỡ"], "milestone": "M3"}
+{"id": "ft10", "question": "phan hoi den khong sang lay tu file nao", "expected_intent": "LOOKUP_FILE", "expected_pattern": "fts5_search", "expected_terms": ["khong sang"], "milestone": "M3", "tags": ["no_diacritics"]}
+{"id": "ft11", "question": "Cho biết dòng nào trong file chứa phản hồi ổ cắm bị cháy", "expected_intent": "LOOKUP_FILE", "expected_pattern": "fts5_search", "expected_terms": ["cháy"], "milestone": "M3"}
+{"id": "ft12", "question": "Có phản hồi nào giống cái đầu tiên không?", "expected_intent": "LOOKUP_SIMILAR", "expected_pattern": "fts5_search", "milestone": "M3"}
+{"id": "ft13", "question": "tim phan hoi tuong tu cai thu ba", "expected_intent": "LOOKUP_SIMILAR", "expected_pattern": "fts5_search", "milestone": "M3", "tags": ["no_diacritics"]}
+{"id": "ft14", "question": "Những phản hồi na ná phản hồi số 2 ở trên", "expected_intent": "LOOKUP_SIMILAR", "expected_pattern": "fts5_search", "milestone": "M3"}
+{"id": "ft15", "question": "Tìm phản hồi tiêu cực về chấn lưu kêu rè của Truyền thống Vùng 2", "expected_intent": "LOOKUP_FEEDBACK", "expected_pattern": "fts5_search", "expected_terms": ["chấn lưu"], "milestone": "M3"}
+{"id": "rd06", "question": "Báo cáo ngày", "expected_intent": "REPORT_DAILY", "expected_sections": [], "milestone": "M5"}
+{"id": "rd07", "question": "Cho tôi báo cáo hôm qua về loại vấn đề", "expected_intent": "REPORT_DAILY", "expected_sections": ["issue_types"], "milestone": "M5"}
+{"id": "rw06", "question": "Báo cáo tuần", "expected_intent": "REPORT_WEEKLY", "expected_sections": [], "milestone": "M5"}
+{"id": "rw07", "question": "Báo cáo tuần trước, phần sản phẩm thôi", "expected_intent": "REPORT_WEEKLY", "expected_sections": ["products"], "milestone": "M5"}
+{"id": "rw08", "question": "bao cao tuan ve don vi va dia ban", "expected_intent": "REPORT_WEEKLY", "expected_sections": ["units", "geography"], "milestone": "M5", "tags": ["no_diacritics"]}
+{"id": "rc06", "question": "Báo cáo tháng 8 về sản phẩm và địa lý", "expected_intent": "REPORT_CUSTOM", "expected_sections": ["products", "geography"], "milestone": "M5"}
+{"id": "rc07", "question": "Làm báo cáo cho tôi", "expected_intent": "REPORT_CUSTOM", "expected_sections": [], "milestone": "M5"}
+{"id": "rc08", "question": "Báo cáo từ 01/07 đến 30/09 tập trung vào vấn đề ưu tiên", "expected_intent": "REPORT_CUSTOM", "expected_sections": ["priority"], "milestone": "M5"}
+{"id": "rc09", "question": "Báo cáo quý 2 về diễn biến theo ngày", "expected_intent": "REPORT_CUSTOM", "expected_sections": ["trend"], "milestone": "M5"}
+{"id": "re06", "question": "Xuất báo cáo tuần này ra file", "expected_intent": "REPORT_EXPORT", "expected_sections": [], "milestone": "M5"}
+{"id": "re07", "question": "Tải về Excel kết quả ở trên", "expected_intent": "REPORT_EXPORT", "expected_sections": [], "milestone": "M5"}
+{"id": "re08", "question": "cho minh file excel bao cao thang 8 ve san pham", "expected_intent": "REPORT_EXPORT", "expected_sections": ["products"], "milestone": "M5", "tags": ["no_diacritics"]}
+{"id": "d01", "question": "Tháng 8 Truyền thống Vùng 2 có bao nhiêu vấn đề?", "expected_intent": "OVERVIEW", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2026-08-01", "date_to": "2026-08-31", "unit_name": "Truyền thống Vùng 2"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d02", "question": "Quý 2 toàn công ty ghi nhận bao nhiêu phản hồi?", "expected_intent": "OVERVIEW", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2026-04-01", "date_to": "2026-06-30"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d03", "question": "thang 12/2025 co bao nhieu van de", "expected_intent": "OVERVIEW", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2025-12-01", "date_to": "2025-12-31"}, "tags": ["no_diacritics"], "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d04", "question": "Phản hồi tháng 8 biến động theo từng ngày thế nào?", "expected_intent": "TREND", "expected_function": "get_daily_trend", "expected_params_subset": {"date_from": "2026-08-01", "date_to": "2026-08-31"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d05", "question": "Diễn biến theo ngày của Nha Trang trong tháng 7", "expected_intent": "TREND", "expected_function": "get_daily_trend", "expected_params_subset": {"date_from": "2026-07-01", "date_to": "2026-07-31", "unit_name": "Nha Trang"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d06", "question": "Tháng 8 so với tháng 7 thì số vấn đề thế nào?", "expected_intent": "COMPARISON", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2026-08-01", "date_to": "2026-08-31", "compare_from": "2026-07-01", "compare_to": "2026-07-31"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d07", "question": "So sánh Truyền thống Vùng 2 và Truyền thống Vùng 1 trong tháng 8", "expected_intent": "COMPARISON", "tags": ["mixed_units"], "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d08", "question": "Sản phẩm Bulb bị phản hồi bao nhiêu lần trong tháng 8?", "expected_intent": "DRILL_PRODUCT", "expected_function": "get_products", "expected_params_subset": {"date_from": "2026-08-01", "date_to": "2026-08-31"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d09", "question": "Mặt hàng nào bị phản hồi nhiều nhất quý 2?", "expected_intent": "DRILL_PRODUCT", "expected_function": "get_products", "expected_params_subset": {"date_from": "2026-04-01", "date_to": "2026-06-30"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d10", "question": "top san pham bi phan hoi thang 8 cua truyền thống vùng 1", "expected_intent": "DRILL_PRODUCT", "expected_function": "get_products", "expected_params_subset": {"date_from": "2026-08-01", "date_to": "2026-08-31"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d11", "question": "Đơn vị nào có nhiều phản hồi nhất tháng 8?", "expected_intent": "DRILL_UNIT", "expected_function": "get_units", "expected_params_subset": {"date_from": "2026-08-01", "date_to": "2026-08-31"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d12", "question": "Xếp hạng các đơn vị trong quý 2, Biên Hòa đứng thứ mấy?", "expected_intent": "DRILL_UNIT", "expected_function": "get_units", "expected_params_subset": {"date_from": "2026-04-01", "date_to": "2026-06-30"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d13", "question": "Ma trận đơn vị và loại vấn đề tháng 8 của Truyền thống Vùng 3 và Truyền thống Vùng 1", "expected_intent": "DRILL_UNIT", "tags": ["mixed_units"], "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d14", "question": "Tỉnh nào có nhiều phản hồi nhất tháng 8?", "expected_intent": "DRILL_GEOGRAPHY", "expected_function": "get_geography", "expected_params_subset": {"date_from": "2026-08-01", "date_to": "2026-08-31"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d15", "question": "Phản hồi ở Thành phố Hà Nội quý 2 có nhiều không?", "expected_intent": "DRILL_GEOGRAPHY", "expected_function": "get_geography", "expected_params_subset": {"date_from": "2026-04-01", "date_to": "2026-06-30", "province": "Thành phố Hà Nội"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d16", "question": "dia ban nao nhieu phan hoi nhat thang 7", "expected_intent": "DRILL_GEOGRAPHY", "expected_function": "get_geography", "expected_params_subset": {"date_from": "2026-07-01", "date_to": "2026-07-31"}, "tags": ["no_diacritics"], "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d17", "question": "Tháng 8 có bao nhiêu phản hồi nhãn Báo lỗi?", "expected_intent": "DRILL_ISSUE", "expected_function": "get_issue_types", "expected_params_subset": {"date_from": "2026-08-01", "date_to": "2026-08-31"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d18", "question": "Còn bao nhiêu vấn đề chưa xử lý trong quý 2?", "expected_intent": "DRILL_ISSUE", "expected_function": "get_status_backlog", "expected_params_subset": {"date_from": "2026-04-01", "date_to": "2026-06-30"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d19", "question": "Những vấn đề nào cần ưu tiên xử lý ở Nha Trang tháng 8?", "expected_intent": "DRILL_ISSUE", "expected_function": "get_priority_issues", "expected_params_subset": {"date_from": "2026-08-01", "date_to": "2026-08-31", "unit_name": "Nha Trang"}, "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d20", "question": "nhom van de nao chiem nhieu nhat thang 8", "expected_intent": "DRILL_ISSUE", "expected_function": "get_groups", "expected_params_subset": {"date_from": "2026-08-01", "date_to": "2026-08-31"}, "tags": ["no_diacritics"], "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d21", "question": "Cho xem phản hồi về vợt muỗi bị hỏng trong tháng 8", "expected_intent": "LOOKUP_FEEDBACK", "expected_pattern": "fts5_search", "expected_terms": ["vợt muỗi"], "milestone": "M3", "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d22", "question": "Khách phàn nàn gì về ấm siêu tốc quý 2?", "expected_intent": "LOOKUP_FEEDBACK", "expected_pattern": "fts5_search", "expected_terms": ["ấm siêu tốc"], "milestone": "M3", "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d23", "question": "cho toi xem phan hoi ve aptomat nhay", "expected_intent": "LOOKUP_FEEDBACK", "expected_pattern": "fts5_search", "expected_terms": ["aptomat nhay"], "milestone": "M3", "tags": ["no_diacritics"], "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d24", "question": "Phản hồi về đèn downlight bị chớp nháy nằm ở file nào?", "expected_intent": "LOOKUP_FILE", "expected_pattern": "fts5_search", "expected_terms": ["chớp nháy"], "milestone": "M3", "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d25", "question": "Có phản hồi nào giống phản hồi vừa rồi không?", "expected_intent": "LOOKUP_SIMILAR", "expected_pattern": "fts5_search", "expected_terms": [], "milestone": "M3", "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d26", "question": "Làm báo cáo ngày 04/09 cho tôi", "expected_intent": "REPORT_DAILY", "expected_sections": [], "milestone": "M5", "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d27", "question": "Báo cáo tuần trước của Truyền thống Vùng 2", "expected_intent": "REPORT_WEEKLY", "expected_sections": [], "milestone": "M5", "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d28", "question": "Báo cáo tháng 8 tập trung vào sản phẩm và đơn vị", "expected_intent": "REPORT_CUSTOM", "expected_sections": ["products", "units"], "milestone": "M5", "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d29", "question": "xuat bao cao thang 7 ra excel", "expected_intent": "REPORT_EXPORT", "expected_sections": [], "milestone": "M5", "tags": ["no_diacritics"], "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d30", "question": "Nhãn “Y/c cải tiến” nghĩa là gì?", "expected_intent": "HELP", "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d31", "question": "Cho tôi số liệu", "expected_state": "CLARIFY", "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}
+{"id": "d32", "question": "Giá cổ phiếu Rạng Đông hôm nay bao nhiêu?", "expected_state": "OUT_OF_DOMAIN", "source": "dữ liệu thật 87 file DMS (2025-10-13 → 2026-09-05), sinh 2026-09-21"}

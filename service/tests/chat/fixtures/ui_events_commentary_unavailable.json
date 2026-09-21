@@ -1,0 +1,122 @@
+{
+  "name": "commentary_unavailable",
+  "question": "Sản phẩm nào bị phản hồi nhiều nhất tháng 8?",
+  "note": "LLM lỗi trước câu đầu → done.commentary_status=unavailable",
+  "events": [
+    {
+      "seq": 1,
+      "type": "status",
+      "data": {
+        "stage": "understanding",
+        "text": "Đang đọc câu hỏi"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "status",
+      "data": {
+        "stage": "planning",
+        "text": "Đang xác định số liệu cần lấy"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "status",
+      "data": {
+        "stage": "querying",
+        "text": "Đang truy vấn dữ liệu"
+      }
+    },
+    {
+      "seq": 4,
+      "type": "data_block",
+      "data": {
+        "block_id": "s1.get_products",
+        "kind": "ranking",
+        "title": "Xếp hạng sản phẩm",
+        "subtitle": "01/08/2026 – 31/08/2026",
+        "payload": {
+          "items": [
+            {
+              "rank": 1,
+              "label": "Đèn LED AT04.S 9W",
+              "value": 45,
+              "display": "45",
+              "percent": 15.68,
+              "percent_display": "15,7%"
+            },
+            {
+              "rank": 2,
+              "label": "Búp trụ RLT02",
+              "value": 28,
+              "display": "28",
+              "percent": 9.76,
+              "percent_display": "9,8%"
+            },
+            {
+              "rank": 3,
+              "label": "Đèn panel RDP01",
+              "value": 22,
+              "display": "22",
+              "percent": 7.67,
+              "percent_display": "7,7%"
+            },
+            {
+              "rank": 4,
+              "label": "Đèn năng lượng NL-01",
+              "value": 18,
+              "display": "18",
+              "percent": 6.27,
+              "percent_display": "6,3%"
+            },
+            {
+              "rank": 5,
+              "label": "Ống nhựa PPR D20",
+              "value": 15,
+              "display": "15",
+              "percent": 5.23,
+              "percent_display": "5,2%"
+            }
+          ],
+          "total_rows": 5,
+          "truncated": false,
+          "total_issues": 287,
+          "total_display": "287",
+          "membership_count": 237,
+          "excluded_missing_issue_code": 12
+        },
+        "chart_hint": "bar"
+      }
+    },
+    {
+      "seq": 5,
+      "type": "status",
+      "data": {
+        "stage": "writing",
+        "text": "Đang viết nhận định"
+      }
+    },
+    {
+      "seq": 6,
+      "type": "suggestions",
+      "data": {
+        "items": [
+          "Các phản hồi về sản phẩm này nói gì?",
+          "Loại vấn đề nào hay gặp nhất trong 01/08/2026 – 31/08/2026?",
+          "Tổng quan trong 01/08/2026 – 31/08/2026 ra sao?"
+        ]
+      }
+    },
+    {
+      "seq": 7,
+      "type": "done",
+      "data": {
+        "status": "ok",
+        "summary": "Xếp hạng sản phẩm 01/08/2026 – 31/08/2026. Đèn LED AT04.S 9W, 45, 15,7%",
+        "commentary_status": "unavailable",
+        "dropped_sentences": 0,
+        "request_id": "syn07"
+      }
+    }
+  ]
+}

@@ -1,0 +1,150 @@
+{
+  "name": "table",
+  "question": "So sánh tháng 8 với tháng 7",
+  "note": "Bảng 6 cột (payload dựng tay vì mock get_comparison trả metrics rỗng — M04)",
+  "events": [
+    {
+      "seq": 1,
+      "type": "status",
+      "data": {
+        "stage": "understanding",
+        "text": "Đang đọc câu hỏi"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "status",
+      "data": {
+        "stage": "planning",
+        "text": "Đang xác định số liệu cần lấy"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "status",
+      "data": {
+        "stage": "querying",
+        "text": "Đang truy vấn dữ liệu"
+      }
+    },
+    {
+      "seq": 4,
+      "type": "data_block",
+      "data": {
+        "block_id": "s1.get_comparison",
+        "kind": "table",
+        "title": "So sánh với kỳ trước",
+        "subtitle": "01/08/2026 – 31/08/2026",
+        "payload": {
+          "columns": [
+            {
+              "key": "label",
+              "header_vi": "Chỉ tiêu",
+              "format": "text"
+            },
+            {
+              "key": "current",
+              "header_vi": "Kỳ này",
+              "format": "int"
+            },
+            {
+              "key": "previous",
+              "header_vi": "Kỳ trước",
+              "format": "int"
+            },
+            {
+              "key": "change_percent",
+              "header_vi": "Thay đổi",
+              "format": "pct"
+            },
+            {
+              "key": "unit",
+              "header_vi": "Đơn vị tính",
+              "format": "text"
+            },
+            {
+              "key": "note",
+              "header_vi": "Ghi chú",
+              "format": "text"
+            }
+          ],
+          "rows": [
+            {
+              "label": "Tổng số vấn đề",
+              "current": "287",
+              "previous": "250",
+              "change_percent": "14,8%",
+              "unit": "vấn đề",
+              "note": "Tăng so với tháng 7"
+            },
+            {
+              "label": "Đã xử lý",
+              "current": "215",
+              "previous": "198",
+              "change_percent": "8,6%",
+              "unit": "vấn đề",
+              "note": ""
+            },
+            {
+              "label": "Chưa xử lý",
+              "current": "72",
+              "previous": "52",
+              "change_percent": "38,5%",
+              "unit": "vấn đề",
+              "note": "Cần theo dõi tồn đọng"
+            },
+            {
+              "label": "Tiêu cực",
+              "current": "120",
+              "previous": "101",
+              "change_percent": "18,8%",
+              "unit": "vấn đề",
+              "note": ""
+            },
+            {
+              "label": "Tích cực",
+              "current": "96",
+              "previous": "97",
+              "change_percent": "-1%",
+              "unit": "vấn đề",
+              "note": ""
+            },
+            {
+              "label": "Trùng lặp",
+              "current": "25",
+              "previous": "30",
+              "change_percent": "-16,7%",
+              "unit": "vấn đề",
+              "note": "Giảm nhờ lọc trùng"
+            }
+          ],
+          "total_rows": 6,
+          "truncated": false
+        },
+        "chart_hint": "none"
+      }
+    },
+    {
+      "seq": 5,
+      "type": "suggestions",
+      "data": {
+        "items": [
+          "Sản phẩm nào bị phản hồi nhiều nhất trong 01/08/2026 – 31/08/2026?",
+          "Xu hướng theo từng ngày trong 01/08/2026 – 31/08/2026 thế nào?",
+          "Loại vấn đề nào tăng nhiều nhất?"
+        ]
+      }
+    },
+    {
+      "seq": 6,
+      "type": "done",
+      "data": {
+        "status": "ok",
+        "summary": "So sánh với kỳ trước 01/08/2026 – 31/08/2026",
+        "commentary_status": "skipped",
+        "dropped_sentences": 0,
+        "request_id": "syn01"
+      }
+    }
+  ]
+}
