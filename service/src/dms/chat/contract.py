@@ -93,37 +93,49 @@ METADATA_ALIASES: dict[str, tuple[str, ...]] = {
 
 # Cột chính thức trong bảng feedback_records — từ repository.py:_apply_migration_1
 FEEDBACK_RECORD_COLUMNS: list[str] = [
-    "feedback_id",          # INTEGER PRIMARY KEY
-    "source_file_key",      # TEXT NOT NULL
-    "source_file_name",     # TEXT NOT NULL
-    "source_row_number",    # INTEGER NOT NULL
-    "last_job_id",          # TEXT NOT NULL
-    "raw_data_json",        # TEXT NOT NULL (JSON blob chứa dữ liệu gốc Excel)
-    "content",              # TEXT NOT NULL (nội dung phản hồi)
-    "normalized_content",   # TEXT NOT NULL (đã chuẩn hóa cho duplicate check)
-    "issue_code",           # TEXT (mã vấn đề, có thể null)
-    "issue_date",           # TEXT (ngày ghi nhận, ISO format)
-    "source",               # TEXT (nguồn: Zalo, Hotline, Nhân viên KD...)
-    "unit_name",            # TEXT (tên đơn vị: CN Miền Nam, CN Miền Bắc...)
-    "business_status",      # TEXT (trạng thái: Đã xử lý, Chờ xử lý...)
-    "product",              # TEXT (sản phẩm đã phân loại)
-    "product_line",         # TEXT (dòng sản phẩm)
-    "model",                # TEXT (model sản phẩm)
-    "sentiment",            # TEXT (Tích cực / Trung lập / Tiêu cực)
-    "brand",                # TEXT (thương hiệu: Rạng Đông / đối thủ)
-    "bm25_score",           # REAL (điểm BM25 matching sản phẩm)
-    "classification_state", # TEXT NOT NULL (pending / completed / failed)
-    "is_active",            # INTEGER NOT NULL DEFAULT 1
-    "created_at",           # TEXT NOT NULL (ISO timestamp)
-    "updated_at",           # TEXT NOT NULL (ISO timestamp)
-    "classified_at",        # TEXT (ISO timestamp)
+    "feedback_id",  # INTEGER PRIMARY KEY
+    "source_file_key",  # TEXT NOT NULL
+    "source_file_name",  # TEXT NOT NULL
+    "source_row_number",  # INTEGER NOT NULL
+    "last_job_id",  # TEXT NOT NULL
+    "raw_data_json",  # TEXT NOT NULL (JSON blob chứa dữ liệu gốc Excel)
+    "content",  # TEXT NOT NULL (nội dung phản hồi)
+    "normalized_content",  # TEXT NOT NULL (đã chuẩn hóa cho duplicate check)
+    "issue_code",  # TEXT (mã vấn đề, có thể null)
+    "issue_date",  # TEXT (ngày ghi nhận, ISO format)
+    "source",  # TEXT (nguồn: Zalo, Hotline, Nhân viên KD...)
+    "unit_name",  # TEXT (tên đơn vị: CN Miền Nam, CN Miền Bắc...)
+    "business_status",  # TEXT (trạng thái: Đã xử lý, Chờ xử lý...)
+    "product",  # TEXT (sản phẩm đã phân loại)
+    "product_line",  # TEXT (dòng sản phẩm)
+    "model",  # TEXT (model sản phẩm)
+    "sentiment",  # TEXT (Tích cực / Trung lập / Tiêu cực)
+    "brand",  # TEXT (thương hiệu: Rạng Đông / đối thủ)
+    "bm25_score",  # REAL (điểm BM25 matching sản phẩm)
+    "classification_state",  # TEXT NOT NULL (pending / completed / failed)
+    "is_active",  # INTEGER NOT NULL DEFAULT 1
+    "created_at",  # TEXT NOT NULL (ISO timestamp)
+    "updated_at",  # TEXT NOT NULL (ISO timestamp)
+    "classified_at",  # TEXT (ISO timestamp)
 ]
 
 # Cột dùng được cho chatbot query (an toàn, không chứa internal state)
 QUERYABLE_COLUMNS: list[str] = [
-    "feedback_id", "content", "normalized_content", "issue_code", "issue_date",
-    "source", "unit_name", "business_status", "product", "product_line",
-    "model", "sentiment", "brand", "bm25_score", "raw_data_json",
+    "feedback_id",
+    "content",
+    "normalized_content",
+    "issue_code",
+    "issue_date",
+    "source",
+    "unit_name",
+    "business_status",
+    "product",
+    "product_line",
+    "model",
+    "sentiment",
+    "brand",
+    "bm25_score",
+    "raw_data_json",
 ]
 
 
@@ -151,10 +163,10 @@ class QueryPattern(StrEnum):
 class AnswerShape(StrEnum):
     """Hình dạng câu trả lời cho Khối [7] Response Shaper."""
 
-    TABLE = "table"           # Bảng Markdown (top products, issues by type...)
-    NARRATIVE = "narrative"   # Tường thuật tổng hợp + trích dẫn nguồn
-    NUMBER = "number"         # Một con số KPI duy nhất
-    LIST = "list"             # Danh sách bullet points
+    TABLE = "table"  # Bảng Markdown (top products, issues by type...)
+    NARRATIVE = "narrative"  # Tường thuật tổng hợp + trích dẫn nguồn
+    NUMBER = "number"  # Một con số KPI duy nhất
+    LIST = "list"  # Danh sách bullet points
 
 
 class QueryStatus(StrEnum):
@@ -183,7 +195,7 @@ class UserScope:
     """
 
     username: str
-    role: str                                       # "admin" | "user"
+    role: str  # "admin" | "user"
     display_name: str = ""
     unit_ids: list[str] = field(default_factory=list)  # ["CN Miền Nam", "CN Miền Bắc"]
 
@@ -230,11 +242,11 @@ class QueryPlan:
     # ── Luôn có ──
     pattern: QueryPattern
     answer_shape: AnswerShape
-    original_query: str                  # Câu hỏi đã qua Bước 0 Contextualize
-    confidence: float = 0.85             # Planner confidence (0.0 - 1.0)
+    original_query: str  # Câu hỏi đã qua Bước 0 Contextualize
+    confidence: float = 0.85  # Planner confidence (0.0 - 1.0)
 
     # ── Pattern 1: SQL Template (Function Registry) ──
-    function_name: str | None = None     # Tên hàm: get_overview, get_daily_trend...
+    function_name: str | None = None  # Tên hàm: get_overview, get_daily_trend...
     params: dict[str, Any] = field(default_factory=dict)
     # params có thể chứa:
     #   date_from: str (ISO date)   — lọc từ ngày
@@ -253,13 +265,13 @@ class QueryPlan:
     #   feedback_id: int            — tra 1 phản hồi cụ thể
 
     # ── Pattern 2: Semantic View ──
-    sql: str | None = None               # SQL trên scoped view (chỉ SELECT)
+    sql: str | None = None  # SQL trên scoped view (chỉ SELECT)
 
     # ── Pattern 3: FTS5 Search ──
-    fts_query: str | None = None         # Chuỗi tìm kiếm (có dấu hoặc không dấu)
+    fts_query: str | None = None  # Chuỗi tìm kiếm (có dấu hoặc không dấu)
     fts_filters: dict[str, Any] = field(default_factory=dict)
     # fts_filters: date_from, date_to, unit_name, sentiment, source, label
-    fts_limit: int = 20                  # Max results (1-100)
+    fts_limit: int = 20  # Max results (1-100)
 
     # ── Pattern 4: JSON Extract ──
     json_keys: list[str] = field(default_factory=list)  # Keys từ raw_data_json
@@ -323,7 +335,7 @@ class QueryResultMetadata:
 
     total_rows: int = 0
     query_time_ms: int = 0
-    scope_applied: str = ""           # "admin" hoặc "unit_ids=[CN Miền Nam]"
+    scope_applied: str = ""  # "admin" hoặc "unit_ids=[CN Miền Nam]"
     cache_hit: bool = False
     pattern_used: str = ""
     executed_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
@@ -377,7 +389,8 @@ class QueryResult:
         """Cache key = hash(plan + scope_unit_ids). Khối [6] CACHE dùng."""
         key_data = json.dumps(
             {"plan": plan.to_dict(), "scope_units": sorted(scope.unit_ids)},
-            sort_keys=True, ensure_ascii=False,
+            sort_keys=True,
+            ensure_ascii=False,
         )
         return hashlib.sha256(key_data.encode()).hexdigest()[:16]
 
@@ -399,9 +412,9 @@ class ChatMessage:
 
     role: MessageRole
     content: str
-    metadata_json: str | None = None     # {"pattern_used", "sources", "tokens", "latency_ms"}
+    metadata_json: str | None = None  # {"pattern_used", "sources", "tokens", "latency_ms"}
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
-    message_id: int | None = None        # Auto-assigned bởi DB
+    message_id: int | None = None  # Auto-assigned bởi DB
 
 
 @dataclass
@@ -409,13 +422,13 @@ class ChatSession:
     """1 phiên chat — lưu SQLite bảng chat_sessions."""
 
     session_id: str
-    user_id: str                         # Khớp UserStore.username
+    user_id: str  # Khớp UserStore.username
     title: str = ""
-    active_domain: str = ""              # overview | trend | drill | lookup | report
-    slots_json: str = "{}"               # Filter state: date_range, unit, product...
+    active_domain: str = ""  # overview | trend | drill | lookup | report
+    slots_json: str = "{}"  # Filter state: date_range, unit, product...
     token_count: int = 0
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
-    expires_at: str = ""                 # TTL 7 ngày, housekeeping dọn
+    expires_at: str = ""  # TTL 7 ngày, housekeeping dọn
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -448,7 +461,6 @@ FUNCTION_REGISTRY_SPEC: dict[str, dict[str, Any]] = {
         "params": ["date_from", "date_to", "period"],  # period: month|quarter|year
         "returns": "Object: current_range, previous_range, metrics (5 KPIs with change + change_percent)",
     },
-
     # ── Phân bổ / Distribution ──
     "get_daily_trend": {
         "description": "Xu hướng phản hồi theo ngày (tích cực, tiêu cực, trung lập)",
@@ -499,7 +511,6 @@ FUNCTION_REGISTRY_SPEC: dict[str, dict[str, Any]] = {
         "params": ["date_from", "date_to", "province", "district", "unit_name"],
         "returns": "Object: provinces[], districts[], top_province, top_district, total_issues",
     },
-
     # ── Trạng thái xử lý ──
     "get_status_backlog": {
         "description": "Trạng thái xử lý: đã xử lý, tồn đọng, phân bố tuổi tồn",
@@ -508,15 +519,24 @@ FUNCTION_REGISTRY_SPEC: dict[str, dict[str, Any]] = {
         "params": ["date_from", "date_to", "province", "district", "unit_name"],
         "returns": "Object: statuses[], processed_count, backlog_count, backlog_rate, age_buckets[]",
     },
-
     # ── Chi tiết records ──
     "get_issues": {
         "description": "Danh sách phản hồi chi tiết có phân trang (pagination)",
         "maps_to": "FeedbackAnalyticsService.issues()",
         "api_endpoint": "GET /api/analytics/issues",
-        "params": ["date_from", "date_to", "province", "district", "unit_name",
-                    "source", "label", "product", "business_status",
-                    "page", "page_size"],
+        "params": [
+            "date_from",
+            "date_to",
+            "province",
+            "district",
+            "unit_name",
+            "source",
+            "label",
+            "product",
+            "business_status",
+            "page",
+            "page_size",
+        ],
         "returns": "Object: items[] (full feedback records), total, page, page_size, total_pages",
     },
     "get_priority_issues": {
@@ -533,7 +553,6 @@ FUNCTION_REGISTRY_SPEC: dict[str, dict[str, Any]] = {
         "params": ["date_from", "date_to", "page", "page_size"],
         "returns": "Grouped duplicate records with match counts",
     },
-
     # ── Ma trận & Chất lượng ──
     "get_unit_issue_type_matrix": {
         "description": "Ma trận chéo đơn vị × loại vấn đề",

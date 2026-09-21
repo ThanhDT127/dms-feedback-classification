@@ -160,12 +160,14 @@ def sync_fts_index(conn: sqlite3.Connection, limit: int | None = None) -> int:
             source = str(row[4] or "")
 
             raw_records.append((fid, content, product, unit, source))
-            nodau_records.append((
-                fid,
-                unidecode(content).lower(),
-                unidecode(product).lower(),
-                unit,
-            ))
+            nodau_records.append(
+                (
+                    fid,
+                    unidecode(content).lower(),
+                    unidecode(product).lower(),
+                    unit,
+                )
+            )
 
         conn.executemany(
             "INSERT INTO feedback_fts_raw(feedback_id, content, product, unit_name, source) VALUES (?, ?, ?, ?, ?)",

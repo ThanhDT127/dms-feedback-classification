@@ -48,9 +48,7 @@ class TestRealDatabaseIntegration:
         """Kiểm tra get_overview trên dữ liệu thật với quyền Admin vs User."""
         executor = SecureQueryExecutor(real_repo)
         admin_scope = UserScope(username="admin", role="admin")
-        user_scope = UserScope(
-            username="user_vung2", role="user", unit_ids=["Truyền thống Vùng 2"]
-        )
+        user_scope = UserScope(username="user_vung2", role="user", unit_ids=["Truyền thống Vùng 2"])
 
         plan = QueryPlan(
             pattern=QueryPattern.SQL_TEMPLATE,

@@ -39,5 +39,7 @@ def build_view_query(
     limit_stmt = f" LIMIT {int(limit)}" if limit is not None else ""
     offset_stmt = f" OFFSET {int(offset)}" if offset is not None else ""
 
-    sql = f"SELECT {selected_cols} FROM {view_name}{where_stmt}{order_stmt}{limit_stmt}{offset_stmt}"
+    sql = (
+        f"SELECT {selected_cols} FROM {view_name}{where_stmt}{order_stmt}{limit_stmt}{offset_stmt}"
+    )
     return sql, query_params

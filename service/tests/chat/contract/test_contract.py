@@ -169,8 +169,10 @@ class TestQueryResult:
     def test_ok_result(self):
         result = QueryResult.ok(
             data=[{"product": "AT04", "count": 45}],
-            total_rows=1, query_time_ms=23,
-            scope_applied="admin", pattern_used="sql_template",
+            total_rows=1,
+            query_time_ms=23,
+            scope_applied="admin",
+            pattern_used="sql_template",
         )
         assert result.status == QueryStatus.OK
         assert result.data[0]["product"] == "AT04"
@@ -189,7 +191,8 @@ class TestQueryResult:
     def test_roundtrip(self):
         original = QueryResult.ok(
             data=[{"label": "Báo lỗi", "issue_count": 78}],
-            total_rows=1, pattern_used="sql_template",
+            total_rows=1,
+            pattern_used="sql_template",
         )
         d = original.to_dict()
         restored = QueryResult.from_dict(d)
@@ -198,8 +201,10 @@ class TestQueryResult:
 
     def test_cache_key_deterministic(self):
         plan = QueryPlan(
-            pattern=QueryPattern.SQL_TEMPLATE, answer_shape=AnswerShape.NUMBER,
-            original_query="Test", function_name="get_overview",
+            pattern=QueryPattern.SQL_TEMPLATE,
+            answer_shape=AnswerShape.NUMBER,
+            original_query="Test",
+            function_name="get_overview",
         )
         scope = UserScope(username="u1", role="user", unit_ids=["CN Miền Nam"])
         result = QueryResult.ok(data=[])
@@ -210,8 +215,10 @@ class TestQueryResult:
 
     def test_cache_key_scope_sensitive(self):
         plan = QueryPlan(
-            pattern=QueryPattern.SQL_TEMPLATE, answer_shape=AnswerShape.NUMBER,
-            original_query="Test", function_name="get_overview",
+            pattern=QueryPattern.SQL_TEMPLATE,
+            answer_shape=AnswerShape.NUMBER,
+            original_query="Test",
+            function_name="get_overview",
         )
         scope_mn = UserScope(username="u1", role="user", unit_ids=["CN Miền Nam"])
         scope_mb = UserScope(username="u2", role="user", unit_ids=["CN Miền Bắc"])
@@ -273,8 +280,10 @@ class TestMockExecutorContract:
 
     def test_get_overview(self, executor, admin):
         plan = QueryPlan(
-            pattern=QueryPattern.SQL_TEMPLATE, answer_shape=AnswerShape.NUMBER,
-            original_query="Tổng quan tháng 8", function_name="get_overview",
+            pattern=QueryPattern.SQL_TEMPLATE,
+            answer_shape=AnswerShape.NUMBER,
+            original_query="Tổng quan tháng 8",
+            function_name="get_overview",
             params={"date_from": "2026-08-01", "date_to": "2026-08-31"},
         )
         result = executor.execute(plan, admin)
@@ -290,8 +299,10 @@ class TestMockExecutorContract:
 
     def test_get_daily_trend(self, executor, admin):
         plan = QueryPlan(
-            pattern=QueryPattern.SQL_TEMPLATE, answer_shape=AnswerShape.TABLE,
-            original_query="Xu hướng tháng 8", function_name="get_daily_trend",
+            pattern=QueryPattern.SQL_TEMPLATE,
+            answer_shape=AnswerShape.TABLE,
+            original_query="Xu hướng tháng 8",
+            function_name="get_daily_trend",
             params={"date_from": "2026-08-01", "date_to": "2026-08-31"},
         )
         result = executor.execute(plan, admin)
@@ -307,8 +318,10 @@ class TestMockExecutorContract:
 
     def test_invalid_function_rejected(self, executor, admin):
         plan = QueryPlan(
-            pattern=QueryPattern.SQL_TEMPLATE, answer_shape=AnswerShape.NUMBER,
-            original_query="Test", function_name="get_nonexistent",
+            pattern=QueryPattern.SQL_TEMPLATE,
+            answer_shape=AnswerShape.NUMBER,
+            original_query="Test",
+            function_name="get_nonexistent",
         )
         result = executor.execute(plan, admin)
         assert result.status == QueryStatus.ERROR
@@ -317,8 +330,10 @@ class TestMockExecutorContract:
 
     def test_fts5_search(self, executor, admin):
         plan = QueryPlan(
-            pattern=QueryPattern.FTS5_SEARCH, answer_shape=AnswerShape.LIST,
-            original_query="Tìm cháy bóng", fts_query="cháy",
+            pattern=QueryPattern.FTS5_SEARCH,
+            answer_shape=AnswerShape.LIST,
+            original_query="Tìm cháy bóng",
+            fts_query="cháy",
             fts_limit=5,
         )
         result = executor.execute(plan, admin)
@@ -329,8 +344,10 @@ class TestMockExecutorContract:
 
     def test_json_extract(self, executor, admin):
         plan = QueryPlan(
-            pattern=QueryPattern.JSON_EXTRACT, answer_shape=AnswerShape.NARRATIVE,
-            original_query="Chi tiết KH", json_keys=["Tên khách hàng", "Số điện thoại"],
+            pattern=QueryPattern.JSON_EXTRACT,
+            answer_shape=AnswerShape.NARRATIVE,
+            original_query="Chi tiết KH",
+            json_keys=["Tên khách hàng", "Số điện thoại"],
             json_filters={"issue_code": "FB-2026-10001"},
         )
         result = executor.execute(plan, admin)
@@ -343,8 +360,10 @@ class TestMockExecutorContract:
     def test_units_scope_filtered(self, executor, user_mn):
         """User CN Miền Nam chỉ thấy data Miền Nam."""
         plan = QueryPlan(
-            pattern=QueryPattern.SQL_TEMPLATE, answer_shape=AnswerShape.TABLE,
-            original_query="Đơn vị", function_name="get_units",
+            pattern=QueryPattern.SQL_TEMPLATE,
+            answer_shape=AnswerShape.TABLE,
+            original_query="Đơn vị",
+            function_name="get_units",
         )
         result = executor.execute(plan, user_mn)
         assert result.status == QueryStatus.OK
@@ -355,8 +374,10 @@ class TestMockExecutorContract:
     def test_issues_scope_filtered(self, executor, user_mn):
         """User CN Miền Nam chỉ thấy issues Miền Nam."""
         plan = QueryPlan(
-            pattern=QueryPattern.SQL_TEMPLATE, answer_shape=AnswerShape.TABLE,
-            original_query="Danh sách phản hồi", function_name="get_issues",
+            pattern=QueryPattern.SQL_TEMPLATE,
+            answer_shape=AnswerShape.TABLE,
+            original_query="Danh sách phản hồi",
+            function_name="get_issues",
         )
         result = executor.execute(plan, user_mn)
         assert result.status == QueryStatus.OK
@@ -369,7 +390,8 @@ class TestMockExecutorContract:
     def test_missing_required_field_rejected(self, executor, admin):
         """Plan thiếu field bắt buộc bị reject."""
         plan = QueryPlan(
-            pattern=QueryPattern.SQL_TEMPLATE, answer_shape=AnswerShape.NUMBER,
+            pattern=QueryPattern.SQL_TEMPLATE,
+            answer_shape=AnswerShape.NUMBER,
             original_query="Test",
             # Missing function_name
         )
@@ -391,6 +413,7 @@ class TestFunctionRegistrySpec:
 
     def test_all_functions_in_mock(self):
         from dms.chat.mock_executor import _FUNCTION_MAP
+
         for name in FUNCTION_REGISTRY_SPEC:
             assert name in _FUNCTION_MAP, f"Function '{name}' missing from MockQueryExecutor"
 

@@ -41,7 +41,7 @@ _FORBIDDEN_SQL_PATTERNS = re.compile(
 def _sanitize_fts_query(query: str) -> str:
     """Loại bỏ ký tự đặc biệt có thể làm lỗi cú pháp truy vấn FTS5 SQLite."""
     # Bỏ các ký tự cú pháp SQLite FTS5 nhạy cảm: *, ^, :, (, ), "
-    cleaned = re.sub(r'[\*\^\:\(\)\"]+', " ", query).strip()
+    cleaned = re.sub(r"[\*\^\:\(\)\"]+", " ", query).strip()
     words = [w for w in cleaned.split() if w]
     if not words:
         return ""
@@ -67,7 +67,9 @@ class SecureQueryExecutor:
         # 1. Kiểm tra validation của plan
         validation_errors = plan.validate()
         if validation_errors:
-            return QueryResult.error(f"Kế hoạch truy vấn không hợp lệ: {'; '.join(validation_errors)}")
+            return QueryResult.error(
+                f"Kế hoạch truy vấn không hợp lệ: {'; '.join(validation_errors)}"
+            )
 
         try:
             # 2. Điều phối theo pattern
@@ -117,17 +119,11 @@ class SecureQueryExecutor:
     # PATTERN IMPLEMENTATIONS
     # ═══════════════════════════════════════════════════════════════════
 
-    def _execute_sql_template(
-        self, plan: QueryPlan, scope: UserScope
-    ) -> list[dict[str, Any]]:
+    def _execute_sql_template(self, plan: QueryPlan, scope: UserScope) -> list[dict[str, Any]]:
         """Pattern 1: Chạy hàm SQL mẫu qua FunctionRegistry."""
-        return self.function_registry.execute(
-            plan.function_name or "", plan.params, scope
-        )
+        return self.function_registry.execute(plan.function_name or "", plan.params, scope)
 
-    def _execute_semantic_view(
-        self, plan: QueryPlan, scope: UserScope
-    ) -> list[dict[str, Any]]:
+    def _execute_semantic_view(self, plan: QueryPlan, scope: UserScope) -> list[dict[str, Any]]:
         """Pattern 2: Chạy SQL an toàn trên Semantic View."""
         raw_sql = str(plan.sql or "").strip()
 
@@ -147,9 +143,7 @@ class SecureQueryExecutor:
             rows = cursor.execute(scoped_sql).fetchall()
             return [dict(r) for r in rows]
 
-    def _execute_fts5_search(
-        self, plan: QueryPlan, scope: UserScope
-    ) -> list[dict[str, Any]]:
+    def _execute_fts5_search(self, plan: QueryPlan, scope: UserScope) -> list[dict[str, Any]]:
         """Pattern 3: Tìm kiếm toàn văn FTS5 dual-index tiếng Việt."""
         raw_query = str(plan.fts_query or "").strip()
         sanitized_raw = _sanitize_fts_query(raw_query)
@@ -195,16 +189,16 @@ class SecureQueryExecutor:
 
             return [dict(r) for r in rows]
 
-    def _execute_json_extract(
-        self, plan: QueryPlan, scope: UserScope
-    ) -> list[dict[str, Any]]:
+    def _execute_json_extract(self, plan: QueryPlan, scope: UserScope) -> list[dict[str, Any]]:
         """Pattern 4: Trích xuất dynamic key từ raw_data_json của một bản ghi."""
         filters = plan.json_filters or {}
         feedback_id = filters.get("feedback_id")
         issue_code = filters.get("issue_code")
 
         if not feedback_id and not issue_code:
-            raise ValueError("Pattern 'json_extract' yêu cầu 'feedback_id' hoặc 'issue_code' trong json_filters.")
+            raise ValueError(
+                "Pattern 'json_extract' yêu cầu 'feedback_id' hoặc 'issue_code' trong json_filters."
+            )
 
         with self.repository._conn() as conn:
             conn.row_factory = sqlite3.Row

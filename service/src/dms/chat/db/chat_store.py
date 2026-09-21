@@ -141,9 +141,7 @@ class ChatStore:
     def delete_session(self, session_id: str) -> bool:
         """Xóa session và toàn bộ tin nhắn liên quan (CASCADE)."""
         with self._conn() as conn:
-            cursor = conn.execute(
-                "DELETE FROM chat_sessions WHERE session_id = ?", (session_id,)
-            )
+            cursor = conn.execute("DELETE FROM chat_sessions WHERE session_id = ?", (session_id,))
             return cursor.rowcount > 0
 
     def add_message(
@@ -211,7 +209,5 @@ class ChatStore:
         """Dọn dẹp các session đã quá hạn TTL."""
         now = now_iso or datetime.now(UTC).isoformat()
         with self._conn() as conn:
-            cursor = conn.execute(
-                "DELETE FROM chat_sessions WHERE expires_at < ?", (now,)
-            )
+            cursor = conn.execute("DELETE FROM chat_sessions WHERE expires_at < ?", (now,))
             return cursor.rowcount

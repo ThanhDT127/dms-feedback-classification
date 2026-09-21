@@ -47,9 +47,7 @@ class ScopePolicy:
         if isinstance(raw_unit_ids, str):
             raw_unit_ids = [raw_unit_ids]
 
-        cleaned_units = [
-            str(u).strip() for u in raw_unit_ids if str(u).strip()
-        ]
+        cleaned_units = [str(u).strip() for u in raw_unit_ids if str(u).strip()]
 
         return UserScope(
             username=username,
@@ -59,9 +57,7 @@ class ScopePolicy:
         )
 
     @classmethod
-    def enforce_scope_on_params(
-        cls, params: dict[str, Any], scope: UserScope
-    ) -> dict[str, Any]:
+    def enforce_scope_on_params(cls, params: dict[str, Any], scope: UserScope) -> dict[str, Any]:
         """Ép ràng buộc đơn vị vào dictionary tham số của truy vấn.
 
         Raises:
@@ -102,9 +98,7 @@ class ScopePolicy:
         return scoped_params
 
     @classmethod
-    def enforce_sql_where(
-        cls, sql: str, scope: UserScope, unit_column: str = "unit_name"
-    ) -> str:
+    def enforce_sql_where(cls, sql: str, scope: UserScope, unit_column: str = "unit_name") -> str:
         """Chèn điều kiện lọc đơn vị an toàn vào câu lệnh SQL SELECT.
 
         Nếu câu lệnh đã có WHERE: chèn ({condition}) AND ...
@@ -119,9 +113,7 @@ class ScopePolicy:
             condition = "1 = 0"
         else:
             quote = "'"
-            escaped_units = ", ".join(
-                quote + u.replace("'", "''") + quote for u in scope.unit_ids
-            )
+            escaped_units = ", ".join(quote + u.replace("'", "''") + quote for u in scope.unit_ids)
             condition = f"{unit_column} IN ({escaped_units})"
 
         # Tìm vị trí WHERE
@@ -133,9 +125,7 @@ class ScopePolicy:
             return f"{clean_sql[:pos]} ({condition}) AND ({clean_sql[pos:].strip()})"
 
         # Nếu không có WHERE, tìm vị trí trước GROUP BY / HAVING / ORDER BY / LIMIT / WINDOW
-        clause_split = re.compile(
-            r"\b(GROUP\s+BY|HAVING|ORDER\s+BY|LIMIT|WINDOW)\b", re.IGNORECASE
-        )
+        clause_split = re.compile(r"\b(GROUP\s+BY|HAVING|ORDER\s+BY|LIMIT|WINDOW)\b", re.IGNORECASE)
         match_clause = clause_split.search(clean_sql)
         if match_clause:
             pos = match_clause.start()
@@ -159,7 +149,5 @@ class ScopePolicy:
 
         allowed_set = {u.casefold() for u in scope.unit_ids}
         return [
-            row
-            for row in rows
-            if str(row.get(unit_key) or "").strip().casefold() in allowed_set
+            row for row in rows if str(row.get(unit_key) or "").strip().casefold() in allowed_set
         ]

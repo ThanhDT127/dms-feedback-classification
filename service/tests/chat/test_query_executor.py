@@ -37,19 +37,25 @@ def test_db_repo(tmp_path):
             """
         )
 
-        raw_data_1 = json.dumps({
-            "Tên khách hàng": "Nguyễn Văn A",
-            "Số điện thoại": "0912345678",
-            "Địa chỉ": "Hồ Chí Minh",
-            "Lỗi chi tiết": "Cháy tụ điện",
-        }, ensure_ascii=False)
+        raw_data_1 = json.dumps(
+            {
+                "Tên khách hàng": "Nguyễn Văn A",
+                "Số điện thoại": "0912345678",
+                "Địa chỉ": "Hồ Chí Minh",
+                "Lỗi chi tiết": "Cháy tụ điện",
+            },
+            ensure_ascii=False,
+        )
 
-        raw_data_2 = json.dumps({
-            "Tên khách hàng": "Trần Thị B",
-            "Số điện thoại": "0987654321",
-            "Địa chỉ": "Hà Nội",
-            "Lỗi chi tiết": "Mối hàn ống hở",
-        }, ensure_ascii=False)
+        raw_data_2 = json.dumps(
+            {
+                "Tên khách hàng": "Trần Thị B",
+                "Số điện thoại": "0987654321",
+                "Địa chỉ": "Hà Nội",
+                "Lỗi chi tiết": "Mối hàn ống hở",
+            },
+            ensure_ascii=False,
+        )
 
         conn.execute(
             """
