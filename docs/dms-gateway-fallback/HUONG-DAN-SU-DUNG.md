@@ -13,7 +13,7 @@ Tài liệu hướng dẫn cấu hình, vận hành và xử lý sự cố cho m
 GEMINI_BACKEND=gateway
 
 # Endpoint OpenAI-compatible của API Gateway (bắt buộc đường dẫn chat completions cụ thể)
-GATEWAY_CHAT_COMPLETIONS_URL=http://apigateway.rangdong.com.vn:50888/v1/chat/completions
+GATEWAY_CHAT_COMPLETIONS_URL=https://apigateway.rangdong.com.vn:50888/v1/chat/completions
 
 # API Key / Virtual Key cấp cho DMS trên Gateway
 GATEWAY_API_KEY=your-gateway-api-key-here

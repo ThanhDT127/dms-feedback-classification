@@ -90,7 +90,7 @@ Các tên mới chưa tồn tại trong DMS. Không ghi giá trị thực vào `
 
 Gateway mode không yêu cầu direct Google credential khi fallback tắt. Các yêu cầu Azure/SharePoint và JWT khác vẫn giữ. Nếu fallback bật nhưng thiếu cấu hình/file direct: ghi cảnh báo cấu hình đã lọc, tắt fallback hiệu lực, tiếp tục Gateway-only; không âm thầm đi AI Studio. File tồn tại không chứng minh quyền Google; lỗi dựng direct client phải nổi lên và được audit. Cấu hình ngưỡng không hợp lệ phải bị từ chối, không được sửa ngầm.
 
-URL cung cấp `http://apigateway.rangdong.com.vn:50888/` chỉ là origin tham khảo, không phải giá trị sẵn dùng của `GATEWAY_CHAT_COMPLETIONS_URL`. HTTPS hoặc mạng riêng được duyệt là gate trước live use.
+URL cung cấp `https://apigateway.rangdong.com.vn:50888/` chỉ là origin tham khảo, không phải giá trị sẵn dùng của `GATEWAY_CHAT_COMPLETIONS_URL`. HTTPS hoặc mạng riêng được duyệt là gate trước live use.
 
 ## 4. Wire contract
 

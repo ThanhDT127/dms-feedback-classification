@@ -6,7 +6,7 @@
 
 ## Why
 
-DMS hiện gọi Google trực tiếp bằng `GeminiClient`, trong khi đã có địa chỉ ingress được cung cấp: `http://apigateway.rangdong.com.vn:50888/`. Cần một chế độ Gateway dùng chung cho các lượt text/JSON, giữ danh tính người thực hiện và khả năng đối soát usage. Khi Gateway không kết nối được, DMS có thể gọi trực tiếp Vertex **chỉ nếu người vận hành chủ động bật chính sách đó**.
+DMS hiện gọi Google trực tiếp bằng `GeminiClient`, trong khi đã có địa chỉ ingress HTTPS được cung cấp: `https://apigateway.rangdong.com.vn:50888/`. Cần một chế độ Gateway dùng chung cho các lượt text/JSON, giữ danh tính người thực hiện và khả năng đối soát usage. Khi Gateway không kết nối được, DMS có thể gọi trực tiếp Vertex **chỉ nếu người vận hành chủ động bật chính sách đó**.
 
 Tài liệu [CRM tham khảo](../gateway-fallback-drop-mail-alerts/proposal.md) mô tả gỡ SMTP trên một codebase khác. DMS chưa có các lớp `_GatewayClient`/`_FallbackClient` và không có SMTP transport tương ứng. Vì vậy đây là **tích hợp mới cho DMS**, không phải áp nguyên patch gỡ mail của CRM. Giữ nguyên bộ tham khảo, không sao chép dấu hoàn tất hoặc kết quả test CRM sang DMS.
 
