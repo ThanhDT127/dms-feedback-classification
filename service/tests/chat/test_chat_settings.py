@@ -279,3 +279,18 @@ def test_chat_memory_and_budget_settings_defaults(settings):
 def test_invalid_chat_memory_settings_rejected(override):
     with pytest.raises(ValidationError):
         Settings(**{**_REQUIRED, **override})
+
+
+def test_chat_redis_url_defaults_to_empty(settings):
+    assert settings.chat_redis_url == ""
+
+
+def test_chat_redis_url_is_trimmed():
+    settings = Settings(**{**_REQUIRED, "chat_redis_url": "  redis://redis:6379/0  "})
+    assert settings.chat_redis_url == "redis://redis:6379/0"
+
+
+@pytest.mark.parametrize("override", [{"chat_redis_url": "localhost:6379"}, {"chat_redis_url": "redis"}])
+def test_invalid_chat_redis_url_rejected(override):
+    with pytest.raises(ValidationError):
+        Settings(**{**_REQUIRED, **override})

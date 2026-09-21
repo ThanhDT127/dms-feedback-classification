@@ -37,6 +37,7 @@ from .answer_buffer import AnswerBuffer, InMemoryAnswerBuffer
 from .audit import log_turn_audit
 from .history_adapter import HistoryAdapter
 from .rate_limiter import AskRateLimiter
+from .redis_answer_buffer import RedisAnswerBuffer, build_redis_client
 from .session_service import ChatSessionService, SessionServiceConfig
 from .turn_runner import ChatTurnRunner, RunnerConfig, TurnRecord
 
@@ -115,6 +116,29 @@ def warn_if_buffer_not_shared(buffer: AnswerBuffer, workers: int | None = None) 
         )
         return True
     return False
+
+
+def build_answer_buffer(settings: Settings) -> AnswerBuffer:
+    """Có ``CHAT_REDIS_URL`` thì dùng buffer chung cho mọi worker; không thì giữ trong RAM.
+
+    Redis hỏng lúc khởi động không được làm sập web: ghi log và lùi về bản in-memory, lúc đó
+    ``warn_if_buffer_not_shared`` sẽ cảnh báo tiếp nếu đang chạy nhiều worker.
+    """
+    stale_after = 2 * float(settings.chat_turn_timeout_seconds)
+    url = str(settings.chat_redis_url or "").strip()
+    if not url:
+        return InMemoryAnswerBuffer(stale_after_seconds=stale_after)
+    try:
+        client = build_redis_client(url)
+        client.ping()
+    except Exception as exc:
+        logger.error(
+            "chat_answer_buffer_redis_unavailable",
+            extra={"error_type": type(exc).__name__, "error": str(exc)[:200]},
+        )
+        return InMemoryAnswerBuffer(stale_after_seconds=stale_after)
+    logger.info("chat_answer_buffer_redis", extra={"ttl_stale_after": stale_after})
+    return RedisAnswerBuffer(client, stale_after_seconds=stale_after)
 
 
 def build_orchestrator(
@@ -199,9 +223,7 @@ def build_chat_services(
                 ttl_seconds=float(settings.chat_metadata_ttl_seconds),
             )
 
-    buffer = buffer or InMemoryAnswerBuffer(
-        stale_after_seconds=2 * float(settings.chat_turn_timeout_seconds)
-    )
+    buffer = buffer or build_answer_buffer(settings)
     warn_if_buffer_not_shared(buffer)
     sessions = ChatSessionService(store, config=SessionServiceConfig.from_settings(settings))
 

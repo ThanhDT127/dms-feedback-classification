@@ -100,7 +100,7 @@ class FakeUserStore:
 
 
 class Env:
-    def __init__(self, tmp_path: Path, monkeypatch, **overrides) -> None:
+    def __init__(self, tmp_path: Path, monkeypatch, *, buffer=None, **overrides) -> None:
         values = dict(
             azure_tenant_id="tenant",
             azure_client_id="client",
@@ -125,7 +125,9 @@ class Env:
         conn.execute("PRAGMA foreign_keys = ON")
         apply_chat_migrations(conn)
         self.store = ChatStore(lambda: conn)
-        self.buffer = InMemoryAnswerBuffer(monotonic=lambda: time.monotonic() + self.offset[0])
+        self.buffer = buffer or InMemoryAnswerBuffer(
+            monotonic=lambda: time.monotonic() + self.offset[0]
+        )
         self.services = build_chat_services(
             self.settings,
             llm=self.llm,

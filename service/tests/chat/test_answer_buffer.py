@@ -6,6 +6,7 @@ chạy lại đúng bộ này. Factory nhận ``clock`` giả để test TTL kh�
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -13,6 +14,7 @@ from collections.abc import Callable
 import pytest
 
 from dms.chat.ws.answer_buffer import AnswerBuffer, InMemoryAnswerBuffer
+from dms.chat.ws.redis_answer_buffer import RedisAnswerBuffer
 
 
 class FakeClock:
@@ -28,16 +30,53 @@ class FakeClock:
 
 BufferFactory = Callable[[FakeClock], AnswerBuffer]
 
+
+# Đặt DMS_TEST_REDIS_URL=redis://127.0.0.1:6379/0 để chạy đúng bộ này với server thật.
+REAL_REDIS_URL = os.environ.get("DMS_TEST_REDIS_URL", "").strip()
+
+
+def _redis_client():
+    """Redis giả trong tiến trình, đủ cho CI."""
+    import fakeredis
+
+    return fakeredis.FakeRedis(decode_responses=True)
+
+
+def _real_redis_client():
+    from dms.chat.ws.redis_answer_buffer import build_redis_client
+
+    client = build_redis_client(REAL_REDIS_URL)
+    client.flushdb()  # mỗi lần tạo buffer bắt đầu từ DB sạch
+    return client
+
+
 BUFFER_FACTORIES: dict[str, BufferFactory] = {
     "in_memory": lambda clock: InMemoryAnswerBuffer(stale_after_seconds=120, wall_clock=clock),
+    "redis": lambda clock: RedisAnswerBuffer(
+        _redis_client(), stale_after_seconds=120, clock=clock
+    ),
 }
+
+if REAL_REDIS_URL:
+    BUFFER_FACTORIES["real_redis"] = lambda clock: RedisAnswerBuffer(
+        _real_redis_client(), stale_after_seconds=120, clock=clock
+    )
 
 # Bản in-memory dùng đồng hồ thật cho monotonic để read có timeout; TTL test dùng factory riêng.
 TTL_FACTORIES: dict[str, BufferFactory] = {
     "in_memory": lambda clock: InMemoryAnswerBuffer(
         stale_after_seconds=120, monotonic=clock, wall_clock=clock
     ),
+    "redis": lambda clock: RedisAnswerBuffer(
+        _redis_client(), stale_after_seconds=120, clock=clock, monotonic=clock
+    ),
 }
+
+
+if REAL_REDIS_URL:
+    TTL_FACTORIES["real_redis"] = lambda clock: RedisAnswerBuffer(
+        _real_redis_client(), stale_after_seconds=120, clock=clock, monotonic=clock
+    )
 
 
 @pytest.fixture(params=sorted(BUFFER_FACTORIES))

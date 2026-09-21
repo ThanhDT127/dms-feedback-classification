@@ -66,6 +66,9 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD}
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+      # Buffer câu trả lời chat dùng chung giữa các worker; bỏ biến này thì mỗi worker giữ riêng
+      # và resume sau khi rớt mạng chỉ chạy đúng khi GUNICORN_WORKERS=1.
+      - CHAT_REDIS_URL=${CHAT_REDIS_URL:-redis://redis:6379/0}
     volumes:
       - ./data:/app/data
       - ./src:/app/src
@@ -79,6 +82,9 @@ services:
       - dms_logs:/app/data/logs
     mem_limit: 2g
     cpus: 1.0
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/')"]
       interval: 30s
@@ -90,6 +96,27 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: dms-redis
+    restart: unless-stopped
+    # Buffer câu trả lời chat là dữ liệu tạm: không bật AOF, hết RAM thì bỏ khoá cũ nhất.
+    command: redis-server --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
+    expose:
+      - "6379"
+    mem_limit: 192m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
 
   nginx:
     image: nginx:alpine

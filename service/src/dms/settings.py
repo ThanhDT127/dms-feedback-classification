@@ -143,6 +143,8 @@ class Settings(BaseSettings):
     chat_answer_buffer_ttl_seconds: int = Field(600, alias="CHAT_ANSWER_BUFFER_TTL_SECONDS")
     chat_ws_idle_timeout_seconds: float = Field(300.0, alias="CHAT_WS_IDLE_TIMEOUT_SECONDS")
     chat_message_metadata_max_bytes: int = Field(262144, alias="CHAT_MESSAGE_METADATA_MAX_BYTES")
+    # Buffer câu trả lời dùng chung giữa các worker; rỗng = giữ trong RAM của một tiến trình.
+    chat_redis_url: str = Field("", alias="CHAT_REDIS_URL")
     # Chat báo cáo và xuất Excel (b10)
     chat_report_max_steps: int = Field(8, alias="CHAT_REPORT_MAX_STEPS")
     chat_report_turn_timeout_seconds: float = Field(
@@ -330,6 +332,9 @@ class Settings(BaseSettings):
             raise ValueError("chat_ws_idle_timeout_seconds must be > 0")
         if int(self.chat_message_metadata_max_bytes) < 4096:
             raise ValueError("chat_message_metadata_max_bytes must be >= 4096")
+        self.chat_redis_url = self.chat_redis_url.strip()
+        if self.chat_redis_url and "://" not in self.chat_redis_url:
+            raise ValueError("chat_redis_url must be a URL, e.g. redis://redis:6379/0")
         if not 1 <= int(self.chat_report_max_steps) <= 20:
             raise ValueError("chat_report_max_steps must be in [1, 20]")
         if float(self.chat_report_turn_timeout_seconds) < float(self.chat_step_timeout_seconds):
