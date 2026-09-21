@@ -33,6 +33,7 @@ dependencies = [
   "bcrypt>=4.1.0,<5",
   "gunicorn>=21.2.0,<24",
   "slowapi>=0.1.9",
+  "sqlglot>=27,<28",
 ]
 
 [project.optional-dependencies]
