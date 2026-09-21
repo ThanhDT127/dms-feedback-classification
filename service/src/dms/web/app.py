@@ -19,6 +19,8 @@ from ..settings import SERVICE_DIR
 from .api.analytics_api import router as analytics_router
 from .api.auth_api import router as auth_router
 from .api.auth_api import user_router
+from .api.chat_api import config_router as chat_config_router
+from .api.chat_api import router as chat_router
 from .api.classify import router as classify_router
 from .api.files import router as files_router
 from .api.metrics_api import router as metrics_router
@@ -39,6 +41,36 @@ async def _token_blacklist_cleanup_loop() -> None:
     while True:
         cleanup()
         await asyncio.sleep(300)
+
+
+def _clear_expired_chat_sessions() -> int:
+    from . import deps
+
+    services = deps.get_chat_services()
+    if services is None:
+        return 0
+    return int(services.sessions.store.clear_expired_sessions() or 0)
+
+
+async def _chat_session_cleanup_loop(interval_seconds: float) -> None:
+    """Dọn phiên chat quá hạn định kỳ (b11 D10); nhiều worker cùng dọn cũng không sao."""
+    while True:
+        try:
+            removed = await asyncio.to_thread(_clear_expired_chat_sessions)
+            if removed:
+                logger.info("chat_sessions_cleaned", extra={"removed": removed})
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("chat_session_cleanup_failed: %s", exc)
+        await asyncio.sleep(interval_seconds)
+
+
+def _chat_cleanup_interval() -> float:
+    from . import deps
+
+    settings = deps.get_settings()
+    return float(getattr(settings, "chat_session_cleanup_interval_seconds", 3600) or 3600)
 
 
 async def _rate_limit_handler(request: StarletteRequest, exc: Exception) -> JSONResponse:
@@ -190,6 +222,28 @@ async def _sync_sharepoint_in_background() -> None:
         logger.warning("Lỗi tự động đồng bộ SharePoint khi khởi động: %s", exc)
 
 
+def _chat_enabled() -> bool:
+    from . import deps
+
+    settings = deps.get_settings()
+    return bool(settings is not None and settings.chat_enabled)
+
+
+def _start_chat_services() -> None:
+    from . import deps
+
+    if deps.get_chat_services() is None:
+        logger.warning("CHAT_ENABLED=true nhưng chat services không khởi tạo được")
+
+
+def _stop_chat_services() -> None:
+    from . import deps
+
+    services = deps._cache.get("chat_services")
+    if services is not None:
+        services.shutdown()
+
+
 def create_app() -> FastAPI:
     """Build and configure the FastAPI application."""
 
@@ -205,6 +259,16 @@ def create_app() -> FastAPI:
             await asyncio.to_thread(_start_classification_worker)
         except Exception as exc:
             logger.warning("Classification worker could not start: %s", exc)
+
+        if _chat_enabled():
+            # Dựng sớm để lỗi cấu hình và cảnh báo answer_buffer_not_shared hiện lúc khởi động.
+            try:
+                await asyncio.to_thread(_start_chat_services)
+            except Exception as exc:
+                logger.warning("Chat services could not start: %s", exc)
+            app.state.chat_session_cleanup_task = asyncio.create_task(
+                _chat_session_cleanup_loop(_chat_cleanup_interval())
+            )
 
         # Tự động tải file và ingest dữ liệu thực tế từ SharePoint trong nền
         app.state.sharepoint_sync_task = asyncio.create_task(_sync_sharepoint_in_background())
@@ -224,6 +288,17 @@ def create_app() -> FastAPI:
                 cleanup_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await cleanup_task
+
+            chat_cleanup_task = getattr(app.state, "chat_session_cleanup_task", None)
+            if chat_cleanup_task is not None:
+                chat_cleanup_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await chat_cleanup_task
+
+            try:
+                _stop_chat_services()
+            except Exception as exc:
+                logger.warning("Chat services shutdown failed: %s", exc)
 
             try:
                 await asyncio.to_thread(_stop_classification_worker)
@@ -272,10 +347,18 @@ def create_app() -> FastAPI:
     app.include_router(classify_router)
     app.include_router(settings_router)
     app.include_router(pipeline_router)
+    app.include_router(chat_config_router)
 
     # --- WebSocket routers ---
     app.include_router(ws_progress_router)
     app.include_router(ws_logs_router)
+
+    # --- Chatbot (b06): chỉ đăng ký khi CHAT_ENABLED ---
+    if _chat_enabled():
+        from ..chat.ws.chat_endpoint import router as ws_chat_router
+
+        app.include_router(chat_router)
+        app.include_router(ws_chat_router)
 
     # --- Root serves index.html ---
     @app.get("/", include_in_schema=False)

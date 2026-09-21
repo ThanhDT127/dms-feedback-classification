@@ -42,6 +42,22 @@ class RuntimeCleanup:
             self.settings.log_dir,
             ttl=timedelta(days=self.settings.cleanup_log_ttl_days),
         )
+        self._cleanup_chat_exports()
+
+    def _cleanup_chat_exports(self) -> None:
+        """Xoá cặp .xlsx + .json của file xuất chat đã quá hạn (b10 D9)."""
+        from .chat.ai.export.export_store import EXPORT_DIR_NAME, cleanup_chat_exports
+
+        root = self.settings.work_dir / EXPORT_DIR_NAME
+        if not root.exists():
+            return
+        try:
+            removed = cleanup_chat_exports(root)
+        except Exception as exc:
+            logger.warning("Failed to clean chat exports: %s", exc)
+            return
+        if removed:
+            logger.info("Removed %s expired chat export files", removed)
 
     def _cleanup_stale_sync_staging(self) -> None:
         cache_dir = self.settings.config_assets_cache_dir

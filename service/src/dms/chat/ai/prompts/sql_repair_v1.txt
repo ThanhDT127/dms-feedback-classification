@@ -1,0 +1,10 @@
+SQL trước bị từ chối hoặc chạy lỗi. Sửa lại cho đúng luật và schema, giữ nguyên ý của yêu cầu.
+
+<sql_truoc>
+{previous_sql}
+</sql_truoc>
+
+LỖI: {error_code}
+CHI TIẾT: {error_detail}
+
+{original_prompt}

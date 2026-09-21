@@ -1,0 +1,11 @@
+{original_prompt}
+
+LẦN TRẢ LỜI TRƯỚC KHÔNG HỢP LỆ
+<json_truoc>
+{previous_output}
+</json_truoc>
+
+Lỗi cần sửa:
+{errors}
+
+Hãy trả về một JSON mới đã sửa hết các lỗi trên, đúng định dạng đã yêu cầu. Chỉ trả JSON.

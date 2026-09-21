@@ -493,8 +493,7 @@ class Watcher:
 
                 # Clear cached lazy clients inside GeminiClient
                 if hasattr(self.pipeline_runner, "gemini"):
-                    self.pipeline_runner.gemini._vertex_client = None
-                    self.pipeline_runner.gemini._apikey_model = None
+                    self.pipeline_runner.gemini.reset_clients()
 
                 # Re-create RAGProductMatcher with new settings
                 if hasattr(self.pipeline_runner, "rag"):
