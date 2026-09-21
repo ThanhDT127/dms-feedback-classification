@@ -635,3 +635,81 @@ def test_priority_issues_ranks_unresolved_negative_first(repo):
     assert body["items"][0]["status"] == "Chờ xử lý"
     assert body["items"][1]["issue_code"] == "ISS-B"
     assert body["items"][2]["issue_code"] == "ISS-C"
+
+
+# ── Trạng thái "Hoàn thành" của DMS thật cũng là đã xử lý ──
+
+
+@pytest.mark.parametrize("processed_status", ["Đã xử lý", "Hoàn thành", "hoàn thành", " Hoàn thành "])
+def test_overview_counts_every_processed_status(repo, processed_status):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {
+                "issue_code": "A",
+                "issue_date": "2026-08-01",
+                "business_status": processed_status,
+                "labels": ["Báo lỗi"],
+                "sentiment": "Tiêu cực",
+            },
+            {
+                "issue_code": "B",
+                "issue_date": "2026-08-02",
+                "business_status": "Chờ xử lý",
+                "labels": ["Báo lỗi"],
+                "sentiment": "Tiêu cực",
+            },
+        ],
+    )
+
+    body = FeedbackAnalyticsService(repo).overview(AnalyticsFilter())
+
+    assert body["total_issues"]["value"] == 2
+    assert body["processed_issues"]["value"] == 1
+
+
+def test_status_backlog_treats_hoan_thanh_as_processed(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {"issue_code": "A", "issue_date": "2026-08-31", "business_status": "Hoàn thành"},
+            {"issue_code": "B", "issue_date": "2026-08-31", "business_status": "Đang xử lý"},
+            {"issue_code": "C", "issue_date": "2026-08-31", "business_status": "Chờ xử lý"},
+        ],
+    )
+
+    body = FeedbackAnalyticsService(repo).status_backlog(AnalyticsFilter())
+
+    assert body["processed_count"] == 1
+    assert body["backlog_count"] == 2
+    # Nhãn trong biểu đồ vẫn giữ nguyên chữ của dữ liệu gốc.
+    assert {row["label"] for row in body["statuses"]} == {"Hoàn thành", "Đang xử lý", "Chờ xử lý"}
+
+
+def test_priority_issues_rank_hoan_thanh_below_open_issues(repo):
+    seed_classified_records(
+        repo,
+        db_path=repo.db_path,
+        entries=[
+            {
+                "issue_code": "DONE",
+                "issue_date": "2026-08-31",
+                "business_status": "Hoàn thành",
+                "sentiment": "Tiêu cực",
+                "labels": ["Báo lỗi"],
+            },
+            {
+                "issue_code": "OPEN",
+                "issue_date": "2026-08-01",
+                "business_status": "Chờ xử lý",
+                "sentiment": "Tiêu cực",
+                "labels": ["Báo lỗi"],
+            },
+        ],
+    )
+
+    body = FeedbackAnalyticsService(repo).priority_issues(AnalyticsFilter(), limit=5)
+
+    assert [item["issue_code"] for item in body["items"]] == ["OPEN", "DONE"]

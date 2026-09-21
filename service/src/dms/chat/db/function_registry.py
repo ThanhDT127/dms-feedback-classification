@@ -104,9 +104,7 @@ class FunctionRegistry:
     ) -> list[dict[str, Any]]:
         res = self.service.units(flt)
         if not scope.is_admin and scope.unit_ids:
-            res["items"] = [
-                u for u in res.get("items", []) if u["label"] in scope.unit_ids
-            ]
+            res["items"] = [u for u in res.get("items", []) if u["label"] in scope.unit_ids]
         return [res]
 
     def _handle_get_groups(
@@ -152,11 +150,15 @@ class FunctionRegistry:
         self, flt: AnalyticsFilter, params: dict[str, Any], scope: UserScope
     ) -> list[dict[str, Any]]:
         limit = int(params.get("limit", 10))
-        items = self.service.priority_issues(flt, limit=limit)
-        # Lọc an toàn đơn vị
+        result = self.service.priority_issues(flt, limit=limit)
+        # Lọc an toàn đơn vị: priority_issues trả một dict {items, total}, và mỗi dòng để tên
+        # đơn vị ở khoá "department" chứ không phải "unit_name".
         if not scope.is_admin and scope.unit_ids:
-            items = ScopePolicy.filter_rows_by_scope(items, scope)
-        return items
+            filtered = ScopePolicy.filter_rows_by_scope(
+                list(result.get("items") or []), scope, unit_key="department"
+            )
+            result = {**result, "items": filtered, "total": len(filtered)}
+        return [result]
 
     def _handle_get_duplicates(
         self, flt: AnalyticsFilter, params: dict[str, Any], scope: UserScope
@@ -171,9 +173,7 @@ class FunctionRegistry:
         res = self.service.unit_issue_type_matrix(flt)
         if not scope.is_admin and scope.unit_ids:
             res["units"] = [u for u in res.get("units", []) if u in scope.unit_ids]
-            res["rows"] = [
-                r for r in res.get("rows", []) if r.get("unit") in scope.unit_ids
-            ]
+            res["rows"] = [r for r in res.get("rows", []) if r.get("unit") in scope.unit_ids]
         return [res]
 
     def _handle_get_data_quality(

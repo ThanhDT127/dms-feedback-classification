@@ -107,3 +107,41 @@ def test_registry_units_filtered_for_user(mock_repo):
     assert len(res) == 1
     units_items = res[0]["items"]
     assert all(u["label"] == "CN Miền Nam" for u in units_items)
+
+
+# ── get_priority_issues: kết quả là một dict {items, total}, đơn vị nằm ở "department" ──
+
+
+def test_registry_priority_issues_admin_gets_wrapped_result(mock_repo):
+    registry = FunctionRegistry(mock_repo)
+    admin_scope = UserScope(username="admin", role="admin")
+
+    res = registry.execute("get_priority_issues", {"limit": 5}, admin_scope)
+
+    assert len(res) == 1
+    body = res[0]
+    assert {"items", "total"} <= set(body)
+    assert {item["issue_code"] for item in body["items"]} == {"FB-001", "FB-002"}
+
+
+def test_registry_priority_issues_filtered_for_user(mock_repo):
+    """Trước đây hàm này ném AttributeError vì coi dict kết quả như list dòng."""
+    registry = FunctionRegistry(mock_repo)
+    user_scope = UserScope(username="user_mn", role="user", unit_ids=["CN Miền Nam"])
+
+    res = registry.execute("get_priority_issues", {"limit": 5}, user_scope)
+
+    assert len(res) == 1
+    body = res[0]
+    assert [item["issue_code"] for item in body["items"]] == ["FB-001"]
+    assert all(item["department"] == "CN Miền Nam" for item in body["items"])
+    assert body["total"] == 1
+
+
+def test_registry_priority_issues_empty_for_user_without_units(mock_repo):
+    registry = FunctionRegistry(mock_repo)
+    scope = UserScope(username="user_x", role="user", unit_ids=["CN Miền Trung"])
+
+    body = registry.execute("get_priority_issues", {}, scope)[0]
+
+    assert body["items"] == [] and body["total"] == 0
