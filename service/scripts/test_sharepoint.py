@@ -42,8 +42,15 @@ def test_gemini() -> bool:
     print("\n" + "=" * 60)
     print("TEST 2: Gemini LLM (Vertex AI)")
     print("=" * 60)
-    resp = gemini.generate("Trả lời đúng 1 từ: 1+1=?")
-    print(f"  Response: {resp.strip()}")
+    resp = gemini.generate(
+        "Trả lời đúng 1 từ: 1+1=?",
+        **(
+            {"actor": settings.gateway_system_user, "operation": "connection_test"}
+            if settings.gemini_backend == "gateway"
+            else {}
+        ),
+    )
+    print(f"  Response: {resp.text.strip()}")
     print("  OK")
     return True
 

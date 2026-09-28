@@ -49,6 +49,35 @@ class GeminiStreamTimeout(GeminiStreamError):
         self.stage = stage
 
 
+class GatewayError(GeminiError):
+    """Safe public failure; never accepts provider messages or response bodies."""
+
+    def __init__(
+        self, category: str, *, retryable: bool = False, outcome_unknown: bool = False
+    ) -> None:
+        allowed = {
+            "identity",
+            "configuration",
+            "auth",
+            "request",
+            "quota",
+            "redirect",
+            "unreachable",
+            "outcome_unknown",
+            "response",
+            "accounting",
+            "direct",
+        }
+        self.category = category if category in allowed else "outcome_unknown"
+        self.retryable = retryable
+        self.outcome_unknown = outcome_unknown or self.category == "outcome_unknown"
+        self.retry_after: float | None = None
+        self.usage: dict | None = None
+        self.response_id: str | None = None
+        self.model_actual: str | None = None
+        super().__init__(f"LLM gateway failure: {self.category}")
+
+
 class PipelineError(DMSError):
     """Raised when pipeline processing fails."""
 

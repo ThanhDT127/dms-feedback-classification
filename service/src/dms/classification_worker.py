@@ -17,7 +17,7 @@ from .analytics import (
     sha256_file,
 )
 from .classification_jobs import JOB_STATUS_CANCELLED, ClassificationJobStore
-from .exceptions import PipelineCancelled
+from .exceptions import GatewayError, PipelineCancelled
 from .pipeline.issue_classifier import get_label_config_snapshot
 from .settings import Settings
 
@@ -31,6 +31,8 @@ def is_retryable_classification_error(exc: BaseException) -> bool:
     """Return whether a pipeline failure is likely transient enough to retry."""
     if isinstance(exc, PipelineCancelled):
         return False
+    if isinstance(exc, GatewayError):
+        return exc.retryable
     if isinstance(exc, (FileNotFoundError, ValueError)):
         return False
 
@@ -206,6 +208,12 @@ class ClassificationWorkerManager:
                         )
                     self.job_store.append_results(job_id, new_results)
 
+            runner_settings = getattr(runner, "settings", self.settings)
+            gateway_kwargs = (
+                {"actor": job.get("owner_username")}
+                if runner_settings.gemini_backend == "gateway"
+                else {}
+            )
             result = runner.run_pipeline(
                 input_path=input_path,
                 output_path=output_path,
@@ -213,6 +221,7 @@ class ClassificationWorkerManager:
                 progress_callback=progress_callback,
                 cancellation_check=cancellation_check,
                 job_id=job_id,
+                **gateway_kwargs,
             )
 
             if cancellation_check():
