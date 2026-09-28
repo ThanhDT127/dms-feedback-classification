@@ -486,3 +486,35 @@ def test_seq_start_continues_after_status_events_emitted_by_runner():
 def test_negative_seq_start_is_rejected():
     with pytest.raises(ValueError):
         AnswerComposer().compose(outcome(), ListSink(), seq_start=-1)
+
+
+# ── Nhãn đơn vị của dữ kiện (chống đọc số đếm thành tỉ lệ) ──
+
+
+def test_kpi_fact_line_carries_the_vietnamese_label():
+    """``kpi.processed_issues → 2`` không kèm nhãn từng bị viết thành "tỉ lệ xử lý là 2"."""
+    from dms.chat.ai.block_builders import build_block
+    from dms.chat.ai.fact_sheet import build_fact_sheet
+
+    from .test_block_builders import OVERVIEW_ROW
+
+    sheet = build_fact_sheet(
+        [build_block(function_name="get_overview", row=OVERVIEW_ROW)], **AUGUST
+    )
+
+    prompt = render_synthesis_prompt(outcome(), sheet, max_sentences=4)
+
+    lines = [line for line in prompt.user_prompt.splitlines() if line.startswith("kpi.")]
+    assert lines, prompt.user_prompt
+    assert all(line.rstrip().endswith(")") for line in lines), lines
+
+
+def test_fact_without_a_label_stays_unchanged():
+    from dms.chat.ai.fact_sheet import FactSheet, make_fact
+
+    sheet = FactSheet(facts={"rank.1.pct": make_fact("rank.1.pct", "12,5%", 12.5)})
+
+    prompt = render_synthesis_prompt(outcome(), sheet, max_sentences=4)
+
+    assert "rank.1.pct → 12,5%" in prompt.user_prompt
+    assert "rank.1.pct → 12,5% (" not in prompt.user_prompt

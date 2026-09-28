@@ -29,6 +29,7 @@ from ..contract import (
     UserScope,
 )
 from .function_registry import FunctionRegistry
+from .scoped_views import create_scoped_views
 
 logger = logging.getLogger("dms-chat-query-executor")
 
@@ -139,6 +140,8 @@ class SecureQueryExecutor:
 
         with self.repository._conn() as conn:
             conn.row_factory = sqlite3.Row
+            # View đã áp phạm vi là TEMP VIEW, sống theo connection nên phải dựng lại mỗi lần.
+            create_scoped_views(conn, scope)
             cursor = conn.cursor()
             rows = cursor.execute(scoped_sql).fetchall()
             return [dict(r) for r in rows]
@@ -161,7 +164,8 @@ class SecureQueryExecutor:
             base_sql = """
                 SELECT r.feedback_id, r.issue_code, r.content, r.product,
                        r.unit_name, r.source, r.issue_date, r.sentiment,
-                       r.business_status, r.raw_data_json
+                       r.business_status, r.raw_data_json,
+                       r.source_file_name, r.source_row_number
                 FROM feedback_fts_raw f
                 JOIN feedback_records r ON r.feedback_id = f.feedback_id
                 WHERE f.feedback_fts_raw MATCH ? AND r.is_active = 1
@@ -176,7 +180,8 @@ class SecureQueryExecutor:
                 fallback_sql = """
                     SELECT r.feedback_id, r.issue_code, r.content, r.product,
                            r.unit_name, r.source, r.issue_date, r.sentiment,
-                           r.business_status, r.raw_data_json
+                           r.business_status, r.raw_data_json,
+                           r.source_file_name, r.source_row_number
                     FROM feedback_fts_nodau f
                     JOIN feedback_records r ON r.feedback_id = f.feedback_id
                     WHERE f.feedback_fts_nodau MATCH ? AND r.is_active = 1

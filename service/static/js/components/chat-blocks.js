@@ -209,15 +209,19 @@ window.ChatBlocks = (() => {
     const wrap = el('div', 'chat-table-wrap');
     const table = el('table', 'chat-table');
     const thead = el('thead');
+    // Cột số căn phải ở CẢ tiêu đề lẫn ô, nếu không tiêu đề lệch hẳn sang trái so với số.
+    const isNumeric = col => col.align === 'right'
+      || (!col.align && (col.format === 'int' || col.format === 'pct' || col.format === 'metric'));
     const hr = el('tr');
-    columns.forEach(col => hr.appendChild(el('th', '', col.header_vi || col.key)));
+    columns.forEach(col => {
+      hr.appendChild(el('th', isNumeric(col) ? 'chat-num' : '', col.header_vi || col.key));
+    });
     thead.appendChild(hr);
     const tbody = el('tbody');
     rows.forEach(row => {
       const tr = el('tr');
       columns.forEach(col => {
-        const numeric = col.format === 'int' || col.format === 'pct';
-        tr.appendChild(el('td', numeric ? 'chat-num' : '', row[col.key]));
+        tr.appendChild(el('td', isNumeric(col) ? 'chat-num' : '', row[col.key]));
       });
       tbody.appendChild(tr);
     });

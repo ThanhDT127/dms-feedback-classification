@@ -167,3 +167,54 @@ def test_check_order_puts_unknown_fact_before_number(guard):
 def test_render_leaves_unknown_placeholder_untouched(guard):
     assert guard.render("{{kpi.revenue}} là bao nhiêu?") == "{{kpi.revenue}} là bao nhiêu?"
     assert guard.render("Tổng {{kpi.total_issues}}.") == "Tổng 1.230."
+
+
+# ── Fact của Pattern 2 nằm dưới namespace "sql" (b09 D8) ──
+
+
+def sql_guard() -> SynthesisGuard:
+    """Fact sheet của một bảng Pattern 2: khoá bắt đầu bằng chính chữ ``sql``."""
+    facts = [
+        make_fact("sql.r1.product", "Bán nguyệt", "Bán nguyệt"),
+        make_fact("sql.r1.so_van_de", "57", 57),
+        make_fact("sql.r2.product", "Ấm siêu tốc", "Ấm siêu tốc"),
+        make_fact("sql.r2.so_van_de", "32", 32),
+    ]
+    return SynthesisGuard(
+        FactSheet(facts={fact.key: fact for fact in facts}),
+        question="Sản phẩm nào bị Báo lỗi nhiều nhất trong tháng 8/2026?",
+    )
+
+
+def test_sentence_citing_a_pattern2_fact_is_kept():
+    """Hồi quy: khoá ``{{sql.*}}`` từng khớp LEAK_MARKERS nên mọi câu trích số đều bị loại."""
+    result = sql_guard().check(
+        "Sản phẩm {{sql.r1.product}} có nhiều báo lỗi nhất với {{sql.r1.so_van_de}} vấn đề."
+    )
+
+    assert result.ok is True, result.reason
+    assert result.text == "Sản phẩm Bán nguyệt có nhiều báo lỗi nhất với 57 vấn đề."
+
+
+def test_several_pattern2_facts_in_one_sentence_are_kept():
+    result = sql_guard().check("Tiếp theo là {{sql.r2.product}} với {{sql.r2.so_van_de}} vấn đề.")
+
+    assert result.ok is True, result.reason
+    assert result.text == "Tiếp theo là Ấm siêu tốc với 32 vấn đề."
+
+
+def test_real_leak_is_still_dropped_even_with_pattern2_facts():
+    """Nới lỏng ở trên không được làm mất khả năng bắt rò rỉ thật trong văn xuôi."""
+    result = sql_guard().check(
+        "Chạy câu lệnh sql trên {{sql.r1.product}} cho ra {{sql.r1.so_van_de}}."
+    )
+
+    assert result.ok is False
+    assert result.reason is DropReason.LEAK
+
+
+def test_leak_hidden_after_a_placeholder_is_still_dropped():
+    result = sql_guard().check("{{sql.r1.product}} lấy từ bảng feedback_records.")
+
+    assert result.ok is False
+    assert result.reason is DropReason.LEAK

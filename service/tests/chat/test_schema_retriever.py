@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from dms.chat.ai.intents import SAMPLE_FUNCTION, Intent, supported_functions
 from dms.chat.ai.planner_config import PlannerConfig
 from dms.chat.ai.query_planner import PlannerOutputModel
@@ -44,11 +46,24 @@ def test_prompt_has_no_permission_information():
         assert forbidden not in text
 
 
-def test_prompt_stays_within_token_budget():
-    retriever = SchemaRetriever(StaticMetadataProvider(), config=PlannerConfig())
+MILESTONE_PATTERNS = [
+    ("M1", {"sql_template"}),
+    ("M3", {"sql_template", "fts5_search"}),
+    ("M4", {"sql_template", "fts5_search", "semantic_view"}),
+    ("M5", {"sql_template", "fts5_search", "semantic_view"}),
+]
+
+
+@pytest.mark.parametrize(("milestone", "patterns"), MILESTONE_PATTERNS)
+def test_prompt_stays_within_token_budget(milestone, patterns):
+    """Mốc cao cõng thêm luật FTS, Pattern 2 và báo cáo — trước chỉ đo M1 nên không thấy."""
+    config = PlannerConfig(milestone=milestone, enabled_patterns=frozenset(patterns))
+    retriever = SchemaRetriever(StaticMetadataProvider(), config=config)
     question = "Tổng quan phản hồi của Nha Trang tháng 8 so với tháng 7 " * 12
     prompt = retriever.render_prompt(make_query(question))
-    assert estimate_tokens(prompt.text) <= MAX_PROMPT_TOKENS, estimate_tokens(prompt.text)
+    assert estimate_tokens(prompt.text) <= MAX_PROMPT_TOKENS, (
+        f"{milestone}: {estimate_tokens(prompt.text)} > {MAX_PROMPT_TOKENS}"
+    )
 
 
 def test_intents_section_marks_unsupported_intents():

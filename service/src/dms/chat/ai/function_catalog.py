@@ -78,6 +78,21 @@ KPI_LABELS_VI: dict[str, str] = {
     "total_records": "Tổng bản ghi",
 }
 
+# KPI mang đơn vị phần trăm. ``get_comparison`` trộn số đếm và tỉ lệ trong cùng một cột nên
+# không thể khai báo format cho cả cột; bảng tra danh sách này để quyết định theo từng dòng.
+KPI_RATE_KEYS: frozenset[str] = frozenset(
+    {
+        "label_coverage",
+        "sentiment_coverage",
+        "product_coverage",
+        "multi_label_rate",
+        "duplicate_record_rate",
+        "duplicate_issue_rate",
+        "model_accuracy",
+        "backlog_rate",
+    }
+)
+
 
 @dataclass(frozen=True)
 class BlockSpec:
@@ -122,6 +137,8 @@ class FunctionInfo:
     result_kind: ResultKind
     pattern: str = "sql_template"
     block_spec: BlockSpec | None = None
+    # Thiếu tham số này thì hàm ném lỗi; Plan Guard hỏi lại thay vì để Executor sập.
+    required_params: frozenset[str] = frozenset()
 
 
 _DISTRIBUTION = (
@@ -154,6 +171,7 @@ FUNCTION_CATALOG: dict[str, FunctionInfo] = {
             "{period, current_range, previous_range, metrics{<kpi>: {current, previous, change, "
             "change_percent, available}}}",
             ResultKind.KPI,
+            required_params=frozenset({"date_from", "date_to"}),
         ),
         FunctionInfo(
             "get_daily_trend",
@@ -289,8 +307,8 @@ BLOCK_SPECS: dict[str, BlockSpec] = {
         items_path="metrics",
         columns=(
             ("label", "Chỉ tiêu", "text"),
-            ("current", "Kỳ này", "int"),
-            ("previous", "Kỳ trước", "int"),
+            ("current", "Kỳ này", "metric"),
+            ("previous", "Kỳ trước", "metric"),
             ("change_percent", "Thay đổi", "pct"),
         ),
     ),

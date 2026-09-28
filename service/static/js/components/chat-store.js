@@ -5,6 +5,32 @@
    ============================================================ */
 
 window.ChatState = (() => {
+  // Phiên đang mở được nhớ qua lần tải lại trang; mọi thứ khác chỉ sống trong RAM.
+  // localStorage có thể ném (chế độ riêng tư, chặn cookie) nên mọi truy cập đều bọc try/catch.
+  const SESSION_KEY = 'dms_chat_session_id';
+
+  function readStoredSessionId() {
+    try {
+      return localStorage.getItem(SESSION_KEY) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeStoredSessionId(sessionId) {
+    try {
+      if (sessionId) localStorage.setItem(SESSION_KEY, sessionId);
+      else localStorage.removeItem(SESSION_KEY);
+    } catch (e) {
+      /* không nhớ được phiên thì vẫn chạy bình thường, chỉ mất khả năng mở lại */
+    }
+  }
+
+  /** Quên phiên đang nhớ — dùng khi đăng xuất, tránh người sau mở nhầm cuộc của người trước. */
+  function forgetSession() {
+    writeStoredSessionId(null);
+  }
+
   /** Kết quả của applyEvent. */
   const APPLY = Object.freeze({
     APPLIED: 'applied',     // event mới, liền kề → render
@@ -14,7 +40,7 @@ window.ChatState = (() => {
 
   function createStore() {
     return {
-      sessionId: null,
+      sessionId: readStoredSessionId(),
       sessions: [],
       answers: new Map(), // answer_id → { answerId, question, clientMsgId, lastSeq, done, doneStatus, events }
       pending: new Map(), // client_msg_id → { question, sessionId }
@@ -42,11 +68,12 @@ window.ChatState = (() => {
 
   function removeSession(sessionId) {
     store.sessions = store.sessions.filter(s => s.session_id !== sessionId);
-    if (store.sessionId === sessionId) store.sessionId = null;
+    if (store.sessionId === sessionId) setSessionId(null);
   }
 
   function setSessionId(sessionId) {
     store.sessionId = sessionId || null;
+    writeStoredSessionId(store.sessionId);
   }
 
   function getSessionId() {
@@ -143,7 +170,7 @@ window.ChatState = (() => {
     APPLY,
     reset,
     setSessions, getSessions, upsertSession, removeSession,
-    setSessionId, getSessionId, clearAnswers,
+    setSessionId, getSessionId, forgetSession, clearAnswers,
     addPending, takePending, hasPending,
     trackAnswer, getAnswer, applyEvent, markDone,
     unfinishedAnswers, hasUnfinished, resumeMessages,

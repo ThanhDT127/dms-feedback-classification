@@ -747,7 +747,7 @@ def render_synthesis_prompt(
         )
     lines.append("DỮ KIỆN")
     lines.append("<du_lieu>")
-    lines.extend(f"{fact.key} → {sanitize_prompt_data(fact.display, 200)}" for fact in facts)
+    lines.extend(_fact_line(fact) for fact in facts)
     lines.append("</du_lieu>")
     if quotes:
         lines.append("<trich_dan>")
@@ -773,6 +773,15 @@ def render_synthesis_prompt(
 
 
 # ── Tóm tắt cho lịch sử (design D9) ──
+
+
+def _fact_line(fact: Any) -> str:
+    """Một dòng dữ kiện; kèm nhãn tiếng Việt để LLM không đoán nhầm đơn vị."""
+    text = f"{fact.key} → {sanitize_prompt_data(fact.display, 200)}"
+    label = getattr(fact, "label", "")
+    if label:
+        text += f" ({sanitize_prompt_data(label, 60)})"
+    return text
 
 
 def build_summary(titles: list[str], sheet: FactSheet, first_commentary: str) -> str:

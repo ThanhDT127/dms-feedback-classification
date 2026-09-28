@@ -59,6 +59,45 @@ def apply_chat_migrations(conn: sqlite3.Connection) -> None:
             "CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at)"
         )
 
+        # 2b. Trí nhớ phiên (b11 D2) — bảng riêng thay vì cột trên chat_sessions để có
+        # version cho ghi có điều kiện. Cố ý KHÔNG khai báo khoá ngoại: store được dùng
+        # độc lập trong bộ test contract; ChatStore tự xoá dòng thừa khi xoá phiên.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chat_session_memory (
+                session_id TEXT PRIMARY KEY,
+                memory_json TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+        # 2c. Sổ usage LLM của chat theo user (b11 D8). Tách khỏi gemini_usage_log của
+        # pipeline: bảng đó không có username và đang phục vụ trang thống kê phân loại.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chat_usage_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                request_id TEXT NOT NULL DEFAULT '',
+                session_id TEXT,
+                call_type TEXT NOT NULL DEFAULT '',
+                model TEXT NOT NULL DEFAULT '',
+                prompt_tokens INTEGER NOT NULL DEFAULT 0,
+                completion_tokens INTEGER NOT NULL DEFAULT 0,
+                total_tokens INTEGER NOT NULL DEFAULT 0,
+                cost_usd REAL NOT NULL DEFAULT 0,
+                success INTEGER NOT NULL DEFAULT 1,
+                at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat_usage_user_at ON chat_usage_log(username, at)"
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_usage_at ON chat_usage_log(at)")
+
         # 3. FTS5 Virtual Tables
         conn.execute(
             """

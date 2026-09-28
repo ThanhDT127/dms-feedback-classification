@@ -2381,6 +2381,29 @@ th.sortable.sorted { color: var(--accent-blue); }
   color: var(--text-primary);
 }
 
+/* --- Confirm dialog --------------------------------------- */
+.confirm-box { max-width: 420px; padding: 24px; }
+.confirm-box .modal-header { margin-bottom: 12px; }
+
+.confirm-message {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 0 0 22px;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Màn hình hẹp: nút xếp dọc, nút chính nằm dưới cho ngón cái dễ với. */
+@media (max-width: 420px) {
+  .confirm-actions { flex-direction: column-reverse; }
+  .confirm-actions .btn { width: 100%; }
+}
+
 /* --- Toast ------------------------------------------------ */
 .toast-container {
   position: fixed;

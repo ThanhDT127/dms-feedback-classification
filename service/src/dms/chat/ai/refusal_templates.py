@@ -52,6 +52,10 @@ TEMPLATES: dict[Reason, str] = {
     Reason.ENTITY_NOT_FOUND: (
         "Tôi không tìm thấy {dimension_label} nào tên là “{mention}” trong dữ liệu."
     ),
+    Reason.FILTER_VALUE_UNGROUNDED: (
+        "Tôi đoán bạn muốn lọc theo {dimension_label} “{value}”, nhưng câu hỏi không nhắc tên "
+        "này nên tôi chưa dám chạy. Ý bạn là “{value}” phải không?"
+    ),
     Reason.FILTER_NOT_SUPPORTED: (
         "Hiện tôi chưa lọc được theo {filter_name} cho câu hỏi này. "
         "Bạn thử bỏ điều kiện đó, hoặc hỏi theo cách khác giúp tôi."
@@ -108,15 +112,14 @@ TEMPLATES: dict[Reason, str] = {
     ),
     Reason.TOPIC_RESET: "Đã bắt đầu chủ đề mới. Bạn muốn hỏi gì tiếp theo?",
     Reason.REPORT_RANGE_REQUIRED: "Bạn muốn báo cáo từ ngày nào đến ngày nào?",
+    Reason.FILTER_REQUIRED: ("Để trả lời câu này tôi cần biết {filter_name}. Bạn nêu giúp tôi."),
     Reason.TREND_RANGE_TOO_LONG: (
         "Khoảng thời gian dài hơn {max_days} ngày nên tôi bỏ phần diễn biến theo ngày; "
         "các phần còn lại vẫn đầy đủ."
     ),
     Reason.SECTION_UNAVAILABLE: "Không lấy được dữ liệu",
     Reason.EXPORT_NO_SOURCE: "Bạn muốn xuất dữ liệu nào?",
-    Reason.EXPORT_FAILED: (
-        "Tôi chưa tạo được file lúc này. Bạn thử lại sau ít phút giúp tôi."
-    ),
+    Reason.EXPORT_FAILED: ("Tôi chưa tạo được file lúc này. Bạn thử lại sau ít phút giúp tôi."),
     Reason.EXPORT_TOO_LARGE: (
         "Dữ liệu cần xuất vượt dung lượng cho phép. "
         "Bạn thu hẹp khoảng thời gian hoặc bớt điều kiện lọc rồi xuất lại giúp tôi."

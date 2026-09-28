@@ -619,7 +619,16 @@ window.ChatPage = (() => {
   }
 
   async function deleteSession(sessionId) {
-    if (!window.confirm('Xoá cuộc trò chuyện này? Không thể hoàn tác.')) return;
+    const session = ChatState.getSessions().find(s => s.session_id === sessionId);
+    const name = (session && session.title) || 'cuộc trò chuyện này';
+    const ok = await Confirm.ask({
+      title: 'Xoá cuộc trò chuyện',
+      message: `Xoá “${name}”? Toàn bộ câu hỏi và câu trả lời trong cuộc này sẽ mất, không khôi phục được.`,
+      confirmText: 'Xoá',
+      cancelText: 'Giữ lại',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await API.del(`/chat/sessions/${encodeURIComponent(sessionId)}`);
     } catch (err) {

@@ -43,6 +43,31 @@ class RuntimeCleanup:
             ttl=timedelta(days=self.settings.cleanup_log_ttl_days),
         )
         self._cleanup_chat_exports()
+        self._cleanup_chat_usage_log()
+
+    def _cleanup_chat_usage_log(self) -> None:
+        """Xoá bản ghi usage chat cũ hơn ``CHAT_USAGE_RETENTION_DAYS`` (b11 D8)."""
+        import sqlite3
+
+        from .chat.db.usage_ledger import SqliteChatUsageLedger
+
+        db_path = self.settings.classification_jobs_db_path
+        if not db_path.exists():
+            return
+        cutoff = utc_now() - timedelta(days=self.settings.chat_usage_retention_days)
+        try:
+            with sqlite3.connect(str(db_path), timeout=10) as conn:
+                has_table = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='chat_usage_log'"
+                ).fetchone()
+                if not has_table:
+                    return
+                removed = SqliteChatUsageLedger(conn).cleanup(cutoff)
+        except Exception as exc:
+            logger.warning("Failed to clean chat usage log: %s", exc)
+            return
+        if removed:
+            logger.info("Removed %s expired chat usage rows", removed)
 
     def _cleanup_chat_exports(self) -> None:
         """Xoá cặp .xlsx + .json của file xuất chat đã quá hạn (b10 D9)."""

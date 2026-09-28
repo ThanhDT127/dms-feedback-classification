@@ -6,6 +6,7 @@ toàn bộ bộ test này mà không phải chép test.
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
@@ -16,11 +17,36 @@ from dms.chat.ai.memory.store import (
     MemoryVersionConflict,
     SessionMemory,
 )
+from dms.chat.db.memory_store import SqliteSessionMemoryStore
+from dms.chat.db.migrations import apply_chat_migrations
+from dms.chat.db.usage_ledger import SqliteChatUsageLedger
 
 NOW = datetime(2026, 9, 17, 10, 0, tzinfo=UTC)
 
-MEMORY_STORES = [pytest.param(InMemorySessionMemoryStore, id="in_memory")]
-USAGE_LEDGERS = [pytest.param(InMemoryChatUsageLedger, id="in_memory")]
+
+def _sqlite_conn() -> sqlite3.Connection:
+    """Một DB riêng trong RAM cho mỗi lần dựng fixture."""
+    conn = sqlite3.connect(":memory:", check_same_thread=False)
+    apply_chat_migrations(conn)
+    return conn
+
+
+def _sqlite_memory_store() -> SqliteSessionMemoryStore:
+    return SqliteSessionMemoryStore(_sqlite_conn())
+
+
+def _sqlite_ledger() -> SqliteChatUsageLedger:
+    return SqliteChatUsageLedger(_sqlite_conn())
+
+
+MEMORY_STORES = [
+    pytest.param(InMemorySessionMemoryStore, id="in_memory"),
+    pytest.param(_sqlite_memory_store, id="sqlite"),
+]
+USAGE_LEDGERS = [
+    pytest.param(InMemoryChatUsageLedger, id="in_memory"),
+    pytest.param(_sqlite_ledger, id="sqlite"),
+]
 
 
 # ── SessionMemoryStore ──

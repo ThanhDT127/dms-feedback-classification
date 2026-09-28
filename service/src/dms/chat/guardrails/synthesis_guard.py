@@ -201,7 +201,10 @@ class SynthesisGuard:
         if code_spans:
             return self._drop(DropReason.UNGROUNDED_CODE)
 
-        lowered = text.casefold()
+        # Chỉ soi phần văn xuôi do LLM tự viết. Khoá placeholder là của hệ thống và đã được
+        # đối chiếu với fact sheet ở trên; namespace của Pattern 2 đúng bằng chữ "sql" nên nếu
+        # soi cả khoá thì mọi câu trích số của Pattern 2 đều bị coi là rò rỉ schema (b09).
+        lowered = without_placeholders.casefold()
         if any(marker in lowered for marker in LEAK_MARKERS):
             return self._drop(DropReason.LEAK)
 

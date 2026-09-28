@@ -92,3 +92,24 @@ def test_background_asset_is_used_in_dark_light_and_login_contexts():
     assert re.search(r"body\s*{[^}]*Nen-chatbot\.png", css, re.S)
     assert re.search(r'\[data-theme="light"\]\s+body\s*{[^}]*Nen-chatbot\.png', css, re.S)
     assert re.search(r"\.login-container\s*{[^}]*Nen-chatbot\.png", css, re.S)
+
+
+def test_every_script_in_index_html_exists():
+    """Quên đăng ký file mới trong index.html thì trang chỉ báo lỗi ở console."""
+    static_dir = Path(__file__).resolve().parents[1] / "static"
+    html = (static_dir / "index.html").read_text(encoding="utf-8")
+
+    refs = re.findall(r'(?:src|href)="((?:js|css)/[^"?]+)(?:\?[^"]*)?"', html)
+
+    assert refs
+    for ref in refs:
+        assert (static_dir / ref).is_file(), f"index.html trỏ tới file không có: {ref}"
+
+
+def test_chat_ui_does_not_use_native_browser_dialogs():
+    """``confirm``/``alert`` của trình duyệt khoá cả tab và không theo giao diện tối/sáng."""
+    chat_js = Path(__file__).resolve().parents[1] / "static" / "js" / "pages" / "chat.js"
+    source = chat_js.read_text(encoding="utf-8")
+
+    for call in ("window.confirm(", "window.alert("):
+        assert call not in source, f"chat.js còn dùng {call}"

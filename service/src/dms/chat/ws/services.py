@@ -31,6 +31,8 @@ from ..ai.sql_generator import SqlGeneratorConfig
 from ..ai.types import LLMClient, MetadataProvider, QueryExecutor
 from ..ai.understanding import UnderstandingConfig
 from ..db.chat_store import ChatStore
+from ..db.memory_store import SqliteSessionMemoryStore
+from ..db.usage_ledger import SqliteChatUsageLedger
 from ..guardrails.plan_guard import PlanGuard, PlanGuardConfig
 from ..guardrails.sql_guard import SqlGuard, SqlGuardConfig
 from .answer_buffer import AnswerBuffer, InMemoryAnswerBuffer
@@ -189,13 +191,24 @@ def build_chat_services(
     memory_store: SessionMemoryStore | None = None,
 ) -> ChatServices:
     connections: ThreadLocalConnections | None = None
-    # Dev A chưa có store thật (b11 task 1.3): dùng bản in-memory, mất khi khởi động lại.
-    ledger = ledger if ledger is not None else InMemoryChatUsageLedger()
-    memory_store = memory_store if memory_store is not None else InMemorySessionMemoryStore()
     if store is None:
         connections = ThreadLocalConnections(settings.classification_jobs_db_path)
         _apply_migrations(connections)
         store = ChatStore(connections)
+    # Có kết nối SQLite thì trí nhớ phiên và sổ usage sống qua lần khởi động lại; khi caller
+    # tự truyền ChatStore (test, script) thì không có kết nối nên lùi về bản in-memory.
+    if ledger is None:
+        ledger = (
+            SqliteChatUsageLedger(connections)
+            if connections is not None
+            else InMemoryChatUsageLedger()
+        )
+    if memory_store is None:
+        memory_store = (
+            SqliteSessionMemoryStore(connections)
+            if connections is not None
+            else InMemorySessionMemoryStore()
+        )
     if llm is None:
         from ..ai.llm_gateway import GeminiChatGateway
 
@@ -244,9 +257,10 @@ def build_chat_services(
         if not summarizer.should_run(pending):
             return
         # Tóm tắt nền tính vào hạn mức nhưng không bị chặn: hết hạn mức thì dùng bản trích xuất.
-        over_budget = budget is not None and budget.status(
-            record.username, is_admin=record.turn.scope.is_admin
-        ).exceeded
+        over_budget = (
+            budget is not None
+            and budget.status(record.username, is_admin=record.turn.scope.is_admin).exceeded
+        )
         summarizer.summarize(
             record.session_id,
             pending,

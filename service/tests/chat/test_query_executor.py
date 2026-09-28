@@ -167,6 +167,29 @@ class TestSecureQueryExecutorPatterns:
         assert res.data[0]["feedback_id"] == 101
         assert "cháy" in res.data[0]["content"].lower()
 
+    def test_pattern_3_fts5_returns_citation_columns(self, test_db_repo):
+        """LOOKUP_FILE cần ``source_file_name`` + ``source_row_number``.
+
+        Hồi quy: câu SQL của FTS từng không SELECT hai cột này nên mọi câu "nằm ở file nào"
+        đều bị từ chối ``FILE_LOOKUP_UNAVAILABLE``. Bộ test cũ không thấy vì executor giả
+        trong ``ai_fakes`` có sẵn hai cột.
+        """
+        executor = SecureQueryExecutor(test_db_repo)
+        admin = UserScope(username="admin", role="admin")
+
+        for query in ("cháy", "bi chay"):
+            plan = QueryPlan(
+                pattern=QueryPattern.FTS5_SEARCH,
+                answer_shape=AnswerShape.LIST,
+                original_query="phản hồi nằm ở file nào",
+                fts_query=query,
+            )
+            res = executor.execute(plan, admin)
+
+            assert res.status == QueryStatus.OK, query
+            for column in ("source_file_name", "source_row_number"):
+                assert column in res.data[0], (query, column)
+
     def test_pattern_3_fts5_search_nodau_fallback(self, test_db_repo):
         executor = SecureQueryExecutor(test_db_repo)
         admin = UserScope(username="admin", role="admin")

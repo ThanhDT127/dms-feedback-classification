@@ -66,9 +66,7 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD}
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
-      # Buffer câu trả lời chat dùng chung giữa các worker; bỏ biến này thì mỗi worker giữ riêng
-      # và resume sau khi rớt mạng chỉ chạy đúng khi GUNICORN_WORKERS=1.
-      - CHAT_REDIS_URL=${CHAT_REDIS_URL:-redis://redis:6379/0}
+      - CHAT_REDIS_URL=${CHAT_REDIS_URL-redis://redis:6379/0}
     volumes:
       - ./data:/app/data
       - ./src:/app/src
@@ -101,7 +99,6 @@ services:
     image: redis:7-alpine
     container_name: dms-redis
     restart: unless-stopped
-    # Buffer câu trả lời chat là dữ liệu tạm: không bật AOF, hết RAM thì bỏ khoá cũ nhất.
     command: redis-server --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
     expose:
       - "6379"

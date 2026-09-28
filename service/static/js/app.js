@@ -293,6 +293,8 @@ window.App = (() => {
       API.logout({ silent: true }).catch(() => {});
     }
     API.clearTokens();
+    // Quên phiên chat đang nhớ, tránh người đăng nhập sau mở nhầm cuộc của người trước.
+    if (window.ChatState) ChatState.forgetSession();
     state.user = null;
     state.isAuthenticated = false;
     state.chatConfig = null;

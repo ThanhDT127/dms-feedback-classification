@@ -34,6 +34,9 @@ class Fact:
     display: str
     raw: int | float | str | None = None
     tokens: frozenset[str] = field(default_factory=frozenset)
+    # Nhãn người dùng đang nhìn thấy ở khối dữ liệu ("Đã xử lý"). Đưa vào prompt để LLM biết
+    # dữ kiện là số đếm hay tỉ lệ — "2" không kèm nhãn từng bị viết thành "tỉ lệ xử lý là 2".
+    label: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return {"key": self.key, "display": self.display, "raw": self.raw}
@@ -44,8 +47,10 @@ def number_tokens(text: str) -> frozenset[str]:
     return frozenset(match.group(0).rstrip(".,") for match in _NUMBER_RUN.finditer(text or ""))
 
 
-def make_fact(key: str, display: str, raw: int | float | str | None = None) -> Fact:
-    return Fact(key=key, display=display, raw=raw, tokens=number_tokens(display))
+def make_fact(
+    key: str, display: str, raw: int | float | str | None = None, label: str = ""
+) -> Fact:
+    return Fact(key=key, display=display, raw=raw, tokens=number_tokens(display), label=label)
 
 
 @dataclass(frozen=True)
@@ -111,7 +116,10 @@ def build_fact_sheet(
         section_id = str((block.section or {}).get("id") or "")
         prefix = f"{section_id}." if section_id else ("" if position == 1 else f"s{position}.")
         for fact in _facts_for_block(block):
-            _add(facts, Fact(prefix + fact.key, fact.display, fact.raw, fact.tokens))
+            _add(
+                facts,
+                Fact(prefix + fact.key, fact.display, fact.raw, fact.tokens, fact.label),
+            )
 
     return FactSheet(facts=facts)
 
@@ -152,7 +160,10 @@ def _kpi_facts(block: DataBlock) -> list[Fact]:
         if not item.get("available"):
             continue
         key = str(item.get("key"))
-        facts.append(make_fact(f"kpi.{key}", str(item.get("display", "")), item.get("value")))
+        label = str(item.get("label") or "")
+        facts.append(
+            make_fact(f"kpi.{key}", str(item.get("display", "")), item.get("value"), label)
+        )
         comparison = item.get("comparison")
         if isinstance(comparison, dict) and comparison.get("available"):
             facts.append(
@@ -160,6 +171,7 @@ def _kpi_facts(block: DataBlock) -> list[Fact]:
                     f"kpi.{key}.prev",
                     str(comparison.get("display", "")),
                     comparison.get("value"),
+                    f"{label} kỳ trước" if label else "",
                 )
             )
             facts.append(
@@ -167,6 +179,7 @@ def _kpi_facts(block: DataBlock) -> list[Fact]:
                     f"delta.{key}",
                     delta_from_change_percent(comparison.get("change_percent")),
                     comparison.get("change_percent"),
+                    f"Thay đổi của {label}" if label else "",
                 )
             )
     return facts

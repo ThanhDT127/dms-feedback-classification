@@ -295,3 +295,52 @@ def test_quote_block_from_real_priority_issues(analytics_service):
     first = block.payload["quotes"][0]
     assert first["issue_code"]
     assert "raw_data_json" not in first
+
+
+# ── Bảng so sánh: nhãn tiếng Việt, đơn vị theo từng KPI, căn lề ──
+
+
+COMPARISON_ROW = {
+    "period": "month",
+    "metrics": {
+        "total_issues": {"current": 3134, "previous": 1768, "change_percent": 77.3},
+        "sentiment_coverage": {"current": 43, "previous": 54, "change_percent": -20.2},
+        "model_accuracy": {"current": None, "previous": None, "change_percent": None},
+    },
+}
+
+
+def comparison_table():
+    return build_block(function_name="get_comparison", row=COMPARISON_ROW)
+
+
+def test_comparison_rows_use_vietnamese_labels():
+    """Người dùng không được nhìn thấy khoá kỹ thuật như ``total_issues``."""
+    labels = [row["label"] for row in comparison_table().payload["rows"]]
+
+    assert labels == ["Tổng số vấn đề", "Tỉ lệ có cảm xúc", "Độ chính xác mô hình"]
+
+
+def test_count_and_rate_kpis_get_their_own_unit():
+    """Cột "Kỳ này" trộn số đếm và tỉ lệ nên đơn vị phải quyết định theo từng dòng."""
+    rows = comparison_table().payload["rows"]
+
+    assert rows[0]["current"] == "3.134"
+    assert rows[1]["current"] == "43,0%"
+
+
+def test_missing_metric_shows_the_placeholder():
+    rows = comparison_table().payload["rows"]
+
+    assert rows[2]["current"] == NOT_ENOUGH_DATA
+    assert rows[2]["change_percent"] == NOT_ENOUGH_DATA
+
+
+def test_numeric_columns_are_marked_right_aligned():
+    """Giao diện dùng ``align`` để căn phải cả tiêu đề lẫn ô; thiếu thì tiêu đề lệch."""
+    columns = {col["key"]: col for col in comparison_table().payload["columns"]}
+
+    assert columns["label"]["align"] == "left"
+    assert columns["current"]["align"] == "right"
+    assert columns["previous"]["align"] == "right"
+    assert columns["change_percent"]["align"] == "right"

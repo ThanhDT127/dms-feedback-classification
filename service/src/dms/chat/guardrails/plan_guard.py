@@ -210,7 +210,7 @@ class PlanGuard:
                 return step_check
 
         # Bước 7
-        resolved_steps, resolution = self._resolve_entities(output.steps)
+        resolved_steps, resolution = self._resolve_entities(output.steps, query)
         if resolution is not None:
             return self._clarify_entity(output, intent, resolution)
 
@@ -318,7 +318,9 @@ class PlanGuard:
         bao giờ dùng lại quyết định phạm vi cũ.
         """
         intent = output.intent or Intent.REPORT_EXPORT
-        resolved, resolution = self._resolve_entities(steps)
+        # Bước báo cáo do template dựng, bước xuất file chép lại từ lượt trước: bộ lọc đã
+        # được neo vào câu hỏi cũ nên không đối chiếu với câu hỏi lượt này (b10 D7).
+        resolved, resolution = self._resolve_entities(steps, query, check_grounding=False)
         if resolution is not None:
             return self._clarify_entity(output, intent, resolution)
         scoped = self._apply_scope(output, intent, query, scope, resolved)
@@ -433,7 +435,11 @@ class PlanGuard:
     # ── Bước 7: chuẩn hoá giá trị ──
 
     def _resolve_entities(
-        self, steps: Sequence[QueryPlan]
+        self,
+        steps: Sequence[QueryPlan],
+        query: NormalizedQuery,
+        *,
+        check_grounding: bool = True,
     ) -> tuple[tuple[QueryPlan, ...], _Resolution | None]:
         resolved: list[QueryPlan] = []
         for step in steps:
@@ -444,9 +450,50 @@ class PlanGuard:
                 outcome = self._resolve_value(param, str(params[param]))
                 if outcome.reason is not None:
                     return (), outcome
+                mention = str(step.params[param])
+                if check_grounding and not self._is_grounded(
+                    param, mention, str(outcome.value), query
+                ):
+                    return (), _Resolution(
+                        reason=Reason.FILTER_VALUE_UNGROUNDED,
+                        value=str(outcome.value),
+                        param=param,
+                        mention=mention,
+                    )
                 params[param] = outcome.value
             resolved.append(replace(step, params=params))
         return tuple(resolved), None
+
+    def _is_grounded(self, param: str, mention: str, value: str, query: NormalizedQuery) -> bool:
+        """Bộ lọc phải truy được về câu hỏi, không phải do Planner tự nghĩ ra (D3).
+
+        Planner đôi khi "dịch" một cụm mô tả tự do thành một giá trị có thật trong dữ liệu — ví
+        dụ "Về giá cao quá khó bán" → nhãn "CTKM, giá, cơ chế". Giá trị đó hợp lệ nên bước chốt
+        giá trị cho qua, rồi câu trả lời lọc theo một điều kiện người dùng chưa hề nêu.
+
+        Xét ``mention`` (cụm Planner chép ra) chứ không xét ``value`` (giá trị sau khi sửa chính
+        tả và gỡ alias): "Báo lôi" hay "HN" vẫn là chữ của người hỏi, chỉ khác mặt chữ.
+
+        Chiều có bảng alias (đơn vị, tỉnh/thành) được bỏ qua: Planner hay bung thẳng alias thành
+        tên đầy đủ ("TV1" → "Truyền thống Vùng 1") nên đối chiếu mặt chữ sẽ báo nhầm, và đơn vị
+        đã có ``_mentioned_units`` cùng bước áp phạm vi soát lại kỹ hơn.
+        """
+        _, alias_dimension = PARAM_DIMENSIONS[param]
+        if alias_dimension:
+            return True
+        for text in (mention, value):
+            normalized = normalize_match_text(text)
+            if not normalized:
+                return True  # không có gì để đối chiếu thì không chặn
+            if normalized in query.match_text:
+                return True
+        target = normalize_match_text(value)
+        # Normalizer đã nhận ra đúng giá trị này, hoặc nó kế thừa từ slot của lượt trước.
+        for source in (query.entities, query.slots.entities):
+            for candidate in source.get(param, ()):
+                if normalize_match_text(candidate.value) == target:
+                    return True
+        return False
 
     def _resolve_value(self, param: str, mention: str) -> _Resolution:
         values = self._values_for(param)
@@ -490,8 +537,21 @@ class PlanGuard:
         self, output: PlannerOutput, intent: Intent, resolution: _Resolution
     ) -> ValidatedPlan:
         label = DIMENSION_LABELS_VI.get(resolution.param, resolution.param)
+        options = resolution.options
         if resolution.reason is Reason.ENTITY_AMBIGUOUS:
-            message = render(Reason.ENTITY_AMBIGUOUS, options=format_options(resolution.options))
+            message = render(Reason.ENTITY_AMBIGUOUS, options=format_options(options))
+        elif resolution.reason is Reason.FILTER_VALUE_UNGROUNDED:
+            logger.info(
+                "plan_guard_filter_value_ungrounded",
+                extra={"param": resolution.param, "value": resolution.value},
+            )
+            message = render(
+                Reason.FILTER_VALUE_UNGROUNDED,
+                dimension_label=label,
+                value=resolution.value,
+            )
+            # Người dùng chỉ cần bấm xác nhận đúng giá trị mà Planner đã đoán.
+            options = (str(resolution.value),)
         else:
             message = render(
                 Reason.ENTITY_NOT_FOUND, dimension_label=label, mention=resolution.mention
@@ -501,7 +561,7 @@ class PlanGuard:
             decision=Decision.CLARIFY,
             reason=resolution.reason,
             intent=intent,
-            clarify_options=resolution.options,
+            clarify_options=options,
             message=message,
         )
 
@@ -665,22 +725,31 @@ class PlanGuard:
     # ── Bước 9–10: tham số được hàm hỗ trợ (D6) ──
 
     def _check_params(self, plan: ValidatedPlan) -> ValidatedPlan:
-        unsupported: dict[str, None] = {}
+        # param -> giá trị người dùng nêu, để thông báo nói rõ điều kiện nào bị chặn (D10).
+        unsupported: dict[str, str] = {}
+
+        def note(param: str, step: QueryPlan) -> None:
+            unsupported.setdefault(param, str(step.params.get(param) or ""))
+
         for step in plan.steps:
             if step.pattern is QueryPattern.SEMANTIC_VIEW:
                 for param in step.params:
                     if param not in SEMANTIC_FILTER_KEYS and param != ANALYSIS_REQUEST_PARAM:
-                        unsupported.setdefault(param, None)
+                        note(param, step)
                 continue
             if step.pattern is QueryPattern.FTS5_SEARCH:
                 for param in step.params:
                     if param not in FTS_FILTER_KEYS and param != SEARCH_TERMS_PARAM:
-                        unsupported.setdefault(param, None)
+                        note(param, step)
                 continue
             info = FUNCTION_CATALOG[str(step.function_name)]
             for param in step.params:
                 if param not in info.supported_params:
-                    unsupported.setdefault(param, None)
+                    note(param, step)
+
+        missing = self._missing_required(plan)
+        if missing is not None:
+            return missing
 
         if not unsupported:
             return plan
@@ -689,7 +758,13 @@ class PlanGuard:
         if fallback is not None:
             return fallback
 
-        names = [PARAM_LABELS_VI.get(param, param) for param in unsupported]
+        # Nêu kèm giá trị để người dùng biết chính xác điều kiện nào bị chặn (D10).
+        names = [
+            f"{PARAM_LABELS_VI.get(param, param)} \u201c{value}\u201d"
+            if value
+            else PARAM_LABELS_VI.get(param, param)
+            for param, value in unsupported.items()
+        ]
         logger.info("plan_guard_filter_not_supported", extra={"params": list(unsupported)})
         return replace(
             plan,
@@ -699,10 +774,44 @@ class PlanGuard:
             message=render(Reason.FILTER_NOT_SUPPORTED, filter_name=join_vi(names)),
         )
 
+    def _missing_required(self, plan: ValidatedPlan) -> ValidatedPlan | None:
+        """Hàm thiếu tham số bắt buộc thì hỏi lại, đừng để Executor ném lỗi (D6).
+
+        ``get_comparison`` không có ngày sẽ ném ``Comparison requires complete from and to
+        dates``; người dùng chỉ thấy "Có lỗi khi lấy dữ liệu" và không biết phải sửa gì.
+        """
+        for step in plan.steps:
+            if step.pattern is not QueryPattern.SQL_TEMPLATE:
+                continue
+            info = FUNCTION_CATALOG.get(str(step.function_name))
+            if info is None:
+                continue
+            absent = [name for name in sorted(info.required_params) if not step.params.get(name)]
+            if not absent:
+                continue
+            # Thiếu cả hai đầu mốc thì hỏi gọn "khoảng thời gian" thay vì kể từng tham số.
+            if set(absent) >= {"date_from", "date_to"}:
+                names = ["khoảng thời gian"]
+            else:
+                names = [PARAM_LABELS_VI.get(name, name) for name in absent]
+            logger.info(
+                "plan_guard_required_param_missing",
+                extra={"function": str(step.function_name), "params": absent},
+            )
+            return replace(
+                plan,
+                decision=Decision.CLARIFY,
+                reason=Reason.FILTER_REQUIRED,
+                steps=(),
+                message=render(Reason.FILTER_REQUIRED, filter_name=join_vi(names)),
+            )
+        return None
+
+
     # ── Pattern 2 (b09 D7): chuyển bộ lọc Pattern 1 không hỗ trợ thành bước semantic_view ──
 
     def _semantic_fallback(
-        self, plan: ValidatedPlan, unsupported: Mapping[str, None]
+        self, plan: ValidatedPlan, unsupported: Mapping[str, str]
     ) -> ValidatedPlan | None:
         intent = plan.intent
         if intent is None or not supports_semantic(

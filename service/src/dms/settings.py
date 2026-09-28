@@ -147,9 +147,7 @@ class Settings(BaseSettings):
     chat_redis_url: str = Field("", alias="CHAT_REDIS_URL")
     # Chat báo cáo và xuất Excel (b10)
     chat_report_max_steps: int = Field(8, alias="CHAT_REPORT_MAX_STEPS")
-    chat_report_turn_timeout_seconds: float = Field(
-        90.0, alias="CHAT_REPORT_TURN_TIMEOUT_SECONDS"
-    )
+    chat_report_turn_timeout_seconds: float = Field(90.0, alias="CHAT_REPORT_TURN_TIMEOUT_SECONDS")
     chat_report_commentary_max_sentences: int = Field(
         8, alias="CHAT_REPORT_COMMENTARY_MAX_SENTENCES"
     )
@@ -168,6 +166,7 @@ class Settings(BaseSettings):
     chat_session_cleanup_interval_seconds: int = Field(
         3600, alias="CHAT_SESSION_CLEANUP_INTERVAL_SECONDS"
     )
+    chat_usage_retention_days: int = Field(90, alias="CHAT_USAGE_RETENTION_DAYS")
 
     # Auth
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
@@ -365,6 +364,8 @@ class Settings(BaseSettings):
             raise ValueError("chat_session_ttl_days must be >= 1")
         if int(self.chat_session_cleanup_interval_seconds) < 60:
             raise ValueError("chat_session_cleanup_interval_seconds must be >= 60")
+        if int(self.chat_usage_retention_days) < 1:
+            raise ValueError("chat_usage_retention_days must be >= 1")
 
         return self
 

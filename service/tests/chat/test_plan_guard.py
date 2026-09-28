@@ -335,3 +335,146 @@ def test_original_planner_output_is_never_mutated(guard):
     assert output.steps[0].params == before
     assert result.steps[0].params["unit_name"] == TV1
     assert result.planner_output is output
+
+
+# ── Bộ lọc Planner tự nghĩ ra (D3) ──
+
+
+def _issues_step(params: dict) -> tuple[QueryPlan, ...]:
+    return (
+        QueryPlan(
+            pattern=QueryPattern.SQL_TEMPLATE,
+            answer_shape=AnswerShape.TABLE,
+            original_query="q",
+            function_name="get_issues",
+            params=params,
+            confidence=0.9,
+        ),
+    )
+
+
+def test_label_planner_invented_is_sent_back_for_confirmation(guard):
+    """Câu hỏi mô tả tự do, Planner tự quy nó về một nhãn có thật -> hỏi lại, không chạy."""
+    output = make_output(
+        intent=Intent.LOOKUP_FEEDBACK,
+        steps=_issues_step({"label": "Bảng giá, Catalogue"}),
+    )
+    query = make_query("sản phẩm nào bị chê giá cao quá khó bán nhiều nhất")
+
+    plan = guard.check(output, query, UserScope(username="admin", role="admin"))
+
+    assert plan.decision is Decision.CLARIFY
+    assert plan.reason is Reason.FILTER_VALUE_UNGROUNDED
+    assert plan.clarify_options == ("Bảng giá, Catalogue",)
+    assert "Bảng giá, Catalogue" in plan.message
+    assert "nhãn" in plan.message
+
+
+def test_label_written_in_the_question_still_runs(guard):
+    output = make_output(intent=Intent.LOOKUP_FEEDBACK, steps=_issues_step({"label": "Báo lỗi"}))
+    query = make_query("liệt kê phản hồi Báo lỗi")
+
+    plan = guard.check(output, query, UserScope(username="admin", role="admin"))
+
+    assert plan.decision is Decision.RUN
+    assert plan.steps[0].params["label"] == "Báo lỗi"
+
+
+def test_label_inherited_from_the_session_still_runs(guard):
+    """Lượt trước đã chốt nhãn; lượt này không nhắc lại thì vẫn được kế thừa."""
+    from dms.chat.ai.types import EntityCandidate, SessionSlots
+
+    slots = SessionSlots(entities={"label": (EntityCandidate("label", "bao loi", "Báo lỗi", 1.0),)})
+    query = make_query("còn tháng trước thì sao")
+    query = type(query)(**{**vars(query), "slots": slots})
+    output = make_output(intent=Intent.LOOKUP_FEEDBACK, steps=_issues_step({"label": "Báo lỗi"}))
+
+    plan = guard.check(output, query, UserScope(username="admin", role="admin"))
+
+    assert plan.decision is Decision.RUN
+
+
+def test_unsupported_filter_message_names_the_value(guard):
+    """get_products không lọc theo nhãn: thông báo phải nói rõ nhãn nào bị chặn."""
+    steps = (
+        QueryPlan(
+            pattern=QueryPattern.SQL_TEMPLATE,
+            answer_shape=AnswerShape.TABLE,
+            original_query="q",
+            function_name="get_products",
+            params={"label": "Báo lỗi"},
+            confidence=0.9,
+        ),
+    )
+    output = make_output(intent=Intent.DRILL_PRODUCT, steps=steps)
+
+    plan = guard.check(
+        output,
+        make_query("sản phẩm nào bị Báo lỗi nhiều nhất"),
+        UserScope(username="admin", role="admin"),
+    )
+
+    assert plan.decision is Decision.NOT_SUPPORTED
+    assert plan.reason is Reason.FILTER_NOT_SUPPORTED
+    assert "Báo lỗi" in plan.message
+
+
+# ── Tham số bắt buộc của hàm (D6) ──
+
+
+def _comparison_step(params: dict) -> tuple[QueryPlan, ...]:
+    return (
+        QueryPlan(
+            pattern=QueryPattern.SQL_TEMPLATE,
+            answer_shape=AnswerShape.TABLE,
+            original_query="q",
+            function_name="get_comparison",
+            params=params,
+            confidence=0.9,
+        ),
+    )
+
+
+def test_comparison_without_dates_asks_instead_of_crashing(guard):
+    """``get_comparison`` thiếu ngày sẽ ném lỗi ở Executor; người dùng chỉ thấy "Có lỗi"."""
+    output = make_output(intent=Intent.COMPARISON, steps=_comparison_step({"period": "month"}))
+
+    plan = guard.check(output, make_query("so sánh với kỳ trước"), ADMIN)
+
+    assert plan.decision is Decision.CLARIFY
+    assert plan.reason is Reason.FILTER_REQUIRED
+    assert "khoảng thời gian" in plan.message
+    assert plan.steps == ()
+
+
+def test_comparison_missing_only_one_end_names_that_parameter(guard):
+    output = make_output(
+        intent=Intent.COMPARISON,
+        steps=_comparison_step({"period": "month", "date_from": "2026-08-01"}),
+    )
+
+    plan = guard.check(output, make_query("so sánh từ đầu tháng 8"), ADMIN)
+
+    assert plan.decision is Decision.CLARIFY
+    assert "đến ngày" in plan.message
+
+
+def test_comparison_with_both_dates_runs(guard):
+    output = make_output(
+        intent=Intent.COMPARISON,
+        steps=_comparison_step(
+            {"period": "month", "date_from": "2026-08-01", "date_to": "2026-08-31"}
+        ),
+    )
+
+    plan = guard.check(output, make_query("so sánh tháng 8/2026 với tháng trước"), ADMIN)
+
+    assert plan.decision is Decision.RUN
+
+
+def test_functions_without_required_params_are_untouched(guard):
+    output = make_output(intent=Intent.OVERVIEW, function_name="get_overview", params={})
+
+    plan = guard.check(output, make_query("tổng quan"), ADMIN)
+
+    assert plan.decision is Decision.RUN

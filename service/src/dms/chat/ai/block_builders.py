@@ -10,7 +10,7 @@ import logging
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from .function_catalog import FUNCTION_CATALOG, KPI_LABELS_VI, BlockSpec
+from .function_catalog import FUNCTION_CATALOG, KPI_LABELS_VI, KPI_RATE_KEYS, BlockSpec
 from .vi_format import (
     NOT_ENOUGH_DATA,
     delta_from_change_percent,
@@ -543,6 +543,9 @@ def _build_quote(
     )
 
 
+_NUMERIC_FORMATS = frozenset({"int", "pct", "metric"})
+
+
 def _build_table(
     block_id: str, title: str, subtitle: str, row: dict, spec: BlockSpec, cfg: BlockConfig
 ) -> DataBlock:
@@ -550,11 +553,20 @@ def _build_table(
     total_rows = len(raw_items)
     shown = raw_items[: cfg.table_max_rows]
     columns = [
-        {"key": key, "header_vi": header, "format": fmt} for key, header, fmt in spec.columns
+        {
+            "key": key,
+            "header_vi": header,
+            "format": fmt,
+            # Giao diện căn phải cả ô lẫn tiêu đề cột số, nhờ vậy cột thẳng hàng (b07).
+            "align": "right" if fmt in _NUMERIC_FORMATS else "left",
+        }
+        for key, header, fmt in spec.columns
     ]
     rows = [
         {
-            column["key"]: _format_cell(item.get(column["key"]), column["format"])
+            column["key"]: _format_cell(
+                item.get(column["key"]), _resolve_format(column["format"], item)
+            )
             for column in columns
         }
         for item in shown
@@ -617,12 +629,27 @@ _BUILDERS = {
 
 
 def _as_list(value: Any) -> list[dict[str, Any]]:
-    """Danh sách bản ghi; ``metrics`` của ``get_comparison`` là dict nên được trải thành list."""
+    """Danh sách bản ghi; ``metrics`` của ``get_comparison`` là dict nên được trải thành list.
+
+    Khoá kỹ thuật (``total_issues``) được đổi sang nhãn tiếng Việt và giữ lại ở ``key`` để bước
+    định dạng biết KPI nào là tỉ lệ.
+    """
     if isinstance(value, list):
         return [item for item in value if isinstance(item, dict)]
     if isinstance(value, dict):
-        return [{"label": key, **item} for key, item in value.items() if isinstance(item, dict)]
+        return [
+            {"key": key, "label": KPI_LABELS_VI.get(key, key), **item}
+            for key, item in value.items()
+            if isinstance(item, dict)
+        ]
     return []
+
+
+def _resolve_format(fmt: str, item: dict[str, Any]) -> str:
+    """``metric`` = đơn vị phụ thuộc KPI của dòng: tỉ lệ thì phần trăm, còn lại là số đếm."""
+    if fmt != "metric":
+        return fmt
+    return "pct" if str(item.get("key") or "") in KPI_RATE_KEYS else "int"
 
 
 def _format_cell(value: Any, fmt: str) -> str:

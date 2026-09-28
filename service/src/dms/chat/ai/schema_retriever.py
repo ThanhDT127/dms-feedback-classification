@@ -41,7 +41,9 @@ PROMPT_FEWSHOT_LIMIT = (
     10  # 10 ví dụ đầu của file phải phủ đủ loại (có dữ liệu, chưa hỗ trợ, HELP, trạng thái)
 )
 CHARS_PER_TOKEN = 3  # ước lượng thận trọng cho tiếng Việt có dấu
-MAX_PROMPT_TOKENS = 4000
+# Trần prompt của Planner. 4000 chỉ đủ cho M1; từ M3 trở lên prompt cõng thêm luật FTS (b08),
+# Pattern 2 (b09) và báo cáo (b10) nên nâng lên 5500 để M5 còn chỗ thở (đo thực tế: 4981).
+MAX_PROMPT_TOKENS = 5500
 MAX_QUESTION_CHARS_IN_PROMPT = 2000
 
 

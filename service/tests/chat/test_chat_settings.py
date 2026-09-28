@@ -261,6 +261,7 @@ def test_chat_memory_and_budget_settings_defaults(settings):
     assert settings.chat_budget_warning_ratio == pytest.approx(0.8)
     assert settings.chat_session_ttl_days == 7
     assert settings.chat_session_cleanup_interval_seconds == 3600
+    assert settings.chat_usage_retention_days == 90
 
 
 @pytest.mark.parametrize(
@@ -274,6 +275,7 @@ def test_chat_memory_and_budget_settings_defaults(settings):
         {"chat_budget_warning_ratio": 1.5},
         {"chat_session_ttl_days": 0},
         {"chat_session_cleanup_interval_seconds": 30},
+        {"chat_usage_retention_days": 0},
     ],
 )
 def test_invalid_chat_memory_settings_rejected(override):
