@@ -6,8 +6,10 @@ không hợp lệ mới đi vào vòng sửa lỗi.
 
 from __future__ import annotations
 
+import calendar
 import logging
 from dataclasses import dataclass, field, replace
+from datetime import date
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -42,6 +44,8 @@ MAX_STEPS = 3
 NARRATIVE_SAMPLE_MAX_PAGE_SIZE = 5
 HELP_TOPICS = frozenset({"usage", "label_definition"})
 DATE_PARAMS = ("date_from", "date_to")
+COMPARISON_FUNCTION = "get_comparison"
+OVERVIEW_FUNCTION = "get_overview"
 
 
 class PlanStepModel(BaseModel):
@@ -291,6 +295,21 @@ class QueryPlanner:
                 continue
 
             params = dict(step.params)
+            if (
+                name == COMPARISON_FUNCTION
+                and query.compare_range is not None
+                and OVERVIEW_FUNCTION in allowed
+                and not _is_previous_period(query, str(params.get("period") or "month"))
+            ):
+                # get_comparison chỉ so với kỳ liền trước; câu hỏi nêu hai kỳ không liền nhau
+                # ("tháng 3 với tháng 6") thì phải dùng get_overview + compare_*, nếu không kỳ
+                # thứ hai bị bỏ âm thầm.
+                logger.info(
+                    "planner_comparison_rewritten",
+                    extra={"request_id": query.request_id, "to": OVERVIEW_FUNCTION},
+                )
+                name = OVERVIEW_FUNCTION
+                params.pop("period", None)
             if is_sample_step:
                 try:
                     page_size = int(params.get("page_size", NARRATIVE_SAMPLE_MAX_PAGE_SIZE))
@@ -400,6 +419,40 @@ class QueryPlanner:
         cleaned = {key: value for key, value in params.items() if key not in date_keys}
         cleaned.update(resolved)
         return cleaned
+
+
+_PERIOD_MONTHS = {"month": 1, "quarter": 3, "year": 12}
+
+
+def _is_previous_period(query: NormalizedQuery, period: str) -> bool:
+    """Kỳ get_comparison tự lùi có trùng đúng kỳ so sánh câu hỏi nêu không.
+
+    Analytics lùi từng mốc theo tháng và kẹp ngày (30/04 → 30/03, không phải 31/03), nên kỳ
+    so sánh là trọn tháng/quý thì phải khớp cả ngày cuối; kỳ đang diễn ra ("tháng này" tới hôm
+    nay) chỉ cần khớp mốc đầu, vì so cùng số ngày với kỳ trước là chủ ý của get_comparison.
+    """
+    months = _PERIOD_MONTHS.get(period)
+    if months is None or query.date_range is None or query.compare_range is None:
+        return False
+    current, compare = query.date_range, query.compare_range
+    if compare.date_from != _shift_months(current.date_from, months):
+        return False
+    if not _is_month_end(current.date_to):
+        return True
+    return compare.date_to == _shift_months(current.date_to, months)
+
+
+def _shift_months(value: date, months: int) -> date:
+    """Cùng quy tắc với ``FeedbackAnalyticsService.comparison``: lùi tháng, kẹp ngày."""
+    year, month_index = divmod(value.year * 12 + value.month - 1 - months, 12)
+    month = month_index + 1
+    return value.replace(
+        year=year, month=month, day=min(value.day, calendar.monthrange(year, month)[1])
+    )
+
+
+def _is_month_end(value: date) -> bool:
+    return value.day == calendar.monthrange(value.year, value.month)[1]
 
 
 ANALYSIS_KEYS = ("goal_vi", "measures", "dimensions", "filters", "order", "limit")

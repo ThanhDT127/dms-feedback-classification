@@ -83,8 +83,8 @@ def test_functions_filtered_by_enabled_patterns():
 def test_dates_and_candidates_are_rendered():
     retriever = SchemaRetriever(StaticMetadataProvider(), config=PlannerConfig())
     variables = retriever.prompt_variables(make_query("So sánh Q2 vs Q3 ở Nha Trang"))
-    assert "date_range 2026-04-01 → 2026-06-30" in variables["date_facts"]
-    assert "compare_range 2026-07-01 → 2026-09-15" in variables["date_facts"]
+    assert "date_range 2026-07-01 → 2026-09-15" in variables["date_facts"]
+    assert "compare_range 2026-04-01 → 2026-06-30" in variables["date_facts"]
     assert "Nha Trang" in variables["candidates"]
 
 

@@ -344,3 +344,26 @@ def test_numeric_columns_are_marked_right_aligned():
     assert columns["current"]["align"] == "right"
     assert columns["previous"]["align"] == "right"
     assert columns["change_percent"]["align"] == "right"
+
+
+# ── Pattern 2: ô rỗng và cột tỉ lệ (bộ câu hỏi kiểm thử, ca 28 và 30) ──
+
+
+def test_sql_table_null_label_is_unknown_not_missing_data():
+    from dms.chat.ai.block_builders import build_sql_block
+
+    rows = [{"product": f"SP{i}", "so_van_de": 30 - i} for i in range(25)]
+    rows[3] = {"product": None, "so_van_de": 27}
+    block = build_sql_block(rows)
+    assert block.kind == "table"
+    assert block.payload["rows"][3]["product"] == "Chưa xác định"
+    numeric = [c for c in block.payload["columns"] if c["key"] == "so_van_de"][0]
+    assert numeric["align"] == "right"
+
+
+def test_sql_rate_column_keeps_percent_sign():
+    from dms.chat.ai.block_builders import build_sql_block
+
+    block = build_sql_block([{"unit_name": "A", "ty_le": 19.8}, {"unit_name": "B", "ty_le": 8.8}])
+    assert block.kind == "ranking"
+    assert [item["display"] for item in block.payload["items"]] == ["19,8%", "8,8%"]

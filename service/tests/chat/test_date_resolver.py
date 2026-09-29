@@ -75,17 +75,53 @@ def test_future_quarter_means_previous_year():
     assert result.assumptions
 
 
-def test_two_periods_first_is_primary():
+def test_two_periods_later_is_primary():
+    """Kỳ sau là kỳ đang xem để "kỳ trước"/"tăng, giảm" đọc đúng chiều thời gian."""
     result = resolver.resolve("So sánh Q2 vs Q3")
     assert result.date_range is not None and result.compare_range is not None
     assert (result.date_range.date_from, result.date_range.date_to) == (
-        d("2026-04-01"),
-        d("2026-06-30"),
-    )
-    assert (result.compare_range.date_from, result.compare_range.date_to) == (
         d("2026-07-01"),
         d("2026-09-15"),
     )
+    assert (result.compare_range.date_from, result.compare_range.date_to) == (
+        d("2026-04-01"),
+        d("2026-06-30"),
+    )
+
+
+def test_two_months_earlier_first_are_swapped():
+    result = resolver.resolve("So sánh tháng 3/2026 với tháng 4/2026")
+    assert result.date_range is not None and result.compare_range is not None
+    assert result.date_range.date_from == d("2026-04-01")
+    assert result.compare_range.date_from == d("2026-03-01")
+
+
+def test_later_period_first_keeps_order():
+    result = resolver.resolve("Tháng 8 so với tháng 7")
+    assert result.date_range is not None and result.compare_range is not None
+    assert result.date_range.date_from == d("2026-08-01")
+    assert result.compare_range.date_from == d("2026-07-01")
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["So sánh từ đầu tháng 8", "Tổng quan từ 01/08", "phan hoi tu thang 6"],
+)
+def test_open_start_without_end_is_flagged(text):
+    assert QueryIssue.MISSING_END_DATE in resolver.resolve(text).issues
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Báo cáo từ 01/01/2026 đến 31/08/2026",
+        "từ tháng 3 đến tháng 5",
+        "Tổng quan tháng 8",
+        "Tổng quan từ đầu năm đến nay",
+    ],
+)
+def test_closed_or_plain_ranges_are_not_flagged(text):
+    assert QueryIssue.MISSING_END_DATE not in resolver.resolve(text).issues
 
 
 def test_same_period_last_month():

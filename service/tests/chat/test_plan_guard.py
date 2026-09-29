@@ -478,3 +478,93 @@ def test_functions_without_required_params_are_untouched(guard):
     plan = guard.check(output, make_query("tổng quan"), ADMIN)
 
     assert plan.decision is Decision.RUN
+
+
+# ── Sửa theo bộ câu hỏi kiểm thử 2026-09-29 ──
+
+M4 = PlanGuardConfig(
+    milestone="M4", enabled_patterns=frozenset({"sql_template", "fts5_search", "semantic_view"})
+)
+
+
+def test_open_start_date_asks_for_end_date(guard):
+    """Ca 19c: "từ đầu tháng 8" không được hiểu thành trọn tháng 8."""
+    plan = guard.check(
+        make_output(intent=Intent.COMPARISON, function_name="get_comparison",
+                    params={"date_from": "2026-08-01", "date_to": "2026-08-31"}),
+        make_query("So sánh từ đầu tháng 8", issues=(QueryIssue.MISSING_END_DATE,)),
+        ADMIN,
+    )
+    assert (plan.decision, plan.reason) == (Decision.CLARIFY, Reason.FILTER_REQUIRED)
+    assert "đến ngày" in plan.message
+
+
+def test_numeric_code_lookup_is_not_supported(guard):
+    """Ca 27: mã thật là số thuần; không lộ tên khoá issue_code."""
+    plan = guard.check(
+        make_output(intent=Intent.LOOKUP_FEEDBACK, function_name="get_issues",
+                    params={"issue_code": "206501"}),
+        make_query("Tra phản hồi mã 206501"),
+        ADMIN,
+    )
+    assert (plan.decision, plan.reason) == (
+        Decision.NOT_SUPPORTED, Reason.LOOKUP_BY_CODE_UNAVAILABLE
+    )
+    assert "issue_code" not in (plan.message or "")
+
+
+def test_unknown_param_name_never_reaches_the_user(guard):
+    """Ca 20-M1: tham số Planner tự chế được gọi bằng tên tiếng Việt."""
+    plan = guard.check(
+        make_output(intent=Intent.LOOKUP_FEEDBACK, function_name="get_issues",
+                    params={"content_keyword": "chập chờn"}),
+        make_query("Liệt kê phản hồi có chữ chập chờn"),
+        ADMIN,
+    )
+    assert plan.reason is Reason.FILTER_NOT_SUPPORTED
+    assert "content_keyword" not in plan.message and "nội dung phản hồi" in plan.message
+
+
+def test_dropped_sentiment_filter_is_restored_to_semantic_view():
+    """Ca 29: "tiêu cực" bị Planner bỏ mất thì chuyển Pattern 2 kèm bộ lọc."""
+    guard = PlanGuard(StaticMetadataProvider(), config=M4)
+    plan = guard.check(
+        make_output(intent=Intent.DRILL_UNIT, function_name="get_units"),
+        make_query("Đơn vị nào có nhiều phản hồi tiêu cực nhất?"),
+        ADMIN,
+    )
+    assert plan.decision is Decision.RUN
+    assert plan.steps[0].pattern is QueryPattern.SEMANTIC_VIEW
+    assert plan.steps[0].params["sentiment"] == "Tiêu cực"
+
+
+def test_sentiment_rate_is_not_a_where_filter():
+    """Ca 30: "tỉ lệ tích cực" cần mẫu số nên không lọc, mà yêu cầu Pattern 2 tính tỉ lệ."""
+    guard = PlanGuard(StaticMetadataProvider(), config=M4)
+    plan = guard.check(
+        make_output(intent=Intent.DRILL_UNIT, function_name="get_units"),
+        make_query("Tỉ lệ phản hồi tích cực theo từng đơn vị"),
+        ADMIN,
+    )
+    step = plan.steps[0]
+    assert step.pattern is QueryPattern.SEMANTIC_VIEW
+    assert "sentiment" not in step.params
+    assert step.params["analysis_request"]["measures"] == ["ty_le"]
+
+
+def test_ungrounded_fts_filter_is_dropped_with_notice():
+    """Ca 22: bộ lọc cảm xúc Planner đoán thêm cho tra cứu bị bỏ, kèm thông báo."""
+    guard = PlanGuard(StaticMetadataProvider(), config=M4)
+    step = QueryPlan(
+        pattern=QueryPattern.FTS5_SEARCH, answer_shape=AnswerShape.LIST, original_query="q",
+        params={"sentiment": "Tiêu cực", "search_terms": ["giao hàng", "chậm"]},
+        fts_query="giao hàng chậm",
+    )
+    plan = guard.check(
+        make_output(intent=Intent.LOOKUP_FEEDBACK, steps=(step,)),
+        make_query("Phản hồi nào nhắc tới giao hàng chậm?"),
+        ADMIN,
+    )
+    assert plan.decision is Decision.RUN
+    assert "sentiment" not in plan.steps[0].params
+    assert any("Tiêu cực" in n.message for n in plan.notices)

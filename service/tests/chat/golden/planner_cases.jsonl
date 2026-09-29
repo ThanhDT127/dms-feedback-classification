@@ -11,7 +11,7 @@
 {"id": "tr04", "question": "xu huong phan hoi cua Ho Chi Minh thang nay", "expected_intent": "TREND", "expected_function": "get_daily_trend", "tags": ["no_diacritics"]}
 {"id": "tr05", "question": "Ngày nào trong tuần trước có nhiều phản hồi nhất?", "expected_intent": "TREND", "expected_function": "get_daily_trend"}
 {"id": "tr06", "question": "Phản hồi tăng hay giảm dần trong quý 3?", "expected_intent": "TREND", "expected_function": "get_daily_trend"}
-{"id": "cp01", "question": "So sánh Q2 vs Q3", "expected_intent": "COMPARISON", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2026-04-01", "compare_from": "2026-07-01"}}
+{"id": "cp01", "question": "So sánh Q2 vs Q3", "expected_intent": "COMPARISON", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2026-07-01", "compare_from": "2026-04-01"}}
 {"id": "cp02", "question": "Tháng 8 so với tháng 7 thì số vấn đề thay đổi thế nào?", "expected_intent": "COMPARISON", "expected_function": "get_overview", "expected_params_subset": {"date_from": "2026-08-01", "compare_from": "2026-07-01"}}
 {"id": "cp03", "question": "So với tháng trước, KPI tháng này tăng hay giảm?", "expected_intent": "COMPARISON", "expected_function": "get_comparison", "expected_params_subset": {"period": "month"}}
 {"id": "cp04", "question": "so sanh quy nay voi quy truoc", "expected_intent": "COMPARISON", "expected_function": "get_comparison", "expected_params_subset": {"period": "quarter"}, "tags": ["no_diacritics"]}

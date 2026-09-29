@@ -34,6 +34,8 @@ FTS_MAX_QUOTES = 10
 SEMANTIC_FUNCTION = "semantic_view"
 SQL_RANKING_MAX_ROWS = 20
 SQL_FACT_ROWS = 10
+UNKNOWN_LABEL = "Chưa xác định"
+RATE_ALIAS_PREFIXES = ("ty_le", "ti_le", "tyle", "tile", "phan_tram")
 FILE_LOOKUP_COLUMNS = (
     ("issue_code", "Mã vấn đề", "text"),
     ("source_file_name", "File nguồn", "text"),
@@ -199,7 +201,7 @@ def build_sql_block(
             "label": title_of(alias),
             "available": value is not None,
             "value": value,
-            "display": _format_sql_value(value),
+            "display": format_sql_cell(value, numeric=True, rate=is_rate_alias(alias)),
             "denominator": None,
             "excluded_missing_issue_code": None,
         }
@@ -226,9 +228,11 @@ def build_sql_block(
         items = [
             {
                 "rank": i,
-                "label": str(r.get(first) if r.get(first) is not None else "Chưa xác định"),
+                "label": str(r.get(first) if r.get(first) is not None else UNKNOWN_LABEL),
                 "value": r.get(value_col),
-                "display": _format_sql_value(r.get(value_col)),
+                "display": format_sql_cell(
+                    r.get(value_col), numeric=True, rate=is_rate_alias(value_col)
+                ),
                 "percent": None,
                 "percent_display": "",
             }
@@ -261,8 +265,21 @@ def build_sql_block(
         return _sql_timeseries(block_id, title, subtitle, rows, first, value_col, sql_facts)
 
     shown = rows[: cfg.table_max_rows]
-    table_columns = [{"key": c, "header_vi": title_of(c), "format": "text"} for c in columns]
-    table_rows = [{c: _format_sql_value(r.get(c)) for c in columns} for r in shown]
+    table_columns = [
+        {
+            "key": c,
+            "header_vi": title_of(c),
+            "format": "int" if c in numeric else "text",
+            "align": "right" if c in numeric else "left",
+        }
+        for c in columns
+    ]
+    # Ô chữ rỗng là nhóm không có giá trị (vd. sản phẩm để trống) — "Chưa xác định" như khối
+    # xếp hạng; "Chưa đủ dữ liệu" chỉ dành cho số không tính được.
+    table_rows = [
+        {c: format_sql_cell(r.get(c), numeric=c in numeric, rate=is_rate_alias(c)) for c in columns}
+        for r in shown
+    ]
     return DataBlock(
         block_id=block_id,
         kind="table",
@@ -286,7 +303,9 @@ def _sql_timeseries(block_id, title, subtitle, rows, date_col, value_col, sql_fa
             if len(str(r.get(date_col))) == 10
             else str(r.get(date_col)),
             "value": r.get(value_col),
-            "display": _format_sql_value(r.get(value_col)),
+            "display": format_sql_cell(
+                r.get(value_col), numeric=True, rate=is_rate_alias(value_col)
+            ),
         }
         for r in rows
     ]
@@ -307,6 +326,21 @@ def _looks_like_dates(rows: list[dict[str, Any]], column: str) -> bool:
     pattern = _re.compile(r"^\d{4}-\d{2}(-\d{2})?$")
     values = [r.get(column) for r in rows if r.get(column) is not None]
     return bool(values) and all(isinstance(v, str) and pattern.match(v) for v in values)
+
+
+def is_rate_alias(alias: str) -> bool:
+    """Prompt sinh SQL đặt tên cột tỉ lệ là ``ty_le``/``ti_le``… — giá trị đã nhân 100."""
+    return str(alias).lower().startswith(RATE_ALIAS_PREFIXES)
+
+
+def format_sql_cell(value: Any, *, numeric: bool, rate: bool = False) -> str:
+    """Ô chữ rỗng là nhóm không có giá trị (vd. sản phẩm để trống) nên ghi "Chưa xác định" như
+    khối xếp hạng; "Chưa đủ dữ liệu" chỉ dành cho con số không tính được. Cột tỉ lệ có "%"."""
+    if value is None and not numeric:
+        return UNKNOWN_LABEL
+    if rate and isinstance(value, int | float) and not isinstance(value, bool):
+        return format_percent(value)
+    return _format_sql_value(value)
 
 
 def _format_sql_value(value: Any) -> str:

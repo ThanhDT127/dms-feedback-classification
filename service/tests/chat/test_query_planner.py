@@ -157,15 +157,39 @@ def test_llm_dates_removed_when_question_has_no_time():
 def test_compare_range_added_only_where_supported():
     planner, _ = make_planner([output(intent="COMPARISON", steps=[step("get_overview")])])
     overview = planner.plan(make_query("So sánh Q2 vs Q3")).steps[0]
-    assert overview.params["compare_from"] == "2026-07-01"
-    assert overview.params["compare_to"] == "2026-09-15"
+    assert overview.params["date_from"] == "2026-07-01"
+    assert overview.params["compare_from"] == "2026-04-01"
+    assert overview.params["compare_to"] == "2026-06-30"
 
+    # Q2 đúng là kỳ liền trước Q3 nên get_comparison(period=quarter) cho cùng kết quả.
     planner, _ = make_planner(
         [output(intent="COMPARISON", steps=[step("get_comparison", period="quarter")])]
     )
     comparison = planner.plan(make_query("So sánh Q2 vs Q3")).steps[0]
+    assert comparison.function_name == "get_comparison"
     assert "compare_from" not in comparison.params
     assert comparison.params["period"] == "quarter"
+
+
+def test_comparison_of_full_months_uses_overview_when_clamp_would_cut_a_day():
+    """Analytics lùi 30/04 thành 30/03: "tháng 3 với tháng 4" giữ get_comparison thì mất 31/03."""
+    planner, _ = make_planner(
+        [output(intent="COMPARISON", steps=[step("get_comparison", period="month")])]
+    )
+    plan = planner.plan(make_query("So sánh tháng 3/2026 với tháng 4/2026")).steps[0]
+    assert plan.function_name == "get_overview"
+    assert (plan.params["compare_from"], plan.params["compare_to"]) == ("2026-03-01", "2026-03-31")
+
+
+def test_comparison_of_non_adjacent_periods_uses_overview():
+    """get_comparison chỉ lùi một kỳ: "tháng 3 với tháng 6" mà giữ nó thì tháng 3 bị bỏ."""
+    planner, _ = make_planner(
+        [output(intent="COMPARISON", steps=[step("get_comparison", period="month")])]
+    )
+    plan = planner.plan(make_query("So sánh tháng 3/2026 với tháng 6/2026")).steps[0]
+    assert plan.function_name == "get_overview"
+    assert "period" not in plan.params
+    assert (plan.params["date_from"], plan.params["compare_from"]) == ("2026-06-01", "2026-03-01")
 
 
 def test_narrative_statistics_then_small_sample():

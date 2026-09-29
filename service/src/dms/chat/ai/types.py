@@ -72,6 +72,8 @@ class GuardDecision:
 
 class QueryIssue(StrEnum):
     INVALID_DATE = "INVALID_DATE"
+    # "từ đầu tháng 8" không kèm "đến ...": chỉ có mốc bắt đầu, không tự đoán ngày kết thúc.
+    MISSING_END_DATE = "MISSING_END_DATE"
 
 
 class Dimension(StrEnum):

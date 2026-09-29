@@ -336,9 +336,7 @@ class AnswerComposer:
 
         dates = _dates(outcome)
         range_text = format_date_range(dates.get("date_from"), dates.get("date_to"))
-        subtitle = subtitle_for_range(
-            dates.get("date_from"), dates.get("date_to"), outcome.scope_units
-        )
+        subtitle = _subtitle(dates, outcome.scope_units)
         blocks = build_blocks(outcome.step_results, config=self.config.blocks, subtitle=subtitle)
 
         if not blocks:
@@ -852,11 +850,40 @@ def _dates(outcome: TurnOutcome) -> dict[str, str]:
     if plan is None or not plan.steps:
         return {}
     params = plan.steps[0].params
-    return {
+    dates = {
         key: str(params[key])
         for key in ("date_from", "date_to", "compare_from", "compare_to")
         if params.get(key)
     }
+    if "compare_from" not in dates:
+        # get_comparison tự lùi kỳ; kỳ trước chỉ có trong kết quả, không có trong tham số.
+        previous = _comparison_previous_range(outcome)
+        if previous is not None:
+            dates["compare_from"], dates["compare_to"] = previous
+    return dates
+
+
+def _comparison_previous_range(outcome: TurnOutcome) -> tuple[str, str] | None:
+    for step in outcome.step_results:
+        if step.function_name != "get_comparison" or step.result is None:
+            continue
+        row = (step.result.data or [{}])[0]
+        previous = row.get("previous_range") if isinstance(row, Mapping) else None
+        if isinstance(previous, Mapping) and previous.get("from") and previous.get("to"):
+            return str(previous["from"]), str(previous["to"])
+    return None
+
+
+def _subtitle(dates: Mapping[str, str], scope_units: Sequence[str]) -> str:
+    """Phụ đề khối; có kỳ so sánh thì ghi cả hai để người đọc biết đang so với kỳ nào."""
+    subtitle = subtitle_for_range(dates.get("date_from"), dates.get("date_to"), tuple(scope_units))
+    compare_text = format_date_range(dates.get("compare_from"), dates.get("compare_to"))
+    if not compare_text:
+        return subtitle
+    range_text = format_date_range(dates.get("date_from"), dates.get("date_to"))
+    if range_text and subtitle.startswith(range_text):
+        return f"{range_text} so với {compare_text}{subtitle[len(range_text):]}"
+    return f"{subtitle} · so với {compare_text}" if subtitle else f"so với {compare_text}"
 
 
 def _title_with_range(block: DataBlock, range_text: str) -> str:

@@ -142,14 +142,23 @@ def _sql_facts(block: DataBlock) -> list[Fact]:
     scope = (block.fact_scope or {}).get("sql")
     if not isinstance(scope, dict):
         return []
-    from .block_builders import _format_sql_value
+    from .block_builders import format_sql_cell, is_rate_alias
 
+    rows = scope.get("rows") or []
+    columns = scope.get("columns") or []
+    numeric = {
+        alias
+        for alias in columns
+        if any(isinstance(r.get(alias), int | float) and not isinstance(r.get(alias), bool)
+               for r in rows)
+    }
     facts: list[Fact] = []
-    for index, row in enumerate(scope.get("rows") or [], start=1):
-        for alias in scope.get("columns") or []:
+    for index, row in enumerate(rows, start=1):
+        for alias in columns:
             value = row.get(alias)
             raw = value if isinstance(value, int | float | str) else None
-            facts.append(make_fact(f"sql.r{index}.{alias}", _format_sql_value(value), raw))
+            display = format_sql_cell(value, numeric=alias in numeric, rate=is_rate_alias(alias))
+            facts.append(make_fact(f"sql.r{index}.{alias}", display, raw))
     return facts
 
 

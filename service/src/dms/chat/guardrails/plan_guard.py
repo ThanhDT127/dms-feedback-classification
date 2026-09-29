@@ -95,6 +95,19 @@ FUNCTION_DIMENSIONS: dict[str, list[str]] = {
     "get_daily_trend": ["issue_date"],
 }
 ISSUE_CODE_PATTERN = re.compile(r"\b[A-Za-z][A-Za-z0-9]{1,5}-\d{3,}\b")
+# "mã 206501", "mã vấn đề NT-0106" trên ``match_text`` (đã bỏ dấu, chữ thường).
+CODE_LOOKUP_PATTERN = re.compile(
+    r"\bma (?:van de |phan hoi |so )?(?:la )?#?(?:[a-z][a-z0-9]{1,5}-)?\d{3,}\b"
+)
+CODE_LOOKUP_INTENTS = frozenset({Intent.LOOKUP_FEEDBACK, Intent.LOOKUP_FILE})
+# Tham số Planner tự chế để tra theo mã; chưa hàm nào nhận nên báo LOOKUP_BY_CODE_UNAVAILABLE.
+CODE_PARAMS = frozenset({"issue_code", "feedback_id", "code", "ma_van_de"})
+# Chiều mà Normalizer nhận ra bằng bảng cụm từ (độ chính xác cao) — Planner bỏ mất thì khôi phục.
+RESTORABLE_DIMENSIONS: dict[str, str] = {
+    Dimension.SENTIMENT.value: "sentiment",
+    Dimension.LABEL.value: "label",
+}
+_RATE_WORDS = re.compile(r"\b(?:ti le|ty le|phan tram|bao nhieu %)\b|%")
 # "liệt kê phản hồi trong file X.xlsx" — chưa có bộ lọc source_file_name (b08 D7).
 _FILE_LISTING = re.compile(r"\.(xlsx|xlsm|xls|csv)\b|\btrong (file|tep)\b")
 
@@ -196,6 +209,13 @@ class PlanGuard:
         assert output.intent is not None
         intent = output.intent
 
+        # "Tra phản hồi mã 206501": mã thật là số thuần nên Planner hay chế tham số issue_code.
+        if intent in CODE_LOOKUP_INTENTS and CODE_LOOKUP_PATTERN.search(query.match_text):
+            logger.info("plan_guard_code_lookup_unavailable", extra={"intent": intent.value})
+            return self._terminal(
+                output, Decision.NOT_SUPPORTED, Reason.LOOKUP_BY_CODE_UNAVAILABLE, intent=intent
+            )
+
         # Báo cáo: bước do template dựng sau khi áp phạm vi, không từ Planner (b10 D1).
         if intent in REPORT_INTENTS and supports_report(intent, self.config.milestone):
             return self._check_report(output, intent, query, scope)
@@ -210,9 +230,13 @@ class PlanGuard:
                 return step_check
 
         # Bước 7
-        resolved_steps, resolution = self._resolve_entities(output.steps, query)
+        dropped_filters: list[tuple[str, str]] = []
+        resolved_steps, resolution = self._resolve_entities(
+            output.steps, query, dropped=dropped_filters
+        )
         if resolution is not None:
             return self._clarify_entity(output, intent, resolution)
+        resolved_steps, rates = self._restore_dropped_filters(resolved_steps, query)
 
         # Bước 8
         scoped = self._apply_scope(output, intent, query, scope, resolved_steps)
@@ -220,10 +244,13 @@ class PlanGuard:
             return scoped
 
         # Bước 9–10
-        checked = self._check_params(scoped)
+        checked = self._check_params(scoped, rates=rates)
         if checked.decision is not Decision.RUN:
             return checked
-        return self._build_fts(checked, query)
+        built = self._build_fts(checked, query)
+        if dropped_filters and built.decision is Decision.RUN:
+            built = replace(built, notices=built.notices + (_dropped_filter_notice(dropped_filters),))
+        return built
 
     # ── Bước 1–3 ──
 
@@ -295,6 +322,15 @@ class PlanGuard:
         if QueryIssue.INVALID_DATE in query.issues:
             return self._terminal(
                 output, Decision.CLARIFY, Reason.INVALID_DATE, intent=output.intent
+            )
+        if QueryIssue.MISSING_END_DATE in query.issues:
+            # "Từ đầu tháng 8" không phải "tháng 8": hỏi ngày kết thúc thay vì lấy trọn tháng.
+            return self._terminal(
+                output,
+                Decision.CLARIFY,
+                Reason.FILTER_REQUIRED,
+                intent=output.intent,
+                filter_name=PARAM_LABELS_VI["date_to"],
             )
         for step in output.steps:
             date_from = step.params.get("date_from")
@@ -440,7 +476,9 @@ class PlanGuard:
         query: NormalizedQuery,
         *,
         check_grounding: bool = True,
+        dropped: list[tuple[str, str]] | None = None,
     ) -> tuple[tuple[QueryPlan, ...], _Resolution | None]:
+        """``dropped``: nhận (tham số, giá trị) của bộ lọc tra cứu bị bỏ vì không có căn cứ."""
         resolved: list[QueryPlan] = []
         for step in steps:
             params = dict(step.params)
@@ -454,6 +492,17 @@ class PlanGuard:
                 if check_grounding and not self._is_grounded(
                     param, mention, str(outcome.value), query
                 ):
+                    if step.pattern is QueryPattern.FTS5_SEARCH and dropped is not None:
+                        # Tra cứu toàn văn: từ khoá đã mang ý câu hỏi ("giao hàng chậm"), bộ lọc
+                        # Planner đoán thêm ("Tiêu cực") chỉ thu hẹp kết quả, nên bỏ đi và báo
+                        # lại thay vì hỏi ngược người dùng về điều họ không nói.
+                        logger.info(
+                            "plan_guard_fts_filter_dropped",
+                            extra={"param": param, "value": outcome.value},
+                        )
+                        dropped.append((param, str(outcome.value)))
+                        del params[param]
+                        continue
                     return (), _Resolution(
                         reason=Reason.FILTER_VALUE_UNGROUNDED,
                         value=str(outcome.value),
@@ -524,6 +573,44 @@ class PlanGuard:
                 mention=mention,
             )
         return _Resolution(value=matches[0].value, param=param, mention=mention)
+
+    def _restore_dropped_filters(
+        self, steps: tuple[QueryPlan, ...], query: NormalizedQuery
+    ) -> tuple[tuple[QueryPlan, ...], dict[str, str]]:
+        """Câu hỏi nêu rõ cảm xúc/nhãn mà bước Pattern 1 không lọc thì gắn lại bộ lọc (D6).
+
+        Planner hay chọn ``get_units`` cho "đơn vị nào nhiều phản hồi tiêu cực nhất" và bỏ mất
+        "tiêu cực": câu trả lời thành xếp hạng toàn bộ vấn đề, rồi nhận định gọi tỉ trọng là
+        "tỉ lệ tiêu cực". Gắn lại thì ``_check_params`` chuyển sang Pattern 2 hoặc báo chưa lọc
+        được. Câu hỏi về tỉ lệ ("tỉ lệ tích cực") không được lọc (lọc rồi thì mất mẫu số) nên
+        trả riêng để Pattern 2 tính tỉ lệ.
+        """
+        if not steps or steps[0].pattern is not QueryPattern.SQL_TEMPLATE:
+            return steps, {}
+        first = steps[0]
+        name = str(first.function_name)
+        own_dimensions = FUNCTION_DIMENSIONS.get(name, [])
+        is_rate = bool(_RATE_WORDS.search(query.match_text))
+        params = dict(first.params)
+        rates: dict[str, str] = {}
+        for dimension, param in RESTORABLE_DIMENSIONS.items():
+            if params.get(param) or param in own_dimensions:
+                continue
+            values = list(dict.fromkeys(c.value for c in query.entities.get(dimension, ())))
+            if len(values) != 1:
+                continue  # "tiêu cực và tích cực" là đếm có điều kiện, không phải một bộ lọc
+            if is_rate:
+                rates[param] = values[0]
+            else:
+                params[param] = values[0]
+        if params == first.params and not rates:
+            return steps, {}
+        logger.info(
+            "plan_guard_filter_restored",
+            extra={"function": name, "params": sorted(set(params) - set(first.params)),
+                   "rates": sorted(rates)},
+        )
+        return (replace(first, params=params), *steps[1:]), rates
 
     def _values_for(self, param: str) -> tuple[str, ...]:
         if param in _CONSTANT_VALUES:
@@ -724,7 +811,9 @@ class PlanGuard:
 
     # ── Bước 9–10: tham số được hàm hỗ trợ (D6) ──
 
-    def _check_params(self, plan: ValidatedPlan) -> ValidatedPlan:
+    def _check_params(
+        self, plan: ValidatedPlan, *, rates: Mapping[str, str] | None = None
+    ) -> ValidatedPlan:
         # param -> giá trị người dùng nêu, để thông báo nói rõ điều kiện nào bị chặn (D10).
         unsupported: dict[str, str] = {}
 
@@ -751,18 +840,28 @@ class PlanGuard:
         if missing is not None:
             return missing
 
+        for param, value in (rates or {}).items():
+            unsupported.setdefault(param, value)
         if not unsupported:
             return plan
 
-        fallback = self._semantic_fallback(plan, unsupported)
+        if CODE_PARAMS & set(unsupported):
+            logger.info("plan_guard_code_lookup_unavailable", extra={"params": list(unsupported)})
+            return replace(
+                plan,
+                decision=Decision.NOT_SUPPORTED,
+                reason=Reason.LOOKUP_BY_CODE_UNAVAILABLE,
+                steps=(),
+                message=render(Reason.LOOKUP_BY_CODE_UNAVAILABLE),
+            )
+
+        fallback = self._semantic_fallback(plan, unsupported, rates=rates or {})
         if fallback is not None:
             return fallback
 
         # Nêu kèm giá trị để người dùng biết chính xác điều kiện nào bị chặn (D10).
         names = [
-            f"{PARAM_LABELS_VI.get(param, param)} \u201c{value}\u201d"
-            if value
-            else PARAM_LABELS_VI.get(param, param)
+            f"{param_label_vi(param)} \u201c{value}\u201d" if value else param_label_vi(param)
             for param, value in unsupported.items()
         ]
         logger.info("plan_guard_filter_not_supported", extra={"params": list(unsupported)})
@@ -811,8 +910,13 @@ class PlanGuard:
     # ── Pattern 2 (b09 D7): chuyển bộ lọc Pattern 1 không hỗ trợ thành bước semantic_view ──
 
     def _semantic_fallback(
-        self, plan: ValidatedPlan, unsupported: Mapping[str, str]
+        self,
+        plan: ValidatedPlan,
+        unsupported: Mapping[str, str],
+        *,
+        rates: Mapping[str, str] | None = None,
     ) -> ValidatedPlan | None:
+        """``rates``: bộ lọc là tử số của một tỉ lệ ("tỉ lệ tích cực"), không đưa vào WHERE."""
         intent = plan.intent
         if intent is None or not supports_semantic(
             intent, self.config.milestone, self.config.enabled_patterns
@@ -835,13 +939,26 @@ class PlanGuard:
         limit = params.pop("limit", None) or params.pop("page_size", None)
         params.pop("page", None)
         filters = {k: v for k, v in params.items() if k in SEMANTIC_FILTER_KEYS}
-        request = {
-            "goal_vi": plan.planner_output.reason or "Phân tích theo yêu cầu",
-            "measures": ["so_van_de"],
-            "dimensions": FUNCTION_DIMENSIONS[str(first.function_name)],
-            "order": "so_van_de desc" if FUNCTION_DIMENSIONS[str(first.function_name)] else None,
-            "limit": limit,
-        }
+        dimensions = FUNCTION_DIMENSIONS[str(first.function_name)]
+        if rates:
+            numerator = join_vi(
+                [f"{DIMENSION_LABELS_VI.get(k, k)} \u201c{v}\u201d" for k, v in rates.items()]
+            )
+            request = {
+                "goal_vi": f"Tỉ lệ vấn đề có {numerator} trên tổng số vấn đề",
+                "measures": ["ty_le"],
+                "dimensions": dimensions,
+                "order": "ty_le desc" if dimensions else None,
+                "limit": limit,
+            }
+        else:
+            request = {
+                "goal_vi": plan.planner_output.reason or "Phân tích theo yêu cầu",
+                "measures": ["so_van_de"],
+                "dimensions": dimensions,
+                "order": "so_van_de desc" if dimensions else None,
+                "limit": limit,
+            }
         step = QueryPlan(
             pattern=QueryPattern.SEMANTIC_VIEW,
             answer_shape=first.answer_shape,
@@ -933,6 +1050,27 @@ class PlanGuard:
         return self._terminal(output, Decision.CLARIFY, Reason.INVALID_PLAN, intent=intent)
 
 
+def param_label_vi(param: str) -> str:
+    """Tên bộ lọc cho người dùng; tham số Planner tự chế không bao giờ lộ tên khoá kỹ thuật."""
+    if param in PARAM_LABELS_VI:
+        return PARAM_LABELS_VI[param]
+    lowered = param.lower()
+    if any(word in lowered for word in ("content", "keyword", "search", "text", "noi_dung")):
+        return "nội dung phản hồi"
+    return "điều kiện"
+
+
+def _dropped_filter_notice(dropped: Sequence[tuple[str, str]]) -> Notice:
+    names = join_vi(
+        [f"{DIMENSION_LABELS_VI.get(param, param)} \u201c{value}\u201d" for param, value in dropped]
+    )
+    return Notice(
+        kind=Reason.RELAXED_SEARCH,
+        message=f"Tôi không lọc theo {names} vì câu hỏi không nhắc tới.",
+        details={"dropped_terms": [], "dropped_filters": [param for param, _ in dropped]},
+    )
+
+
 def iter_unsupported_params(steps: Iterable[QueryPlan]) -> Mapping[str, str]:
     """Tham số không được hàm hỗ trợ → tên tiếng Việt (dùng cho log và b05)."""
     found: dict[str, str] = {}
@@ -942,5 +1080,5 @@ def iter_unsupported_params(steps: Iterable[QueryPlan]) -> Mapping[str, str]:
             continue
         for param in step.params:
             if param not in info.supported_params:
-                found[param] = PARAM_LABELS_VI.get(param, param)
+                found[param] = param_label_vi(param)
     return found

@@ -103,7 +103,13 @@ class HistoryAdapter:
                 plans = json.loads(message.metadata_json).get("plans") or []
             except (ValueError, AttributeError):
                 continue
-            usable = [dict(plan) for plan in plans if isinstance(plan, dict) and plan.get("params")]
+            # ``params`` rỗng vẫn là plan hợp lệ: "đơn vị nào nhiều vấn đề nhất" không có bộ lọc.
+            usable = [
+                dict(plan)
+                for plan in plans
+                if isinstance(plan, dict) and plan.get("function_name")
+                and isinstance(plan.get("params", {}), dict)
+            ]
             if usable:
                 return usable
         return []

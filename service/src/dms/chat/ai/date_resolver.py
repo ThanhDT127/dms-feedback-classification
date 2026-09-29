@@ -339,6 +339,10 @@ def _vague(m: re.Match[str], today: date) -> _Period:
 _D = r"(?P<{d}>\d{{1,2}})[/-](?P<{m}>\d{{1,2}})(?:[/-](?P<{y}>\d{{2,4}}))?"
 _Q_TAIL = r"(?:(?:[/ -]| nam )(?P<y>\d{4})\b)?"
 
+# Mốc mở "từ <ngày|tháng|quý|năm>" mà phía sau không có "đến/tới": thiếu ngày kết thúc.
+_OPEN_START = re.compile(r"(?<!quy )\btu (?:dau |giua |cuoi )?(?:ngay |thang |quy |nam )?\d")
+_RANGE_END = re.compile(r"\b(?:den|toi)\b|->|~")
+
 _SAME_PERIOD = re.compile(
     r"\bcung ky(?: (?P<u>thang truoc|thang roi|nam truoc|nam ngoai|nam roi|quy truoc|tuan truoc|hom qua))?\b"
 )
@@ -497,11 +501,21 @@ class DateResolver:
                 assumptions.append("Hiểu “cùng kỳ” là cùng kỳ năm trước.")
         elif len(periods) >= 2:
             compare = periods[1]
+            # "So sánh tháng 3 với tháng 4": kỳ sau là kỳ đang xem, kỳ trước là mốc so sánh,
+            # để "tăng/giảm" luôn đọc theo chiều thời gian (4 so với 3), không theo thứ tự chữ.
+            if compare.start > primary.start:
+                primary, compare = compare, primary
             if len(periods) > 2:
                 assumptions.append("Chỉ dùng hai mốc thời gian đầu tiên trong câu hỏi.")
+
+        issues: tuple[QueryIssue, ...] = ()
+        open_start = _OPEN_START.search(normalized)
+        if open_start and not _RANGE_END.search(normalized, open_start.end()):
+            issues = (QueryIssue.MISSING_END_DATE,)
 
         return DateResolution(
             date_range=_to_range(primary),
             compare_range=_to_range(compare) if compare else None,
             assumptions=tuple(assumptions),
+            issues=issues,
         )
