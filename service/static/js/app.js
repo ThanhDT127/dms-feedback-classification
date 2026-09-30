@@ -13,6 +13,7 @@ window.App = (() => {
     theme: 'dark',
     user: null,
     isAuthenticated: false,
+    chatConfig: null,
   };
 
   /* ---- Page Registry ---- */
@@ -26,6 +27,7 @@ window.App = (() => {
     pipeline:  { module: () => window.PipelinePage,  title: 'Pipeline' },
     metrics:   { module: () => window.MetricsPage,   title: 'Thống kê' },
     qa:        { module: () => window.QAPage,        title: 'Hướng dẫn sử dụng' },
+    chat:      { module: () => window.ChatPage,      title: 'Trợ lý dữ liệu' },
   };
 
   const DEFAULT_PAGE = 'analytics';
@@ -50,6 +52,12 @@ window.App = (() => {
 
     // Redirect away from login if already authenticated
     if (pageName === 'login') {
+      window.location.hash = DEFAULT_PAGE;
+      return;
+    }
+
+    // Chat chỉ mở khi server bật (GET /api/chat/config)
+    if (pageName === 'chat' && !state.chatConfig?.enabled) {
       window.location.hash = DEFAULT_PAGE;
       return;
     }
@@ -193,6 +201,17 @@ window.App = (() => {
     if (overlay) overlay.style.display = 'none';
   }
 
+  /* ---- Chat feature flag ---- */
+  async function loadChatConfig() {
+    try {
+      state.chatConfig = await API.get('/chat/config', { silent: true });
+    } catch {
+      // Lỗi hoặc route không có: coi như chat tắt, không báo lỗi.
+      state.chatConfig = { enabled: false };
+    }
+    return state.chatConfig;
+  }
+
   /* ---- Init ---- */
   async function init() {
     initTheme();
@@ -204,6 +223,7 @@ window.App = (() => {
         const user = await API.get('/auth/me', { silent: true });
         state.user = user;
         state.isAuthenticated = true;
+        await loadChatConfig();
       } catch {
         API.clearTokens();
         state.user = null;
@@ -261,6 +281,11 @@ window.App = (() => {
   function setUser(user) {
     state.user = user;
     state.isAuthenticated = true;
+    // Trang đăng nhập render sidebar ngay; khi có config thì render lại để hiện mục chat.
+    loadChatConfig().then(() => {
+      if (state.isAuthenticated && window.Sidebar) window.Sidebar.render();
+      if (state.isAuthenticated && getHash() === 'chat') onHashChange();
+    });
   }
 
   function logout() {
@@ -268,8 +293,11 @@ window.App = (() => {
       API.logout({ silent: true }).catch(() => {});
     }
     API.clearTokens();
+    // Quên phiên chat đang nhớ, tránh người đăng nhập sau mở nhầm cuộc của người trước.
+    if (window.ChatState) ChatState.forgetSession();
     state.user = null;
     state.isAuthenticated = false;
+    state.chatConfig = null;
     renderPage('login');
   }
 
@@ -278,6 +306,6 @@ window.App = (() => {
     toggleSidebar, closeSidebar,
     showModal, closeModal,
     toggleTheme,
-    setUser, logout
+    setUser, logout, loadChatConfig
   };
 })();

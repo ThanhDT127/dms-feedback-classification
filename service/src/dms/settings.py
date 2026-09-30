@@ -104,6 +104,82 @@ class Settings(BaseSettings):
         15.0, alias="CLASSIFICATION_WORKER_HEARTBEAT_SECONDS"
     )
 
+    # Chatbot (Dev B — hiểu câu hỏi)
+    chat_timezone: str = Field("Asia/Ho_Chi_Minh", alias="CHAT_TIMEZONE")
+    chat_max_question_chars: int = Field(1000, alias="CHAT_MAX_QUESTION_CHARS")
+    chat_history_turns: int = Field(5, alias="CHAT_HISTORY_TURNS")
+    chat_fuzzy_match_threshold: float = Field(0.88, alias="CHAT_FUZZY_MATCH_THRESHOLD")
+    # Chatbot (Dev B — Query Planner)
+    chat_enabled_patterns: str = Field("sql_template", alias="CHAT_ENABLED_PATTERNS")
+    chat_planner_max_repair: int = Field(1, alias="CHAT_PLANNER_MAX_REPAIR")
+    chat_metadata_ttl_seconds: int = Field(300, alias="CHAT_METADATA_TTL_SECONDS")
+    chat_milestone: str = Field("M1", alias="CHAT_MILESTONE")
+    # Chatbot (Dev B — Plan Guard & Orchestrator)
+    chat_plan_min_confidence: float = Field(0.6, alias="CHAT_PLAN_MIN_CONFIDENCE")
+    chat_fuzzy_ambiguity_margin: float = Field(0.05, alias="CHAT_FUZZY_AMBIGUITY_MARGIN")
+    chat_step_timeout_seconds: float = Field(20.0, alias="CHAT_STEP_TIMEOUT_SECONDS")
+    chat_turn_timeout_seconds: float = Field(60.0, alias="CHAT_TURN_TIMEOUT_SECONDS")
+    # Chatbot (Dev B — LLM gateway & stream)
+    chat_gemini_model: str = Field("", alias="CHAT_GEMINI_MODEL")
+    chat_llm_max_retry: int = Field(1, alias="CHAT_LLM_MAX_RETRY")
+    chat_stream_first_chunk_timeout_seconds: float = Field(
+        15.0, alias="CHAT_STREAM_FIRST_CHUNK_TIMEOUT_SECONDS"
+    )
+    chat_stream_idle_timeout_seconds: float = Field(10.0, alias="CHAT_STREAM_IDLE_TIMEOUT_SECONDS")
+    chat_stream_total_timeout_seconds: float = Field(
+        60.0, alias="CHAT_STREAM_TOTAL_TIMEOUT_SECONDS"
+    )
+    chat_gemini_thinking_budget: int | None = Field(None, alias="CHAT_GEMINI_THINKING_BUDGET")
+    # Chatbot (Dev B — Response Shaper chế độ 3)
+    chat_commentary_enabled: bool = Field(True, alias="CHAT_COMMENTARY_ENABLED")
+    chat_commentary_max_sentences: int = Field(4, alias="CHAT_COMMENTARY_MAX_SENTENCES")
+    chat_commentary_max_output_tokens: int = Field(400, alias="CHAT_COMMENTARY_MAX_OUTPUT_TOKENS")
+    chat_table_max_rows: int = Field(20, alias="CHAT_TABLE_MAX_ROWS")
+    chat_quote_max_chars: int = Field(240, alias="CHAT_QUOTE_MAX_CHARS")
+    # Chat FTS (b08)
+    chat_fts_max_terms: int = Field(6, alias="CHAT_FTS_MAX_TERMS")
+    chat_fts_default_limit: int = Field(20, alias="CHAT_FTS_DEFAULT_LIMIT")
+    chat_fts_max_relax: int = Field(2, alias="CHAT_FTS_MAX_RELAX")
+    chat_similar_top_terms: int = Field(8, alias="CHAT_SIMILAR_TOP_TERMS")
+    # Chat text2sql (b09)
+    chat_sql_max_rows: int = Field(200, alias="CHAT_SQL_MAX_ROWS")
+    chat_sql_max_repair: int = Field(2, alias="CHAT_SQL_MAX_REPAIR")
+    chat_sql_examples_top_k: int = Field(4, alias="CHAT_SQL_EXAMPLES_TOP_K")
+    chat_sql_max_joins: int = Field(2, alias="CHAT_SQL_MAX_JOINS")
+    chat_sql_max_subquery_depth: int = Field(3, alias="CHAT_SQL_MAX_SUBQUERY_DEPTH")
+    # Chat WebSocket (b06)
+    chat_enabled: bool = Field(False, alias="CHAT_ENABLED")
+    chat_max_concurrent_turns: int = Field(4, alias="CHAT_MAX_CONCURRENT_TURNS")
+    chat_max_active_turns_per_user: int = Field(1, alias="CHAT_MAX_ACTIVE_TURNS_PER_USER")
+    chat_rate_limit_per_minute: int = Field(10, alias="CHAT_RATE_LIMIT_PER_MINUTE")
+    chat_answer_buffer_ttl_seconds: int = Field(600, alias="CHAT_ANSWER_BUFFER_TTL_SECONDS")
+    chat_ws_idle_timeout_seconds: float = Field(300.0, alias="CHAT_WS_IDLE_TIMEOUT_SECONDS")
+    chat_message_metadata_max_bytes: int = Field(262144, alias="CHAT_MESSAGE_METADATA_MAX_BYTES")
+    # Buffer câu trả lời dùng chung giữa các worker; rỗng = giữ trong RAM của một tiến trình.
+    chat_redis_url: str = Field("", alias="CHAT_REDIS_URL")
+    # Chat báo cáo và xuất Excel (b10)
+    chat_report_max_steps: int = Field(8, alias="CHAT_REPORT_MAX_STEPS")
+    chat_report_turn_timeout_seconds: float = Field(90.0, alias="CHAT_REPORT_TURN_TIMEOUT_SECONDS")
+    chat_report_commentary_max_sentences: int = Field(
+        8, alias="CHAT_REPORT_COMMENTARY_MAX_SENTENCES"
+    )
+    chat_export_ttl_hours: int = Field(24, alias="CHAT_EXPORT_TTL_HOURS")
+    chat_export_max_rows: int = Field(5000, alias="CHAT_EXPORT_MAX_ROWS")
+    chat_export_max_bytes: int = Field(10485760, alias="CHAT_EXPORT_MAX_BYTES")
+    chat_export_max_active_per_user: int = Field(20, alias="CHAT_EXPORT_MAX_ACTIVE_PER_USER")
+    # Chat trí nhớ hội thoại và hạn mức token (b11)
+    chat_memory_summary_max_chars: int = Field(800, alias="CHAT_MEMORY_SUMMARY_MAX_CHARS")
+    chat_memory_compact_batch: int = Field(3, alias="CHAT_MEMORY_COMPACT_BATCH")
+    chat_history_char_budget: int = Field(3000, alias="CHAT_HISTORY_CHAR_BUDGET")
+    chat_user_daily_token_budget: int = Field(200000, alias="CHAT_USER_DAILY_TOKEN_BUDGET")
+    chat_budget_exempt_admin: bool = Field(True, alias="CHAT_BUDGET_EXEMPT_ADMIN")
+    chat_budget_warning_ratio: float = Field(0.8, alias="CHAT_BUDGET_WARNING_RATIO")
+    chat_session_ttl_days: int = Field(7, alias="CHAT_SESSION_TTL_DAYS")
+    chat_session_cleanup_interval_seconds: int = Field(
+        3600, alias="CHAT_SESSION_CLEANUP_INTERVAL_SECONDS"
+    )
+    chat_usage_retention_days: int = Field(90, alias="CHAT_USAGE_RETENTION_DAYS")
+
     # Auth
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     default_admin_password: str = Field(default="", alias="DEFAULT_ADMIN_PASSWORD")
@@ -217,6 +293,131 @@ class Settings(BaseSettings):
             raise ValueError("classification_worker_poll_interval_seconds must be > 0")
         if float(self.classification_worker_heartbeat_seconds) <= 0:
             raise ValueError("classification_worker_heartbeat_seconds must be > 0")
+        if int(self.chat_max_question_chars) < 1:
+            raise ValueError("chat_max_question_chars must be >= 1")
+        if int(self.chat_history_turns) < 0:
+            raise ValueError("chat_history_turns must be >= 0")
+        if not 0 < float(self.chat_fuzzy_match_threshold) <= 1:
+            raise ValueError("chat_fuzzy_match_threshold must be in (0, 1]")
+        patterns = [p.strip() for p in self.chat_enabled_patterns.split(",") if p.strip()]
+        allowed_patterns = {"sql_template", "semantic_view", "fts5_search", "json_extract"}
+        if not patterns or not set(patterns) <= allowed_patterns:
+            raise ValueError(
+                "CHAT_ENABLED_PATTERNS must be a comma-separated subset of "
+                + ", ".join(sorted(allowed_patterns))
+            )
+        self.chat_enabled_patterns = ",".join(dict.fromkeys(patterns))
+        self.chat_milestone = self.chat_milestone.strip().upper()
+        if self.chat_milestone not in {"M1", "M2", "M3", "M4", "M5"}:
+            raise ValueError("CHAT_MILESTONE must be one of M1..M5")
+        if int(self.chat_planner_max_repair) < 0:
+            raise ValueError("chat_planner_max_repair must be >= 0")
+        if int(self.chat_metadata_ttl_seconds) < 0:
+            raise ValueError("chat_metadata_ttl_seconds must be >= 0")
+        if not 0 <= float(self.chat_plan_min_confidence) <= 1:
+            raise ValueError("chat_plan_min_confidence must be in [0, 1]")
+        if not 0 <= float(self.chat_fuzzy_ambiguity_margin) < 1:
+            raise ValueError("chat_fuzzy_ambiguity_margin must be in [0, 1)")
+        if float(self.chat_step_timeout_seconds) <= 0:
+            raise ValueError("chat_step_timeout_seconds must be > 0")
+        if float(self.chat_turn_timeout_seconds) < float(self.chat_step_timeout_seconds):
+            raise ValueError("chat_turn_timeout_seconds must be >= chat_step_timeout_seconds")
+        # Model riêng cho chat: chuẩn hoá giống gemini_model, để rỗng thì dùng chung GEMINI_MODEL.
+        self.chat_gemini_model = self.chat_gemini_model.strip().lower().replace(" ", "-")
+        if int(self.chat_llm_max_retry) < 0:
+            raise ValueError("chat_llm_max_retry must be >= 0")
+        for stream_field in (
+            "chat_stream_first_chunk_timeout_seconds",
+            "chat_stream_idle_timeout_seconds",
+            "chat_stream_total_timeout_seconds",
+        ):
+            if float(getattr(self, stream_field)) <= 0:
+                raise ValueError(f"{stream_field} must be > 0")
+        if float(self.chat_stream_total_timeout_seconds) < float(
+            self.chat_stream_first_chunk_timeout_seconds
+        ):
+            raise ValueError(
+                "chat_stream_total_timeout_seconds must be >= "
+                "chat_stream_first_chunk_timeout_seconds"
+            )
+        if (
+            self.chat_gemini_thinking_budget is not None
+            and int(self.chat_gemini_thinking_budget) < 0
+        ):
+            raise ValueError("chat_gemini_thinking_budget must be >= 0")
+        if int(self.chat_commentary_max_sentences) < 1:
+            raise ValueError("chat_commentary_max_sentences must be >= 1")
+        if int(self.chat_commentary_max_output_tokens) < 1:
+            raise ValueError("chat_commentary_max_output_tokens must be >= 1")
+        if int(self.chat_table_max_rows) < 1:
+            raise ValueError("chat_table_max_rows must be >= 1")
+        if int(self.chat_quote_max_chars) < 20:
+            raise ValueError("chat_quote_max_chars must be >= 20")
+        for name in (
+            "chat_max_concurrent_turns",
+            "chat_max_active_turns_per_user",
+            "chat_rate_limit_per_minute",
+            "chat_answer_buffer_ttl_seconds",
+        ):
+            if int(getattr(self, name)) < 1:
+                raise ValueError(f"{name} must be >= 1")
+        if not 1 <= int(self.chat_fts_max_terms) <= 20:
+            raise ValueError("chat_fts_max_terms must be in [1, 20]")
+        if not 1 <= int(self.chat_fts_default_limit) <= 50:
+            raise ValueError("chat_fts_default_limit must be in [1, 50]")
+        if not 0 <= int(self.chat_fts_max_relax) <= 5:
+            raise ValueError("chat_fts_max_relax must be in [0, 5]")
+        if int(self.chat_similar_top_terms) < 1:
+            raise ValueError("chat_similar_top_terms must be >= 1")
+        if not 1 <= int(self.chat_sql_max_rows) <= 1000:
+            raise ValueError("chat_sql_max_rows must be in [1, 1000]")
+        if not 0 <= int(self.chat_sql_max_repair) <= 5:
+            raise ValueError("chat_sql_max_repair must be in [0, 5]")
+        if not 0 <= int(self.chat_sql_examples_top_k) <= 10:
+            raise ValueError("chat_sql_examples_top_k must be in [0, 10]")
+        if not 0 <= int(self.chat_sql_max_joins) <= 5:
+            raise ValueError("chat_sql_max_joins must be in [0, 5]")
+        if not 1 <= int(self.chat_sql_max_subquery_depth) <= 5:
+            raise ValueError("chat_sql_max_subquery_depth must be in [1, 5]")
+        if float(self.chat_ws_idle_timeout_seconds) <= 0:
+            raise ValueError("chat_ws_idle_timeout_seconds must be > 0")
+        if int(self.chat_message_metadata_max_bytes) < 4096:
+            raise ValueError("chat_message_metadata_max_bytes must be >= 4096")
+        self.chat_redis_url = self.chat_redis_url.strip()
+        if self.chat_redis_url and "://" not in self.chat_redis_url:
+            raise ValueError("chat_redis_url must be a URL, e.g. redis://redis:6379/0")
+        if not 1 <= int(self.chat_report_max_steps) <= 20:
+            raise ValueError("chat_report_max_steps must be in [1, 20]")
+        if float(self.chat_report_turn_timeout_seconds) < float(self.chat_step_timeout_seconds):
+            raise ValueError(
+                "chat_report_turn_timeout_seconds must be >= chat_step_timeout_seconds"
+            )
+        if int(self.chat_report_commentary_max_sentences) < 1:
+            raise ValueError("chat_report_commentary_max_sentences must be >= 1")
+        if int(self.chat_export_ttl_hours) < 1:
+            raise ValueError("chat_export_ttl_hours must be >= 1")
+        if not 1 <= int(self.chat_export_max_rows) <= 100000:
+            raise ValueError("chat_export_max_rows must be in [1, 100000]")
+        if int(self.chat_export_max_bytes) < 65536:
+            raise ValueError("chat_export_max_bytes must be >= 65536")
+        if int(self.chat_export_max_active_per_user) < 1:
+            raise ValueError("chat_export_max_active_per_user must be >= 1")
+        if int(self.chat_memory_summary_max_chars) < 100:
+            raise ValueError("chat_memory_summary_max_chars must be >= 100")
+        if int(self.chat_memory_compact_batch) < 0:
+            raise ValueError("chat_memory_compact_batch must be >= 0")
+        if int(self.chat_history_char_budget) < 500:
+            raise ValueError("chat_history_char_budget must be >= 500")
+        if int(self.chat_user_daily_token_budget) < 0:
+            raise ValueError("chat_user_daily_token_budget must be >= 0")
+        if not 0 < float(self.chat_budget_warning_ratio) <= 1:
+            raise ValueError("chat_budget_warning_ratio must be in (0, 1]")
+        if int(self.chat_session_ttl_days) < 1:
+            raise ValueError("chat_session_ttl_days must be >= 1")
+        if int(self.chat_session_cleanup_interval_seconds) < 60:
+            raise ValueError("chat_session_cleanup_interval_seconds must be >= 60")
+        if int(self.chat_usage_retention_days) < 1:
+            raise ValueError("chat_usage_retention_days must be >= 1")
 
         return self
 

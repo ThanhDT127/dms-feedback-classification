@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "write_request": {
+    "max_gap_tokens": 4,
+    "verbs": [
+      "xoa", "xoa bo", "xoa het", "xoa sach", "sua", "sua doi", "chinh sua", "cap nhat",
+      "them moi", "them vao", "ghi de", "ghi vao", "chen", "doi ten",
+      "delete", "remove", "update", "insert", "modify", "drop", "truncate", "alter",
+      "overwrite", "edit"
+    ],
+    "verb_exceptions": ["sua chua"],
+    "objects": [
+      "du lieu", "phan hoi", "ban ghi", "bang", "database", "co so du lieu", "csdl",
+      "tai khoan", "nguoi dung", "user", "users", "record", "records", "table", "data",
+      "nhan", "label", "labels", "file", "tep", "cau hinh", "config"
+    ],
+    "object_exceptions": ["bang gia", "bang bien"],
+    "topic_prefixes": [
+      "viec", "yeu cau", "de nghi", "de xuat", "phan nan", "ve", "khong", "chua", "cham", "loi"
+    ],
+    "question_markers": ["chua", "khi nao", "luc nao", "bao gio", "den ngay nao", "den khi nao"],
+    "question_marker_verbs": ["cap nhat", "update"]
+  },
+  "secret_request": {
+    "terms": [
+      "api key", "apikey", "mat khau", "password", "token", "jwt", "secret", "service account",
+      "credential", "credentials", "chuoi ket noi", "connection string", "bien moi truong",
+      "khoa bi mat", "private key"
+    ],
+    "contexts": [
+      "he thong", "server", "may chu", "gemini", "vertex", "google", "admin", "quan tri",
+      "cua ban", "database", "co so du lieu", "la gi", "cho toi", "cho xin", "cung cap",
+      "hien thi", "in ra", "tiet lo", "what", "show", "give", "print", "reveal", "tell"
+    ]
+  },
+  "prompt_injection": [
+    {
+      "id": "ignore_instructions_vi",
+      "regex": "\\b(bo qua|phot lo|lo di|khong can tuan theo|dung tuan theo|quen (di|het|moi|tat ca))\\b.{0,30}\\b(huong dan|chi dan|chi thi|quy tac|lenh|nguyen tac)\\b"
+    },
+    {
+      "id": "ignore_instructions_en",
+      "regex": "\\b(ignore|disregard|forget|override|bypass)\\b.{0,30}\\b(instructions?|rules?|prompts?|guidelines?|directives?)\\b"
+    },
+    {
+      "id": "reveal_system_prompt",
+      "regex": "\\b(system prompt|system message|developer message|prompt he thong|chi dan he thong|huong dan he thong|lenh he thong|prompt goc)\\b"
+    },
+    {
+      "id": "role_override",
+      "regex": "\\b(hay dong vai|dong vai la|gia vai|nhap vai|act as|pretend to be|pretend you are|you are now|tu gio ban la|bay gio ban la|tu bay gio ban)\\b"
+    },
+    {
+      "id": "jailbreak",
+      "regex": "\\b(jailbreak|developer mode|dan mode|che do nha phat trien)\\b"
+    },
+    {
+      "id": "sql_stacked",
+      "regex": ";\\s*(drop|delete|update|insert|alter|truncate|create|attach|pragma|replace)\\b"
+    },
+    {
+      "id": "sql_union_select",
+      "regex": "\\bunion\\s+(all\\s+)?select\\b"
+    },
+    {
+      "id": "sql_ddl",
+      "regex": "\\b(drop|truncate|alter)\\s+(table|database|view|index)\\b"
+    },
+    {
+      "id": "sql_comment",
+      "regex": "(^|\\s|;|')--(\\s|$)|/\\*"
+    },
+    {
+      "id": "sql_tautology",
+      "regex": "\\b(or|and)\\s+'?\\d+'?\\s*=\\s*'?\\d+"
+    },
+    {
+      "id": "sql_system_objects",
+      "regex": "\\b(sqlite_master|sqlite_schema|information_schema|pragma|attach database|load_extension)\\b"
+    },
+    {
+      "id": "sql_select_from",
+      "regex": "\\bselect\\b.{1,80}\\bfrom\\b"
+    },
+    {
+      "id": "script_tag",
+      "regex": "<\\s*script"
+    }
+  ]
+}

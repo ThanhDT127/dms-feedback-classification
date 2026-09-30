@@ -1,0 +1,50 @@
+{
+  "name": "error",
+  "question": "Sản phẩm nào bị phản hồi nhiều nhất tháng 8?",
+  "note": "Lỗi khi lấy dữ liệu",
+  "events": [
+    {
+      "seq": 1,
+      "type": "status",
+      "data": {
+        "stage": "understanding",
+        "text": "Đang đọc câu hỏi"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "status",
+      "data": {
+        "stage": "planning",
+        "text": "Đang xác định số liệu cần lấy"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "status",
+      "data": {
+        "stage": "querying",
+        "text": "Đang truy vấn dữ liệu"
+      }
+    },
+    {
+      "seq": 4,
+      "type": "error",
+      "data": {
+        "code": "INTERNAL",
+        "text": "Có lỗi khi lấy dữ liệu. Bạn thử lại sau ít phút giúp tôi."
+      }
+    },
+    {
+      "seq": 5,
+      "type": "done",
+      "data": {
+        "status": "error",
+        "summary": "",
+        "commentary_status": "skipped",
+        "dropped_sentences": 0,
+        "request_id": "req-1"
+      }
+    }
+  ]
+}

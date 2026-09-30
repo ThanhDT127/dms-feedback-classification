@@ -1,0 +1,195 @@
+{
+  "name": "unknown_kind",
+  "question": "Tổng quan tháng 8",
+  "note": "Kind/kiểu event lạ phải bị bỏ qua, các event sau vẫn hiện",
+  "events": [
+    {
+      "seq": 1,
+      "type": "status",
+      "data": {
+        "stage": "understanding",
+        "text": "Đang đọc câu hỏi"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "status",
+      "data": {
+        "stage": "planning",
+        "text": "Đang xác định số liệu cần lấy"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "status",
+      "data": {
+        "stage": "querying",
+        "text": "Đang truy vấn dữ liệu"
+      }
+    },
+    {
+      "seq": 4,
+      "type": "data_block",
+      "data": {
+        "block_id": "s1.get_overview",
+        "kind": "kpi",
+        "title": "Tổng quan",
+        "subtitle": "01/08/2026 – 31/08/2026",
+        "payload": {
+          "items": [
+            {
+              "key": "total_issues",
+              "label": "Tổng số vấn đề",
+              "available": true,
+              "value": 287,
+              "display": "287",
+              "denominator": 287,
+              "excluded_missing_issue_code": 12
+            },
+            {
+              "key": "processed_issues",
+              "label": "Đã xử lý",
+              "available": true,
+              "value": 215,
+              "display": "215",
+              "denominator": 287,
+              "excluded_missing_issue_code": 12
+            },
+            {
+              "key": "label_coverage",
+              "label": "Tỉ lệ có nhãn",
+              "available": true,
+              "value": 94.08,
+              "display": "94,1%",
+              "denominator": 287,
+              "excluded_missing_issue_code": 12,
+              "numerator": 270
+            },
+            {
+              "key": "sentiment_coverage",
+              "label": "Tỉ lệ có cảm xúc",
+              "available": true,
+              "value": 89.2,
+              "display": "89,2%",
+              "denominator": 287,
+              "excluded_missing_issue_code": 12,
+              "numerator": 256
+            },
+            {
+              "key": "product_coverage",
+              "label": "Tỉ lệ có sản phẩm",
+              "available": true,
+              "value": 82.58,
+              "display": "82,6%",
+              "denominator": 287,
+              "excluded_missing_issue_code": 12,
+              "numerator": 237
+            },
+            {
+              "key": "multi_label_rate",
+              "label": "Tỉ lệ nhiều nhãn",
+              "available": true,
+              "value": 15.33,
+              "display": "15,3%",
+              "denominator": 287,
+              "excluded_missing_issue_code": 12,
+              "numerator": 44
+            },
+            {
+              "key": "duplicate_record_rate",
+              "label": "Tỉ lệ bản ghi trùng",
+              "available": true,
+              "value": 8.7,
+              "display": "8,7%",
+              "denominator": 299,
+              "excluded_missing_issue_code": 12,
+              "numerator": 26
+            },
+            {
+              "key": "duplicate_issue_rate",
+              "label": "Tỉ lệ vấn đề trùng",
+              "available": true,
+              "value": 4.18,
+              "display": "4,2%",
+              "denominator": 287,
+              "excluded_missing_issue_code": 12,
+              "numerator": 12
+            },
+            {
+              "key": "model_accuracy",
+              "label": "Độ chính xác mô hình",
+              "available": false,
+              "value": null,
+              "display": "Chưa đủ dữ liệu",
+              "denominator": 0,
+              "excluded_missing_issue_code": 12,
+              "reason": "No human-verified ground-truth labels are stored."
+            }
+          ]
+        },
+        "chart_hint": "none"
+      }
+    },
+    {
+      "seq": 5,
+      "type": "data_block",
+      "data": {
+        "block_id": "x",
+        "kind": "heatmap",
+        "title": "Heatmap",
+        "payload": {}
+      }
+    },
+    {
+      "seq": 6,
+      "type": "sparkle",
+      "data": {}
+    },
+    {
+      "seq": 7,
+      "type": "status",
+      "data": {
+        "stage": "writing",
+        "text": "Đang viết nhận định"
+      }
+    },
+    {
+      "seq": 8,
+      "type": "commentary",
+      "data": {
+        "sentence_index": 1,
+        "text": "Trong 01/08/2026 – 31/08/2026, tổng số vấn đề là 287."
+      }
+    },
+    {
+      "seq": 9,
+      "type": "commentary",
+      "data": {
+        "sentence_index": 2,
+        "text": "Kết thúc nhận định."
+      }
+    },
+    {
+      "seq": 10,
+      "type": "suggestions",
+      "data": {
+        "items": [
+          "Xu hướng phản hồi theo từng ngày trong 01/08/2026 – 31/08/2026 thế nào?",
+          "Sản phẩm nào bị phản hồi nhiều nhất trong 01/08/2026 – 31/08/2026?",
+          "Loại vấn đề nào chiếm nhiều nhất trong 01/08/2026 – 31/08/2026?"
+        ]
+      }
+    },
+    {
+      "seq": 11,
+      "type": "done",
+      "data": {
+        "status": "ok",
+        "summary": "Tổng quan 01/08/2026 – 31/08/2026. Tổng số vấn đề 287, Đã xử lý 215, Tỉ lệ có nhãn 94,1%. Trong 01/08/2026 – 31/08/2026, tổng số vấn đề là 287",
+        "commentary_status": "full",
+        "dropped_sentences": 1,
+        "request_id": "syn01"
+      }
+    }
+  ]
+}

@@ -1,0 +1,273 @@
+{
+  "name": "ranking_partial",
+  "question": "Đơn vị nào nhiều phản hồi nhất tháng 8?",
+  "note": "Từ chối một phần + ranking 20/25 + bar",
+  "events": [
+    {
+      "seq": 1,
+      "type": "status",
+      "data": {
+        "stage": "understanding",
+        "text": "Đang đọc câu hỏi"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "status",
+      "data": {
+        "stage": "planning",
+        "text": "Đang xác định số liệu cần lấy"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "status",
+      "data": {
+        "stage": "querying",
+        "text": "Đang truy vấn dữ liệu"
+      }
+    },
+    {
+      "seq": 4,
+      "type": "refusal",
+      "data": {
+        "reason": "PARTIAL_REFUSAL",
+        "text": "Bạn không có quyền xem Truyền thống Vùng 2 nên kết quả chỉ gồm Truyền thống Vùng 1.",
+        "partial": true,
+        "dropped_units": [
+          "Truyền thống Vùng 2"
+        ],
+        "allowed_units": [
+          "Truyền thống Vùng 1"
+        ]
+      }
+    },
+    {
+      "seq": 5,
+      "type": "data_block",
+      "data": {
+        "block_id": "s1.get_units",
+        "kind": "ranking",
+        "title": "Xếp hạng đơn vị",
+        "subtitle": "01/08/2026 – 31/08/2026 · Truyền thống Vùng 1",
+        "payload": {
+          "items": [
+            {
+              "rank": 1,
+              "label": "Đơn vị 00",
+              "value": 200,
+              "display": "200",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 2,
+              "label": "Đơn vị 01",
+              "value": 195,
+              "display": "195",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 3,
+              "label": "Đơn vị 02",
+              "value": 190,
+              "display": "190",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 4,
+              "label": "Đơn vị 03",
+              "value": 185,
+              "display": "185",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 5,
+              "label": "Đơn vị 04",
+              "value": 180,
+              "display": "180",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 6,
+              "label": "Đơn vị 05",
+              "value": 175,
+              "display": "175",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 7,
+              "label": "Đơn vị 06",
+              "value": 170,
+              "display": "170",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 8,
+              "label": "Đơn vị 07",
+              "value": 165,
+              "display": "165",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 9,
+              "label": "Đơn vị 08",
+              "value": 160,
+              "display": "160",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 10,
+              "label": "Đơn vị 09",
+              "value": 155,
+              "display": "155",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 11,
+              "label": "Đơn vị 10",
+              "value": 150,
+              "display": "150",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 12,
+              "label": "Đơn vị 11",
+              "value": 145,
+              "display": "145",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 13,
+              "label": "Đơn vị 12",
+              "value": 140,
+              "display": "140",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 14,
+              "label": "Đơn vị 13",
+              "value": 135,
+              "display": "135",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 15,
+              "label": "Đơn vị 14",
+              "value": 130,
+              "display": "130",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 16,
+              "label": "Đơn vị 15",
+              "value": 125,
+              "display": "125",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 17,
+              "label": "Đơn vị 16",
+              "value": 120,
+              "display": "120",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 18,
+              "label": "Đơn vị 17",
+              "value": 115,
+              "display": "115",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 19,
+              "label": "Đơn vị 18",
+              "value": 110,
+              "display": "110",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            },
+            {
+              "rank": 20,
+              "label": "Đơn vị 19",
+              "value": 105,
+              "display": "105",
+              "percent": 33.1,
+              "percent_display": "33,1%"
+            }
+          ],
+          "total_rows": 25,
+          "truncated": true,
+          "total_issues": 287,
+          "total_display": "287",
+          "membership_count": 287,
+          "excluded_missing_issue_code": 3
+        },
+        "chart_hint": "bar"
+      }
+    },
+    {
+      "seq": 6,
+      "type": "status",
+      "data": {
+        "stage": "writing",
+        "text": "Đang viết nhận định"
+      }
+    },
+    {
+      "seq": 7,
+      "type": "commentary",
+      "data": {
+        "sentence_index": 1,
+        "text": "Đơn vị 00 có nhiều phản hồi nhất với 200 vấn đề."
+      }
+    },
+    {
+      "seq": 8,
+      "type": "commentary",
+      "data": {
+        "sentence_index": 2,
+        "text": "Kết thúc nhận định."
+      }
+    },
+    {
+      "seq": 9,
+      "type": "suggestions",
+      "data": {
+        "items": [
+          "Đơn vị Truyền thống Vùng 1 gặp loại vấn đề nào nhiều nhất?",
+          "Xu hướng phản hồi của Truyền thống Vùng 1 theo ngày thế nào?",
+          "Tổng quan trong 01/08/2026 – 31/08/2026 ra sao?"
+        ]
+      }
+    },
+    {
+      "seq": 10,
+      "type": "done",
+      "data": {
+        "status": "partial",
+        "summary": "Xếp hạng đơn vị 01/08/2026 – 31/08/2026. Đơn vị 00, 200, 33,1%. Đơn vị 00 có nhiều phản hồi nhất với 200 vấn đề",
+        "commentary_status": "full",
+        "dropped_sentences": 1,
+        "request_id": "syn10"
+      }
+    }
+  ]
+}

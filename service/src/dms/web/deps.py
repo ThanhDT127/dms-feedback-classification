@@ -39,6 +39,12 @@ def reset() -> None:
                 worker_manager.stop()
             except Exception as exc:
                 logger.warning("Could not stop cached classification worker manager: %s", exc)
+        chat_services = _cache.get("chat_services")
+        if chat_services is not None and hasattr(chat_services, "shutdown"):
+            try:
+                chat_services.shutdown()
+            except Exception as exc:
+                logger.warning("Could not stop cached chat services: %s", exc)
         _cache.clear()
         get_settings_provider().invalidate()
 
@@ -358,6 +364,39 @@ def get_sharepoint_sync_service():
             return None
 
     return _get_or_create("sharepoint_sync_service", _factory)
+
+
+def get_chat_services():
+    """Return ChatServices (runner, buffer, sessions), or None if chat is off or unavailable."""
+
+    def _factory():
+        settings = get_settings()
+        if settings is None or not settings.chat_enabled:
+            return None
+        try:
+            from ..chat.ws.services import build_chat_services
+
+            return build_chat_services(settings, usage_tracker=get_usage_tracker())
+        except Exception as exc:
+            logger.warning("Không thể khởi tạo chat services: %s", exc)
+            return None
+
+    return _get_or_create("chat_services", _factory)
+
+
+def get_chat_store():
+    services = get_chat_services()
+    return services.sessions.store if services is not None else None
+
+
+def get_answer_buffer():
+    services = get_chat_services()
+    return services.buffer if services is not None else None
+
+
+def get_chat_runner():
+    services = get_chat_services()
+    return services.runner if services is not None else None
 
 
 async def run_sync_in_threadpool(func, *args, **kwargs):

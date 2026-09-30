@@ -1,0 +1,33 @@
+{
+  "_comment": "Cách gọi tắt của người dùng → tên đúng trong dữ liệu. Áp trước khi khớp mờ (design b03 D3). Mọi giá trị phải là tên thật trong MetadataProvider.",
+  "unit": {
+    "tv1": "Truyền thống Vùng 1",
+    "tv 1": "Truyền thống Vùng 1",
+    "vùng 1": "Truyền thống Vùng 1",
+    "v1": "Truyền thống Vùng 1",
+    "tv2": "Truyền thống Vùng 2",
+    "tv 2": "Truyền thống Vùng 2",
+    "vùng 2": "Truyền thống Vùng 2",
+    "v2": "Truyền thống Vùng 2",
+    "tv3": "Truyền thống Vùng 3",
+    "tv 3": "Truyền thống Vùng 3",
+    "vùng 3": "Truyền thống Vùng 3",
+    "v3": "Truyền thống Vùng 3",
+    "nt": "Nha Trang",
+    "bh": "Biên Hòa",
+    "hcm": "Hồ Chí Minh",
+    "tphcm": "Hồ Chí Minh",
+    "sài gòn": "Hồ Chí Minh",
+    "sg": "Hồ Chí Minh"
+  },
+  "province": {
+    "hcm": "Hồ Chí Minh",
+    "tphcm": "Hồ Chí Minh",
+    "sài gòn": "Hồ Chí Minh",
+    "sg": "Hồ Chí Minh",
+    "hn": "Hà Nội",
+    "thủ đô": "Hà Nội",
+    "khánh hoà": "Khánh Hòa",
+    "đồng nai": "Đồng Nai"
+  }
+}

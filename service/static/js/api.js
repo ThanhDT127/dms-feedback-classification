@@ -86,6 +86,7 @@ window.API = (() => {
   function post(path, data, opts = {}) { return request('POST', path, data, opts); }
   function put(path, data, opts = {}) { return request('PUT', path, data, opts); }
   function del(path, opts = {}) { return request('DELETE', path, null, opts); }
+  function patch(path, data, opts = {}) { return request('PATCH', path, data, opts); }
 
   function upload(path, formData, opts = {}) {
     return request('POST', path, formData, opts);
@@ -308,7 +309,7 @@ window.API = (() => {
   }
 
   return {
-    get, post, put, del, upload, download, uploadWithProgress,
+    get, post, put, patch, del, upload, download, uploadWithProgress,
     onLoading, offLoading, isLoading,
     setTokens, getAccessToken, clearTokens, refreshToken,
     getHealth, getMetrics, getMetricsDaily,

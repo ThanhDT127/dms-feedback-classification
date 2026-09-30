@@ -1,0 +1,134 @@
+{
+  "name": "quote_xss",
+  "question": "Cho xem phản hồi tháng 8",
+  "note": "Nội dung chứa HTML/script phải hiển thị dạng chữ",
+  "events": [
+    {
+      "seq": 1,
+      "type": "status",
+      "data": {
+        "stage": "understanding",
+        "text": "Đang đọc câu hỏi"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "status",
+      "data": {
+        "stage": "planning",
+        "text": "Đang xác định số liệu cần lấy"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "status",
+      "data": {
+        "stage": "querying",
+        "text": "Đang truy vấn dữ liệu"
+      }
+    },
+    {
+      "seq": 4,
+      "type": "data_block",
+      "data": {
+        "block_id": "s1.get_issues",
+        "kind": "quote",
+        "title": "<b>Phản hồi</b> tiêu biểu",
+        "subtitle": "01/08/2026 – 31/08/2026",
+        "payload": {
+          "quotes": [
+            {
+              "issue_code": "FB-2026-10001",
+              "content": "<img src=x onerror=alert(1)> đèn cháy",
+              "unit_name": "CN Miền Bắc",
+              "issue_date": "2026-08-15",
+              "display_date": "15/08/2026",
+              "sentiment": "Tiêu cực"
+            },
+            {
+              "issue_code": "FB-2026-10002",
+              "content": "<script>alert('xss')</script>",
+              "unit_name": "CN Miền Nam",
+              "issue_date": "2026-08-16",
+              "display_date": "16/08/2026",
+              "sentiment": "Tích cực"
+            },
+            {
+              "issue_code": "FB-2026-10003",
+              "content": "Ống nhựa PPR bị rò rỉ tại mối nối",
+              "unit_name": "CN Đà Nẵng",
+              "issue_date": "2026-08-17",
+              "display_date": "17/08/2026",
+              "sentiment": "Tiêu cực"
+            },
+            {
+              "issue_code": "FB-2026-10004",
+              "content": "Đèn năng lượng mặt trời NL-01 pin yếu sau 6 tháng",
+              "unit_name": "CN Miền Nam",
+              "issue_date": "2026-08-18",
+              "display_date": "18/08/2026",
+              "sentiment": "Tiêu cực"
+            },
+            {
+              "issue_code": "FB-2026-10005",
+              "content": "Búp trụ RLT02 màu ánh sáng không đồng nhất",
+              "unit_name": "CN Hà Nội",
+              "issue_date": "2026-08-19",
+              "display_date": "19/08/2026",
+              "sentiment": "Tiêu cực"
+            }
+          ],
+          "total": 8,
+          "total_display": "8"
+        },
+        "chart_hint": "none"
+      }
+    },
+    {
+      "seq": 5,
+      "type": "status",
+      "data": {
+        "stage": "writing",
+        "text": "Đang viết nhận định"
+      }
+    },
+    {
+      "seq": 6,
+      "type": "commentary",
+      "data": {
+        "sentence_index": 1,
+        "text": "Nhận định có <a href=\"javascript:alert(1)\">liên kết</a>."
+      }
+    },
+    {
+      "seq": 7,
+      "type": "commentary",
+      "data": {
+        "sentence_index": 2,
+        "text": "Nhận định có <a href=\"javascript:alert(1)\">liên kết</a>."
+      }
+    },
+    {
+      "seq": 8,
+      "type": "suggestions",
+      "data": {
+        "items": [
+          "Loại vấn đề nào chiếm nhiều nhất trong 01/08/2026 – 31/08/2026?",
+          "Tổng quan trong 01/08/2026 – 31/08/2026 ra sao?",
+          "Đơn vị nào có nhiều phản hồi nhất trong 01/08/2026 – 31/08/2026?"
+        ]
+      }
+    },
+    {
+      "seq": 9,
+      "type": "done",
+      "data": {
+        "status": "ok",
+        "summary": "Phản hồi tiêu biểu 01/08/2026 – 31/08/2026. Một phản hồi tiêu biểu là “Bóng đèn LED AT04 cháy sau 2 tháng sử dụng” (FB-2026-10001)",
+        "commentary_status": "full",
+        "dropped_sentences": 1,
+        "request_id": "syn28"
+      }
+    }
+  ]
+}

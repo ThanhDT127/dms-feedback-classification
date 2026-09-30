@@ -17,8 +17,16 @@ from .repository import FeedbackAnalyticsRepository
 
 _UNKNOWN = "Chưa xác định"
 _UNLABELED = "__unlabeled__"
+# Trạng thái nghiệp vụ coi là đã xử lý xong. DMS thật ghi "Hoàn thành"; file mẫu và mock
+# dùng "Đã xử lý" — cả hai đều phải tính vào processed, nếu không tồn đọng bị thổi lên.
+_PROCESSED_STATUSES = frozenset({"đã xử lý", "hoàn thành"})
 _QUALITY_LABELS = ("Báo lỗi", "Báo CL tốt", "Y/c cải tiến", "Đề xuất SPM")
 _SENTIMENT_LABELS = ("Tích cực", "Trung lập", "Tiêu cực")
+
+
+def _is_processed(status: object) -> bool:
+    """Một dòng đã được xử lý xong hay chưa, theo ``business_status``."""
+    return str(status or "").strip().casefold() in _PROCESSED_STATUSES
 
 
 class FeedbackAnalyticsService:
@@ -382,7 +390,7 @@ class FeedbackAnalyticsService:
             code
             for row in rows
             if (code := self._issue_code(row)) is not None
-            and str(row.get("business_status") or "").strip().casefold() == "đã xử lý".casefold()
+            and _is_processed(row.get("business_status"))
         }
         labeled_codes = {
             code
@@ -583,7 +591,7 @@ class FeedbackAnalyticsService:
             status = str(row.get("business_status") or "").strip() or _UNKNOWN
             issue_date_text = str(row.get("issue_date") or "").strip()
             issue_date = date.fromisoformat(issue_date_text) if issue_date_text else None
-            if status.casefold() == "đã xử lý".casefold():
+            if _is_processed(status):
                 processed_codes.add(code)
                 current_statuses[code] = (issue_date, status)
             elif code not in processed_codes:
@@ -960,7 +968,7 @@ class FeedbackAnalyticsService:
         def _calc_priority(r: dict[str, Any]) -> tuple[int, str, int]:
             sentiment = str(r.get("sentiment") or "").strip()
             status = str(r.get("business_status") or "").strip()
-            is_resolved = status.casefold() == "đã xử lý".casefold()
+            is_resolved = _is_processed(status)
             is_negative = sentiment.casefold() == "tiêu cực".casefold()
 
             if not is_resolved and is_negative:

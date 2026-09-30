@@ -87,5 +87,6 @@ def test_user_store_reads_existing_users_json_through_repository(tmp_path):
             "is_active": True,
             "created_at": "2026-07-11T00:00:00+00:00",
             "must_change_password": False,
+            "unit_ids": [],
         }
     ]

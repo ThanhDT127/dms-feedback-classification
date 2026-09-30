@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "dimension_hints": {
+    "tinh": "province",
+    "thanh pho": "province",
+    "tinh thanh": "province",
+    "tinh tp": "province",
+    "khu vuc": "province",
+    "dia ban": "province",
+    "dia phuong": "province",
+    "quan": "district",
+    "huyen": "district",
+    "quan huyen": "district",
+    "chi nhanh": "unit",
+    "don vi": "unit",
+    "vung": "unit",
+    "phong ban": "unit",
+    "san pham": "product",
+    "mat hang": "product",
+    "dong san pham": "product",
+    "nguon": "source",
+    "kenh": "source",
+    "trang thai": "status",
+    "nhan": "label",
+    "loai van de": "label",
+    "nhom van de": "label",
+    "cam xuc": "sentiment",
+    "sac thai": "sentiment"
+  },
+  "dimension_hint_exclusions": [
+    "tinh trang",
+    "tinh nang",
+    "tinh hinh",
+    "tinh toan",
+    "tinh chat",
+    "quan tam",
+    "quan ly",
+    "quan trong",
+    "quan he",
+    "quan diem",
+    "quan sat",
+    "nhan vien",
+    "nhan duoc",
+    "nhan xet",
+    "ghi nhan",
+    "tiep nhan",
+    "nhan thay",
+    "nguon goc",
+    "vung tau"
+  ],
+  "value_synonyms": {
+    "sentiment": {
+      "Tiêu cực": [
+        "tieu cuc",
+        "phan nan",
+        "khieu nai",
+        "che",
+        "khong hai long",
+        "buc xuc",
+        "khong tot"
+      ],
+      "Tích cực": [
+        "tich cuc",
+        "khen",
+        "hai long",
+        "danh gia tot"
+      ],
+      "Trung lập": [
+        "trung lap"
+      ]
+    },
+    "label": {
+      "Báo lỗi": [
+        "bao loi",
+        "bi loi",
+        "loi san pham",
+        "hong",
+        "bi hong",
+        "hu hong",
+        "bi hu",
+        "khong sang",
+        "chap chon"
+      ],
+      "Bảo hành": [
+        "bao hanh"
+      ],
+      "Hàng giả": [
+        "hang gia",
+        "hang nhai"
+      ],
+      "CTKM, giá, cơ chế": [
+        "khuyen mai",
+        "ctkm",
+        "gia ca",
+        "co che"
+      ],
+      "Website": [
+        "website",
+        "trang web"
+      ],
+      "Đề xuất SPM": [
+        "san pham moi",
+        "de xuat spm"
+      ],
+      "Y/c cải tiến": [
+        "cai tien"
+      ],
+      "Trả thưởng": [
+        "tra thuong"
+      ],
+      "Bảng giá, Catalogue": [
+        "bang gia",
+        "catalogue",
+        "catalog"
+      ],
+      "Bảng biển": [
+        "bang bien",
+        "bien quang cao"
+      ]
+    }
+  },
+  "search_synonyms": {
+    "chap chon": [
+      "nhap nhay",
+      "chop tat"
+    ],
+    "nhap nhay": [
+      "chap chon"
+    ],
+    "giao hang": [
+      "van chuyen"
+    ],
+    "van chuyen": [
+      "giao hang"
+    ],
+    "khong sang": [
+      "khong len den"
+    ],
+    "doi tra": [
+      "doi moi"
+    ],
+    "nong chay": [
+      "nong bat thuong"
+    ],
+    "ro nuoc": [
+      "ri nuoc"
+    ]
+  }
+}

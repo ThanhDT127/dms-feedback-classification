@@ -8,6 +8,7 @@ window.Sidebar = (() => {
     { id: 'classify',  icon: '⚡', label: 'Phân loại' },
     { id: 'files',     icon: '📂', label: 'Quản lý file' },
     { id: 'dashboard', icon: '📋', label: 'Tiến trình Job' },
+    { id: 'chat',      icon: '🤖', label: 'Trợ lý dữ liệu' },
     { id: 'metrics',   icon: '📈', label: 'Thống kê' },
     { id: 'pipeline',  icon: '🔬', label: 'Pipeline' },
     { id: 'qa',        icon: '📖', label: 'Hướng dẫn' },
@@ -24,6 +25,7 @@ window.Sidebar = (() => {
     const role = user?.role || 'user';
     const items = NAV_ITEMS.filter(item => {
       if (role !== 'admin' && ['settings', 'pipeline'].includes(item.id)) return false;
+      if (item.id === 'chat' && !App.state?.chatConfig?.enabled) return false;
       return true;
     });
     const isLight = document.documentElement.getAttribute('data-theme') === 'light';

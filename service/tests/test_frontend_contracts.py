@@ -142,7 +142,7 @@ def test_analytics_distinguishes_ingested_rows_without_ai_classification():
 def test_managed_file_analytics_assets_have_updated_cache_versions():
     index_html = _read("index.html")
 
-    assert "css/style.css?v=1.0.18" in index_html
+    assert "css/style.css?v=1.0.19" in index_html
     assert "js/api.js?v=1.0.10" in index_html
     assert "js/pages/analytics.js?v=1.0.22" in index_html
     assert "js/components/charts.js?v=1.0.8" in index_html
@@ -521,7 +521,7 @@ def test_analytics_p0_matches_prototype_structure_without_restoring_removed_scop
         ".analytics-matrix thead th {",
     ]:
         assert expected_css in style_css
-    assert "css/style.css?v=1.0.18" in index_html
+    assert "css/style.css?v=1.0.19" in index_html
     assert "js/pages/analytics.js?v=1.0.22" in index_html
 
     for removed in [

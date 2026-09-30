@@ -59,3 +59,44 @@ def test_cleanup_housekeeping_preserves_active_and_state(settings, tmp_path: Pat
     assert not old_log.exists()
     assert active_kw.exists()
     assert settings.seen_files_path.exists()
+
+
+def test_cleanup_housekeeping_trims_the_chat_usage_log(settings):
+    """Dọn định kỳ xoá bản ghi usage chat quá hạn, giữ bản ghi còn trong hạn (b11 D8)."""
+    import sqlite3
+    from datetime import UTC, datetime, timedelta
+
+    from dms.chat.db.migrations import apply_chat_migrations
+    from dms.chat.db.usage_ledger import SqliteChatUsageLedger
+
+    settings.enable_runtime_cleanup = True
+    settings.chat_usage_retention_days = 90
+    settings.ensure_runtime_dirs()
+
+    db_path = settings.classification_jobs_db_path
+    conn = sqlite3.connect(db_path)
+    apply_chat_migrations(conn)
+    ledger = SqliteChatUsageLedger(conn)
+    now = datetime.now(UTC)
+    for offset, request_id in ((timedelta(days=200), "cu"), (timedelta(days=1), "moi")):
+        ledger.record(
+            username="an",
+            request_id=request_id,
+            session_id=None,
+            call_type="chat_plan",
+            model="gemini-test",
+            prompt_tokens=1,
+            completion_tokens=1,
+            total_tokens=2,
+            cost_usd=0.0,
+            success=True,
+            at=now - offset,
+        )
+    conn.close()
+
+    RuntimeCleanup(settings).cleanup_housekeeping()
+
+    check = sqlite3.connect(db_path)
+    rows = check.execute("SELECT request_id FROM chat_usage_log").fetchall()
+    check.close()
+    assert [row[0] for row in rows] == ["moi"]
