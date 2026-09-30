@@ -151,9 +151,7 @@ class SynthesisGuard:
         self.max_chars = max_chars
         self.allowed_tokens = self._build_allowed_tokens(sheet, question)
         # ``None`` = câu trả lời thường: không có luật phần nào.
-        self.sections: frozenset[str] | None = (
-            None if sections is None else frozenset(sections)
-        )
+        self.sections: frozenset[str] | None = None if sections is None else frozenset(sections)
 
     @staticmethod
     def _build_allowed_tokens(sheet: FactSheet, question: str) -> frozenset[str]:

@@ -83,7 +83,9 @@ class BudgetPolicy:
         reset_at = end.astimezone(self._tz).isoformat()
         exempt = is_admin and self.config.exempt_admin
         if not self.config.enabled or exempt:
-            return BudgetStatus(used=0, limit=self.config.daily_tokens, reset_at=reset_at, exempt=True)
+            return BudgetStatus(
+                used=0, limit=self.config.daily_tokens, reset_at=reset_at, exempt=True
+            )
         used = self.ledger.total_tokens(username, start, now + timedelta(microseconds=1))
         return BudgetStatus(used=used, limit=self.config.daily_tokens, reset_at=reset_at)
 

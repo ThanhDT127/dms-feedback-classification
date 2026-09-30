@@ -36,8 +36,8 @@ REAL_REDIS_URL = os.environ.get("DMS_TEST_REDIS_URL", "").strip()
 
 
 def _redis_client():
-    """Redis giả trong tiến trình, đủ cho CI."""
-    import fakeredis
+    """Redis giả trong tiến trình, đủ cho CI; thiếu gói dev ``fakeredis`` thì bỏ qua biến thể này."""
+    fakeredis = pytest.importorskip("fakeredis")
 
     return fakeredis.FakeRedis(decode_responses=True)
 
@@ -52,9 +52,7 @@ def _real_redis_client():
 
 BUFFER_FACTORIES: dict[str, BufferFactory] = {
     "in_memory": lambda clock: InMemoryAnswerBuffer(stale_after_seconds=120, wall_clock=clock),
-    "redis": lambda clock: RedisAnswerBuffer(
-        _redis_client(), stale_after_seconds=120, clock=clock
-    ),
+    "redis": lambda clock: RedisAnswerBuffer(_redis_client(), stale_after_seconds=120, clock=clock),
 }
 
 if REAL_REDIS_URL:

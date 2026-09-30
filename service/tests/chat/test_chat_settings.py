@@ -292,7 +292,9 @@ def test_chat_redis_url_is_trimmed():
     assert settings.chat_redis_url == "redis://redis:6379/0"
 
 
-@pytest.mark.parametrize("override", [{"chat_redis_url": "localhost:6379"}, {"chat_redis_url": "redis"}])
+@pytest.mark.parametrize(
+    "override", [{"chat_redis_url": "localhost:6379"}, {"chat_redis_url": "redis"}]
+)
 def test_invalid_chat_redis_url_rejected(override):
     with pytest.raises(ValidationError):
         Settings(**{**_REQUIRED, **override})

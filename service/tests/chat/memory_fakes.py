@@ -42,7 +42,11 @@ def add_turns(
         events = []
         if quotes and n in quotes:
             events.append(
-                {"seq": 1, "type": "data_block", "data": {"kind": "quote", "payload": {"quotes": quotes[n]}}}
+                {
+                    "seq": 1,
+                    "type": "data_block",
+                    "data": {"kind": "quote", "payload": {"quotes": quotes[n]}},
+                }
             )
         store.add_message(
             session_id,

@@ -134,13 +134,13 @@ class ExportStore:
         )
         _, meta_path = self.paths_for(username, export_id)
         meta_path.parent.mkdir(parents=True, exist_ok=True)
-        meta_path.write_text(
-            json.dumps(record.to_dict(), ensure_ascii=False), encoding="utf-8"
-        )
+        meta_path.write_text(json.dumps(record.to_dict(), ensure_ascii=False), encoding="utf-8")
         self.enforce_limit(username, now=moment)
         return record
 
-    def get(self, username: str, export_id: str, *, now: datetime | None = None) -> ExportRecord | None:
+    def get(
+        self, username: str, export_id: str, *, now: datetime | None = None
+    ) -> ExportRecord | None:
         """Bản ghi còn hạn của chính user; mọi trường hợp khác trả ``None`` (endpoint trả 404)."""
         if not EXPORT_ID_PATTERN.match(str(export_id or "")):
             return None
@@ -177,9 +177,7 @@ class ExportStore:
             self.delete(oldest.owner, oldest.export_id)
             removed += 1
         if removed:
-            logger.info(
-                "chat_export_limit_enforced", extra={"removed": removed, "owner": username}
-            )
+            logger.info("chat_export_limit_enforced", extra={"removed": removed, "owner": username})
         return removed
 
     def delete(self, username: str, export_id: str) -> None:
@@ -208,7 +206,12 @@ class ExportStore:
     def _all_metadata(self) -> Iterator[Path]:
         if not self.root.is_dir():
             return iter(())
-        return (path for folder in self.root.iterdir() if folder.is_dir() for path in folder.glob("*.json"))
+        return (
+            path
+            for folder in self.root.iterdir()
+            if folder.is_dir()
+            for path in folder.glob("*.json")
+        )
 
 
 def cleanup_chat_exports(root: Path, now: datetime | None = None) -> int:

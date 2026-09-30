@@ -113,9 +113,7 @@ def test_malformed_export_id_gets_404(env: Env, bad: str):
 def test_path_traversal_reads_nothing_outside_the_export_dir(env: Env, tmp_path):
     secret = tmp_path / "secret.txt"
     secret.write_text("top secret", encoding="utf-8")
-    response = env.client.get(
-        "/api/chat/exports/..%2F..%2Fsecret.txt", headers=env.headers()
-    )
+    response = env.client.get("/api/chat/exports/..%2F..%2Fsecret.txt", headers=env.headers())
     assert response.status_code == 404
     assert b"top secret" not in response.content
 

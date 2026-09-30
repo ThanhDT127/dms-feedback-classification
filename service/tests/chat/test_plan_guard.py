@@ -490,8 +490,11 @@ M4 = PlanGuardConfig(
 def test_open_start_date_asks_for_end_date(guard):
     """Ca 19c: "từ đầu tháng 8" không được hiểu thành trọn tháng 8."""
     plan = guard.check(
-        make_output(intent=Intent.COMPARISON, function_name="get_comparison",
-                    params={"date_from": "2026-08-01", "date_to": "2026-08-31"}),
+        make_output(
+            intent=Intent.COMPARISON,
+            function_name="get_comparison",
+            params={"date_from": "2026-08-01", "date_to": "2026-08-31"},
+        ),
         make_query("So sánh từ đầu tháng 8", issues=(QueryIssue.MISSING_END_DATE,)),
         ADMIN,
     )
@@ -502,13 +505,17 @@ def test_open_start_date_asks_for_end_date(guard):
 def test_numeric_code_lookup_is_not_supported(guard):
     """Ca 27: mã thật là số thuần; không lộ tên khoá issue_code."""
     plan = guard.check(
-        make_output(intent=Intent.LOOKUP_FEEDBACK, function_name="get_issues",
-                    params={"issue_code": "206501"}),
+        make_output(
+            intent=Intent.LOOKUP_FEEDBACK,
+            function_name="get_issues",
+            params={"issue_code": "206501"},
+        ),
         make_query("Tra phản hồi mã 206501"),
         ADMIN,
     )
     assert (plan.decision, plan.reason) == (
-        Decision.NOT_SUPPORTED, Reason.LOOKUP_BY_CODE_UNAVAILABLE
+        Decision.NOT_SUPPORTED,
+        Reason.LOOKUP_BY_CODE_UNAVAILABLE,
     )
     assert "issue_code" not in (plan.message or "")
 
@@ -516,8 +523,11 @@ def test_numeric_code_lookup_is_not_supported(guard):
 def test_unknown_param_name_never_reaches_the_user(guard):
     """Ca 20-M1: tham số Planner tự chế được gọi bằng tên tiếng Việt."""
     plan = guard.check(
-        make_output(intent=Intent.LOOKUP_FEEDBACK, function_name="get_issues",
-                    params={"content_keyword": "chập chờn"}),
+        make_output(
+            intent=Intent.LOOKUP_FEEDBACK,
+            function_name="get_issues",
+            params={"content_keyword": "chập chờn"},
+        ),
         make_query("Liệt kê phản hồi có chữ chập chờn"),
         ADMIN,
     )
@@ -556,7 +566,9 @@ def test_ungrounded_fts_filter_is_dropped_with_notice():
     """Ca 22: bộ lọc cảm xúc Planner đoán thêm cho tra cứu bị bỏ, kèm thông báo."""
     guard = PlanGuard(StaticMetadataProvider(), config=M4)
     step = QueryPlan(
-        pattern=QueryPattern.FTS5_SEARCH, answer_shape=AnswerShape.LIST, original_query="q",
+        pattern=QueryPattern.FTS5_SEARCH,
+        answer_shape=AnswerShape.LIST,
+        original_query="q",
         params={"sentiment": "Tiêu cực", "search_terms": ["giao hàng", "chậm"]},
         fts_query="giao hàng chậm",
     )

@@ -149,8 +149,10 @@ def _sql_facts(block: DataBlock) -> list[Fact]:
     numeric = {
         alias
         for alias in columns
-        if any(isinstance(r.get(alias), int | float) and not isinstance(r.get(alias), bool)
-               for r in rows)
+        if any(
+            isinstance(r.get(alias), int | float) and not isinstance(r.get(alias), bool)
+            for r in rows
+        )
     }
     facts: list[Fact] = []
     for index, row in enumerate(rows, start=1):

@@ -101,7 +101,9 @@ class ChatExporter:
             highlights=tuple(highlights),
             commentary=tuple(commentary),
         )
-        payloads = [block.to_dict() if hasattr(block, "to_dict") else dict(block) for block in blocks]
+        payloads = [
+            block.to_dict() if hasattr(block, "to_dict") else dict(block) for block in blocks
+        ]
 
         export_id, path = self.store.reserve(owner)
         try:

@@ -86,9 +86,7 @@ class ComposerConfig:
             max_output_tokens=int(settings.chat_commentary_max_output_tokens),
             milestone=str(settings.chat_milestone),
             blocks=BlockConfig.from_settings(settings),
-            report_max_sentences=int(
-                getattr(settings, "chat_report_commentary_max_sentences", 8)
-            ),
+            report_max_sentences=int(getattr(settings, "chat_report_commentary_max_sentences", 8)),
         )
 
 
@@ -391,9 +389,7 @@ class AnswerComposer:
             for section in outcome.sections
         ]
         compare_text = format_date_range(dates.get("compare_from"), dates.get("compare_to"))
-        state.highlights = build_highlights(
-            section_data, compare_label=compare_text or "kỳ trước"
-        )
+        state.highlights = build_highlights(section_data, compare_label=compare_text or "kỳ trước")
         highlights = highlights_block(state.highlights)
         if highlights is not None:
             emitter.emit(EventType.DATA_BLOCK, highlights.to_dict())
@@ -436,9 +432,7 @@ class AnswerComposer:
             state.commentary_status = CommentaryStatus.SKIPPED
             return
         sections_with_data = tuple(
-            section.section_id
-            for section in outcome.sections
-            if section.status is SectionStatus.OK
+            section.section_id for section in outcome.sections if section.status is SectionStatus.OK
         )
         if not sections_with_data:
             state.commentary_status = CommentaryStatus.SKIPPED
@@ -525,9 +519,7 @@ class AnswerComposer:
             return emitted
         state.sentences_per_section[result.section] = used + 1
         emitted += 1
-        section = next(
-            (s for s in state.section_refs if s.section_id == result.section), None
-        )
+        section = next((s for s in state.section_refs if s.section_id == result.section), None)
         data: dict[str, Any] = {"sentence_index": emitted, "text": result.text}
         if section is not None:
             data["section"] = section.event_ref()
@@ -587,9 +579,7 @@ class AnswerComposer:
                 "chat_export_failed",
                 extra={"request_id": outcome.request_id, "error_type": type(exc).__name__},
             )
-            emitter.emit(
-                EventType.DATA_BLOCK, _export_block({"error": Reason.EXPORT_FAILED.value})
-            )
+            emitter.emit(EventType.DATA_BLOCK, _export_block({"error": Reason.EXPORT_FAILED.value}))
             return
         emitter.emit(EventType.DATA_BLOCK, _export_block(result))
 
@@ -882,7 +872,7 @@ def _subtitle(dates: Mapping[str, str], scope_units: Sequence[str]) -> str:
         return subtitle
     range_text = format_date_range(dates.get("date_from"), dates.get("date_to"))
     if range_text and subtitle.startswith(range_text):
-        return f"{range_text} so với {compare_text}{subtitle[len(range_text):]}"
+        return f"{range_text} so với {compare_text}{subtitle[len(range_text) :]}"
     return f"{subtitle} · so với {compare_text}" if subtitle else f"so với {compare_text}"
 
 
@@ -908,7 +898,6 @@ def _single_kpi(outcome: TurnOutcome, content_facts: list[Any]) -> tuple[str, st
 
     key = kpis[0].key.split(".", 1)[1]
     return KPI_LABELS_VI.get(key, key), kpis[0].display
-
 
 
 # ── Tiện ích của báo cáo (b10 D3, D4, D6) ──
@@ -1048,6 +1037,7 @@ def render_report_synthesis_prompt(
         version=system.version,
         sha256=system.sha256,
     )
+
 
 __all__ = [
     "AnswerComposer",

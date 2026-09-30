@@ -135,7 +135,9 @@ def test_every_llm_call_of_a_turn_carries_the_user_context(tmp_path, monkeypatch
         env.services.shutdown()
 
     summary_calls = [ctx for call_type, ctx in llm.seen if call_type == CALL_TYPE_MEMORY_SUMMARY]
-    assert summary_calls and all(ctx is not None and ctx.username == "alice" for ctx in summary_calls)
+    assert summary_calls and all(
+        ctx is not None and ctx.username == "alice" for ctx in summary_calls
+    )
     turn_calls = [ctx for call_type, ctx in llm.seen if call_type != CALL_TYPE_MEMORY_SUMMARY]
     assert turn_calls and all(ctx is not None and ctx.username == "alice" for ctx in turn_calls)
     memory = env.services.memory.load(session_id)
@@ -164,7 +166,9 @@ def test_completed_turn_extends_session_expiry(make_env):
         reply = ask(ws)
         receive_until_done(ws, reply["answer_id"])
     session_id = reply["session_id"]
-    env.store.update_session(session_id, expires_at=(datetime.now(UTC) + timedelta(days=1)).isoformat())
+    env.store.update_session(
+        session_id, expires_at=(datetime.now(UTC) + timedelta(days=1)).isoformat()
+    )
     with env.ws() as ws:
         second = ask(ws, client_msg_id="m2", session_id=session_id)
         receive_until_done(ws, second["answer_id"])
@@ -188,7 +192,9 @@ def test_cleanup_removes_expired_sessions_and_messages(make_env):
         receive_until_done(ws, reply["answer_id"])
     session_id = reply["session_id"]
     wait_for(lambda: len(env.store.get_messages(session_id)) == 2)
-    env.store.update_session(session_id, expires_at=(datetime.now(UTC) - timedelta(minutes=1)).isoformat())
+    env.store.update_session(
+        session_id, expires_at=(datetime.now(UTC) - timedelta(minutes=1)).isoformat()
+    )
 
     assert _clear_expired_chat_sessions() == 1
     assert env.store.get_session(session_id) is None

@@ -107,7 +107,8 @@ class HistoryAdapter:
             usable = [
                 dict(plan)
                 for plan in plans
-                if isinstance(plan, dict) and plan.get("function_name")
+                if isinstance(plan, dict)
+                and plan.get("function_name")
                 and isinstance(plan.get("params", {}), dict)
             ]
             if usable:

@@ -159,9 +159,7 @@ class ReportRunner:
                 },
             )
 
-        return ReportRun(
-            step_results=tuple(results), sections=tuple(sections), timings_ms=timings
-        )
+        return ReportRun(step_results=tuple(results), sections=tuple(sections), timings_ms=timings)
 
 
 def sections_with_data(run: ReportRun) -> tuple[str, ...]:

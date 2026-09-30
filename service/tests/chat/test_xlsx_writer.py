@@ -169,7 +169,9 @@ def test_rows_are_capped_and_marked_truncated(tmp_path: Path):
     sheet = load_workbook(path)["Xếp hạng sản phẩm"]
     assert sheet.max_row == 5004  # 1 tiêu đề + 1 phụ đề + 1 trống + 1 header + 5000 dòng
     text = "\n".join(
-        str(cell.value or "") for row in load_workbook(path)["Thông tin"].iter_rows() for cell in row
+        str(cell.value or "")
+        for row in load_workbook(path)["Thông tin"].iter_rows()
+        for cell in row
     )
     assert "5.000" in text
 

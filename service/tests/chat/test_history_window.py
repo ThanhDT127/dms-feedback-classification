@@ -19,7 +19,11 @@ def turns_of(count: int, size: int) -> list[StoredTurn]:
     """Mỗi lượt dài đúng ``size`` ký tự (câu hỏi + câu trả lời)."""
     half = size // 2
     return [
-        StoredTurn(message_id=i * 2, question=f"{i:02d}".ljust(half, "q"), answer_summary="a" * (size - half))
+        StoredTurn(
+            message_id=i * 2,
+            question=f"{i:02d}".ljust(half, "q"),
+            answer_summary="a" * (size - half),
+        )
         for i in range(1, count + 1)
     ]
 
@@ -60,9 +64,7 @@ def test_pending_turns_are_those_outside_the_window(total, expected):
 
 def _fixed_prompt_size() -> int:
     return len(
-        load_prompt(
-            "contextualize_v1", {"session_summary": "", "history": "", "question": ""}
-        ).text
+        load_prompt("contextualize_v1", {"session_summary": "", "history": "", "question": ""}).text
     )
 
 

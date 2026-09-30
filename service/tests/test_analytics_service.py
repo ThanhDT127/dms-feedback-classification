@@ -640,7 +640,9 @@ def test_priority_issues_ranks_unresolved_negative_first(repo):
 # ── Trạng thái "Hoàn thành" của DMS thật cũng là đã xử lý ──
 
 
-@pytest.mark.parametrize("processed_status", ["Đã xử lý", "Hoàn thành", "hoàn thành", " Hoàn thành "])
+@pytest.mark.parametrize(
+    "processed_status", ["Đã xử lý", "Hoàn thành", "hoàn thành", " Hoàn thành "]
+)
 def test_overview_counts_every_processed_status(repo, processed_status):
     seed_classified_records(
         repo,

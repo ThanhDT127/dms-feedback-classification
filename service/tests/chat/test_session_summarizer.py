@@ -160,7 +160,9 @@ class _ConflictStore(InMemorySessionMemoryStore):
 
 def test_version_conflict_skips_this_round():
     summarizer = SessionSummarizer(
-        _ConflictStore(), llm=ScriptedLLM(default=summary_json("tóm tắt")), config=SummarizerConfig(batch=1)
+        _ConflictStore(),
+        llm=ScriptedLLM(default=summary_json("tóm tắt")),
+        config=SummarizerConfig(batch=1),
     )
     assert summarizer.summarize("s1", [PendingTurn(1, "q", "a")]) is None
 

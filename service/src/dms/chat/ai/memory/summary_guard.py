@@ -74,9 +74,7 @@ def check_summary(
     return SummaryCheck(ok=True)
 
 
-def extractive_summary(
-    source: SummarySource, *, max_chars: int = DEFAULT_MAX_CHARS
-) -> str:
+def extractive_summary(source: SummarySource, *, max_chars: int = DEFAULT_MAX_CHARS) -> str:
     """Bản dự phòng: nối tóm tắt cũ với từng lượt, cắt phần cũ nhất cho vừa giới hạn."""
     lines: list[str] = []
     if source.previous_summary.strip():

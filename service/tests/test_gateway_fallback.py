@@ -217,13 +217,16 @@ def test_direct_sdk_lazy_singleton_explicit_credentials_and_no_retries(
     class FakeModel:
         def generate_content(self, prompt, generation_config=None):
             requests_seen.append((prompt, generation_config))
-            return SimpleNamespace(text="direct-text", usage_metadata=SimpleNamespace(
-                prompt_token_count=3, candidates_token_count=2, total_token_count=5
-            ))
+            return SimpleNamespace(
+                text="direct-text",
+                usage_metadata=SimpleNamespace(
+                    prompt_token_count=3, candidates_token_count=2, total_token_count=5
+                ),
+            )
 
     fake_module = SimpleNamespace(
         configure=configure,
-        GenerativeModel=lambda model: (models.append(model) or FakeModel()),
+        GenerativeModel=lambda model: models.append(model) or FakeModel(),
     )
     monkeypatch.setitem(sys.modules, "google.generativeai", fake_module)
 

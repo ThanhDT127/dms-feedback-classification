@@ -175,7 +175,9 @@ class SessionSummarizer:
             return fallback, (), SUMMARY_METHOD_EXTRACTIVE
 
         topics = tuple(
-            " ".join(str(topic).split()) for topic in parsed.topics[:MAX_TOPICS] if str(topic).strip()
+            " ".join(str(topic).split())
+            for topic in parsed.topics[:MAX_TOPICS]
+            if str(topic).strip()
         )
         return candidate, topics, SUMMARY_METHOD_LLM
 
@@ -187,9 +189,7 @@ def render_summary_prompt(source: SummarySource, *, max_chars: int = DEFAULT_MAX
         lines.append(
             f"Lượt {index} – Người dùng: {sanitize_prompt_data(question, TURN_TEXT_MAX_CHARS)}"
         )
-        lines.append(
-            f"Lượt {index} – Trợ lý: {sanitize_prompt_data(answer, TURN_TEXT_MAX_CHARS)}"
-        )
+        lines.append(f"Lượt {index} – Trợ lý: {sanitize_prompt_data(answer, TURN_TEXT_MAX_CHARS)}")
     return load_prompt(PROMPT_NAME, {"max_chars": str(max_chars), "content": "\n".join(lines)})
 
 

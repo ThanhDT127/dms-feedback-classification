@@ -27,7 +27,7 @@ _REQUIRED = {
 
 
 def fake_redis():
-    import fakeredis
+    fakeredis = pytest.importorskip("fakeredis")
 
     return fakeredis.FakeRedis(decode_responses=True)
 

@@ -153,7 +153,7 @@ def _mock_get_sources(params: dict, scope: UserScope) -> list[dict]:
 
 def _mock_get_units(params: dict, scope: UserScope) -> list[dict]:
     """Mock FeedbackAnalyticsService.units() — format thật, filtered by scope."""
-    all_units = [
+    all_units: list[dict[str, Any]] = [
         {"label": "CN Miền Nam", "issue_count": 95, "percentage": 33.10},
         {"label": "CN Miền Bắc", "issue_count": 82, "percentage": 28.57},
         {"label": "CN Hà Nội", "issue_count": 65, "percentage": 22.65},

@@ -1076,7 +1076,9 @@ def _in_scope(reference: Mapping[str, Any], scope: UserScope, validated: Validat
     return normalize_match_text(str(reference.get("unit_name") or "")) in allowed
 
 
-def _plans_to_steps(plans: Sequence[Mapping[str, Any]], original_query: str) -> tuple[QueryPlan, ...]:
+def _plans_to_steps(
+    plans: Sequence[Mapping[str, Any]], original_query: str
+) -> tuple[QueryPlan, ...]:
     """Dựng lại bước từ ``metadata.plans`` đã lưu; bỏ mục không còn hợp lệ (b10 D7)."""
     steps: list[QueryPlan] = []
     for plan in plans or ():

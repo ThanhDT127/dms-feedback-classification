@@ -134,7 +134,9 @@ def test_topic_reset_with_question_skips_context_and_slots():
 
     assert llm.calls_for(CALL_TYPE_CONTEXTUALIZE) == []  # không gọi Contextualizer
     assert "unit" not in query.slots.entities
-    assert query.date_range == DateRange(date(2026, 7, 1), date(2026, 9, 15), query.date_range.label)
+    assert query.date_range == DateRange(
+        date(2026, 7, 1), date(2026, 9, 15), query.date_range.label
+    )
     assert query.topic_reset and not query.reset_only
     assert query.assumptions[0] == RESET_ASSUMPTION
 
@@ -253,7 +255,9 @@ def test_own_unit_by_full_name_is_not_a_partial_refusal():
     executor = ScopeRespectingFakeExecutor()
     orchestrator, _ = build(executor, [OVERVIEW_PLAN])
 
-    outcome = orchestrator.handle(user_turn(f"Tổng quan {TV1} tháng 8", TV1, history=HistoryWindow()))
+    outcome = orchestrator.handle(
+        user_turn(f"Tổng quan {TV1} tháng 8", TV1, history=HistoryWindow())
+    )
 
     assert outcome.decision is Decision.RUN
     assert outcome.dropped_entities == ()

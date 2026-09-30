@@ -249,7 +249,9 @@ class PlanGuard:
             return checked
         built = self._build_fts(checked, query)
         if dropped_filters and built.decision is Decision.RUN:
-            built = replace(built, notices=built.notices + (_dropped_filter_notice(dropped_filters),))
+            built = replace(
+                built, notices=built.notices + (_dropped_filter_notice(dropped_filters),)
+            )
         return built
 
     # ── Bước 1–3 ──
@@ -607,8 +609,11 @@ class PlanGuard:
             return steps, {}
         logger.info(
             "plan_guard_filter_restored",
-            extra={"function": name, "params": sorted(set(params) - set(first.params)),
-                   "rates": sorted(rates)},
+            extra={
+                "function": name,
+                "params": sorted(set(params) - set(first.params)),
+                "rates": sorted(rates),
+            },
         )
         return (replace(first, params=params), *steps[1:]), rates
 
@@ -905,7 +910,6 @@ class PlanGuard:
                 message=render(Reason.FILTER_REQUIRED, filter_name=join_vi(names)),
             )
         return None
-
 
     # ── Pattern 2 (b09 D7): chuyển bộ lọc Pattern 1 không hỗ trợ thành bước semantic_view ──
 

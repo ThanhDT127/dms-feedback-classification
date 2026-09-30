@@ -195,9 +195,7 @@ def test_custom_report_without_dates_asks_for_range():
 
 
 def test_report_sections_filter_keeps_overview():
-    orchestrator, _ = build(
-        ReportFakeExecutor(), plan=plan_json("REPORT_CUSTOM", ["products"])
-    )
+    orchestrator, _ = build(ReportFakeExecutor(), plan=plan_json("REPORT_CUSTOM", ["products"]))
     outcome = orchestrator.handle(turn("Báo cáo từ 01/08 đến 31/08 về sản phẩm", TV1))
     assert [section.section_id for section in outcome.sections] == ["overview", "products"]
 
@@ -430,9 +428,7 @@ def test_export_of_previous_answer_never_reuses_saved_events(tmp_path):
             "intent": "DRILL_PRODUCT",
         }
     ]
-    orchestrator.handle(
-        turn("Xuất kết quả vừa rồi ra Excel", TV1, previous_plans=tuple(plans))
-    )
+    orchestrator.handle(turn("Xuất kết quả vừa rồi ra Excel", TV1, previous_plans=tuple(plans)))
     assert [plan.function_name for plan, _ in executor.calls] == ["get_products"]
 
 

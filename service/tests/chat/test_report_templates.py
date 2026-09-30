@@ -64,9 +64,7 @@ def test_custom_report_without_range_has_no_default():
 
 def test_explicit_range_is_capped_at_today_with_assumption():
     given = DateRange(date_from=date(2026, 9, 1), date_to=date(2026, 9, 30))
-    report_range, assumptions = resolve_range(
-        Intent.REPORT_CUSTOM, today=TODAY, date_range=given
-    )
+    report_range, assumptions = resolve_range(Intent.REPORT_CUSTOM, today=TODAY, date_range=given)
     assert report_range is not None
     assert report_range.current.date_to == TODAY
     assert any("15/09/2026" in text for text in assumptions)
@@ -130,9 +128,7 @@ def test_requested_sections_filter_but_always_keep_overview():
 def test_unknown_requested_section_is_skipped_with_assumption():
     given = DateRange(date_from=date(2026, 8, 1), date_to=date(2026, 8, 31))
     report_range = _range(Intent.REPORT_CUSTOM, date_range=given)
-    context = ReportContext(
-        scope_units=("TV1",), requested_sections=("products", "issue_types")
-    )
+    context = ReportContext(scope_units=("TV1",), requested_sections=("products", "issue_types"))
     plan = build_report_plan(Intent.REPORT_CUSTOM, report_range, context)
     assert [spec.section_id for spec in plan.sections] == ["overview", "products"]
     assert any("Loại vấn đề" in text for text in plan.assumptions)
@@ -183,9 +179,7 @@ def test_steps_carry_range_and_compare_params():
 
 def test_priority_step_asks_for_top_five():
     report_range = _range(Intent.REPORT_DAILY)
-    plan = build_report_plan(
-        Intent.REPORT_DAILY, report_range, ReportContext(scope_units=("TV1",))
-    )
+    plan = build_report_plan(Intent.REPORT_DAILY, report_range, ReportContext(scope_units=("TV1",)))
     priority = next(s for s in plan.steps if s.function_name == "get_priority_issues")
     assert priority.params["limit"] == PRIORITY_TOP_N
 

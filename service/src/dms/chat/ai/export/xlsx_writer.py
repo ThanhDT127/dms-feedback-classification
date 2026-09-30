@@ -290,9 +290,7 @@ def _kpi_table(payload: Mapping[str, Any]) -> tuple[list[tuple[str, str]], list[
                 "value": _count(item.get("value"))
                 if item.get("available")
                 else str(item.get("display") or NOT_ENOUGH_DATA),
-                "previous": _count(comparison.get("value"))
-                if comparison.get("available")
-                else "",
+                "previous": _count(comparison.get("value")) if comparison.get("available") else "",
             }
         )
     return columns, rows

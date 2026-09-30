@@ -231,8 +231,11 @@ class ChatConnection:
                     error(
                         ProtocolError.BUDGET_EXCEEDED,
                         client_msg_id=reply_id,
-                        data={"reset_at": status.reset_at, "used": status.used,
-                              "limit": status.limit},
+                        data={
+                            "reset_at": status.reset_at,
+                            "used": status.used,
+                            "limit": status.limit,
+                        },
                     )
                 )
                 return

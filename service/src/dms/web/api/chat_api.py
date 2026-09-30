@@ -167,7 +167,7 @@ async def download_export(
         headers={
             "Content-Disposition": (
                 f'attachment; filename="{_ascii_filename(filename)}"; '
-                f"filename*=utf-8\'\'{quote(filename)}"
+                f"filename*=utf-8''{quote(filename)}"
             ),
             "X-Content-Type-Options": "nosniff",
             "Cache-Control": "no-store",

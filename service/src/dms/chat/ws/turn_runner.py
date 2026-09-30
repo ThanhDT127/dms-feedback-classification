@@ -241,9 +241,7 @@ class ChatTurnRunner:
 
     # ── Tác vụ nền ưu tiên thấp (b11 D2) ──
 
-    def _submit_background(
-        self, record: TurnRecord, context: ChatRequestContext | None
-    ) -> None:
+    def _submit_background(self, record: TurnRecord, context: ChatRequestContext | None) -> None:
         if not self.background or record.done_status is DoneStatus.CANCELLED:
             return
         if self.inflight >= self.config.max_concurrent_turns:

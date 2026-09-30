@@ -292,9 +292,7 @@ def resolve_range(
         current = DateRange(
             date_from=min(current.date_from, today), date_to=today, label=current.label
         )
-        assumptions.append(
-            f"Kỳ này chưa kết thúc nên số liệu chỉ tính tới {format_date(today)}."
-        )
+        assumptions.append(f"Kỳ này chưa kết thúc nên số liệu chỉ tính tới {format_date(today)}.")
     compare = compare_range or previous_period(current)
     return ReportRange(current=current, compare=compare), tuple(assumptions)
 
