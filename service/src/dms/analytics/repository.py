@@ -188,6 +188,17 @@ class FeedbackAnalyticsRepository:
             now,
         )
 
+    def get_job_source_file_key(self, job_id: str) -> str | None:
+        """Keep the original input identity when a job is retried by another worker."""
+        with self._lock, self._conn() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT source_file_key FROM feedback_record_versions WHERE job_id = ?",
+                (job_id,),
+            ).fetchall()
+        if len(rows) > 1:
+            raise ValueError(f"Ambiguous input source keys for job_id={job_id!r}")
+        return str(rows[0]["source_file_key"]) if rows else None
+
     def persist_input_snapshot(
         self,
         *,

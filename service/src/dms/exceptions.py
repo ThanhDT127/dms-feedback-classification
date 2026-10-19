@@ -63,6 +63,7 @@ class GatewayError(GeminiError):
             "quota",
             "redirect",
             "unreachable",
+            "timeout",
             "outcome_unknown",
             "response",
             "accounting",

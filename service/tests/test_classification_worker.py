@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from dms.analytics.input_reader import read_feedback_workbook
 from dms.analytics.repository import FeedbackAnalyticsRepository
 from dms.classification_jobs import (
     JOB_STATUS_CANCELLED,
@@ -395,3 +396,48 @@ def test_worker_handles_queued_and_running_cancellation(tmp_path: Path):
         manager.stop()
 
     assert cancelled["terminal"] is True
+
+
+def test_worker_retry_preserves_watcher_sharepoint_source_key(tmp_path: Path):
+    settings = _settings(tmp_path, upload_input_to_sharepoint=False)
+    db_path = tmp_path / "jobs.db"
+    store = ClassificationJobStore(db_path)
+    job = _create_job(store, tmp_path, "watcher-retry")
+    with store._conn() as conn:
+        conn.execute(
+            "UPDATE classification_jobs SET mode='watcher', owner_username='system_watcher' WHERE job_id=?",
+            (job["job_id"],),
+        )
+        conn.commit()
+    repo = FeedbackAnalyticsRepository(db_path)
+    parsed = read_feedback_workbook(job["input_path"])
+    repo.persist_input_snapshot(
+        job_id=job["job_id"],
+        source_file_key="sharepoint-original-item-id",
+        source_file_name=job["filename"],
+        records=parsed.records,
+        deactivate_absent=True,
+    )
+    repo.mark_job_unfinished_failed(job["job_id"])
+    store.fail_job(job["job_id"], "Gateway read timed out")
+    store.retry_job(job["job_id"])
+    claimed = store.claim_next_job(
+        worker_id="test", global_running_limit=1, per_user_running_limit=1
+    )
+    manager = ClassificationWorkerManager(
+        settings=settings,
+        job_store=store,
+        runner_factory=lambda: SuccessfulRunner(),
+        sharepoint_factory=lambda: None,
+        analytics_repository=repo,
+    )
+
+    manager._process_job(claimed)
+
+    result = store.get_job(job["job_id"])
+    assert result["status"] == JOB_STATUS_COMPLETED, result["error"]
+    versions = repo.fetch_versions(job_id=job["job_id"])
+    assert len(versions) == 1
+    assert versions[0]["source_file_key"] == "sharepoint-original-item-id"
+    assert versions[0]["classification_state"] == "completed"
+    assert len(repo.fetch_current_records()) == 1

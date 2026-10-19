@@ -151,9 +151,10 @@ class ClassificationWorkerManager:
 
             if self.analytics_repository is not None:
                 parsed_input = read_feedback_workbook(input_path)
+                source_file_key = self.analytics_repository.get_job_source_file_key(job_id)
                 self.analytics_repository.persist_input_snapshot(
                     job_id=job_id,
-                    source_file_key=f"sha256:{sha256_file(input_path)}",
+                    source_file_key=source_file_key or f"sha256:{sha256_file(input_path)}",
                     source_file_name=job["filename"],
                     records=parsed_input.records,
                     deactivate_absent=False,

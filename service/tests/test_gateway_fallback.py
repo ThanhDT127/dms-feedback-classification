@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 
 import pytest
-from test_gateway import Audit, gateway_settings
+from test_gateway import Audit, completion, endpoint, gateway_settings
 
 from dms.exceptions import GatewayError
 from dms.gemini_client import GeminiClient, GeminiResponse
@@ -31,6 +31,170 @@ def fallback_client(tmp_path, monkeypatch, **overrides):
 
 def unreachable(*args):
     raise GatewayError("unreachable", retryable=True)
+
+
+@pytest.mark.parametrize("helper", ["generate", "generate_json"])
+@pytest.mark.parametrize("status", [500, 502, 503, 504])
+def test_http_server_failure_falls_back_on_first_attempt(tmp_path, monkeypatch, helper, status):
+    with endpoint([(status, {"error": "upstream failure"}, {})]) as (url, seen):
+        client, audit, direct = fallback_client(tmp_path, monkeypatch, url=url)
+        response = getattr(client, helper)("prompt", actor="alice")
+
+    assert response.route == "direct_apikey"
+    assert len(seen) == len(direct) == 1
+    starts = [event for event in audit.events if event["event_kind"] == "attempt_started"]
+    assert [event["route"] for event in starts] == ["gateway", "direct_apikey"]
+    failed = next(event for event in audit.events if event.get("error_category"))
+    assert failed["error_category"] == "outcome_unknown"
+    assert failed["outcome"] == "unknown"
+    assert len({event["operation_id"] for event in starts}) == 1
+
+
+@pytest.mark.parametrize("helper", ["generate", "generate_json"])
+@pytest.mark.parametrize("payload", [{}, {"choices": []}, completion(""), completion(None), []])
+def test_invalid_gateway_response_falls_back_on_first_attempt(
+    tmp_path, monkeypatch, helper, payload
+):
+    with endpoint([(200, payload, {})]) as (url, seen):
+        client, audit, direct = fallback_client(tmp_path, monkeypatch, url=url)
+        response = getattr(client, helper)("prompt", actor="alice")
+
+    assert response.route == "direct_apikey"
+    assert len(seen) == len(direct) == 1
+    failed = next(event for event in audit.events if event.get("error_category"))
+    assert failed["error_category"] == "response"
+    assert failed["outcome"] == "unknown"
+
+
+@pytest.mark.parametrize("helper", ["generate", "generate_json"])
+@pytest.mark.parametrize("wrapped_reset", [False, True])
+def test_ambiguous_connection_error_falls_back_on_first_attempt(
+    tmp_path, monkeypatch, helper, wrapped_reset
+):
+    import requests
+
+    client, audit, direct = fallback_client(tmp_path, monkeypatch)
+    seen = []
+
+    def reset(*args, **kwargs):
+        seen.append(1)
+        reason = ConnectionResetError("connection reset") if wrapped_reset else "connection lost"
+        raise requests.exceptions.ConnectionError(reason)
+
+    monkeypatch.setattr(requests.Session, "post", reset)
+    assert getattr(client, helper)("prompt", actor="alice").route == "direct_apikey"
+    assert len(seen) == len(direct) == 1
+    failed = next(event for event in audit.events if event.get("error_category"))
+    assert failed["error_category"] == "outcome_unknown" and failed["outcome"] == "unknown"
+
+
+@pytest.mark.parametrize("disabled", ["flag", "missing_key"])
+@pytest.mark.parametrize("category", ["response", "outcome_unknown"])
+def test_expanded_failures_require_configured_fallback(tmp_path, monkeypatch, disabled, category):
+    overrides = {"fallback_enabled": False} if disabled == "flag" else {"gemini_api_key": ""}
+    client, audit, direct = fallback_client(tmp_path, monkeypatch, **overrides)
+
+    def fail(*args, **kwargs):
+        raise GatewayError(category, outcome_unknown=True)
+
+    monkeypatch.setattr(client, "_gateway_request", fail)
+    with pytest.raises(GatewayError) as caught:
+        client.generate("prompt", actor="alice")
+    assert caught.value.category == category
+    assert not direct and client._incident_id is None
+
+
+@pytest.mark.parametrize("category", ["auth", "quota", "configuration", "accounting"])
+def test_other_gateway_failures_do_not_open_enabled_fallback(tmp_path, monkeypatch, category):
+    client, audit, direct = fallback_client(tmp_path, monkeypatch)
+
+    def fail(*args, **kwargs):
+        raise GatewayError(category)
+
+    monkeypatch.setattr(client, "_gateway_request", fail)
+    with pytest.raises(GatewayError) as caught:
+        client.generate("prompt", actor="alice")
+    assert caught.value.category == category
+    assert not direct and client._incident_id is None
+
+
+@pytest.mark.parametrize("helper", ["generate", "generate_json"])
+@pytest.mark.parametrize("kind", ["ConnectTimeout", "ReadTimeout", "Timeout", "wrapped_read"])
+def test_timeout_falls_back_on_first_attempt(tmp_path, monkeypatch, helper, kind):
+    import requests
+    from urllib3.exceptions import ReadTimeoutError
+
+    client, audit, direct = fallback_client(tmp_path, monkeypatch)
+    requests_seen = []
+
+    def timeout(*args, **kwargs):
+        requests_seen.append(1)
+        if kind == "wrapped_read":
+            raise requests.exceptions.ConnectionError(ReadTimeoutError(None, "/chat", "timed out"))
+        raise getattr(requests.exceptions, kind)("synthetic timeout")
+
+    monkeypatch.setattr(requests.Session, "post", timeout)
+    result = getattr(client, helper)("prompt", actor="alice")
+
+    assert result.text == "direct"
+    assert len(requests_seen) == len(direct) == 1
+    starts = [e for e in audit.events if e["event_kind"] == "attempt_started"]
+    assert [e["route"] for e in starts] == ["gateway", "direct_apikey"]
+    assert len({e["operation_id"] for e in starts}) == 1
+    failed = next(e for e in audit.events if e.get("error_category"))
+    assert failed["error_category"] == "timeout"
+    assert failed["outcome"] == ("failed" if kind == "ConnectTimeout" else "unknown")
+
+
+def test_timeout_probe_keeps_fallback_until_gateway_recovers(tmp_path, monkeypatch):
+    import requests
+
+    clock = [0.0]
+    monkeypatch.setattr("dms.gemini_client.time.monotonic", lambda: clock[0])
+    client, audit, direct = fallback_client(tmp_path, monkeypatch)
+    calls = []
+
+    def timeout(*args):
+        calls.append(1)
+        raise requests.exceptions.ReadTimeout("synthetic timeout")
+
+    monkeypatch.setattr(client, "_gateway_request", timeout)
+    assert client.generate("open", actor="alice").text == "direct"
+    incident = client._incident_id
+    assert client.generate("next", actor="alice").text == "direct"
+    assert len(calls) == 1
+    clock[0] = 60
+    assert client.generate("probe", actor="alice").text == "direct"
+    assert client._incident_id == incident
+    assert len(calls) == 2
+    clock[0] = 61
+    assert client.generate("after probe", actor="alice").text == "direct"
+    assert len(calls) == 2
+    clock[0] = 120
+    monkeypatch.setattr(
+        client, "_gateway_request", lambda *args: GeminiResponse("recovered", route="gateway")
+    )
+    assert client.generate("recover", actor="alice").route == "gateway"
+    assert client._incident_id is None
+    assert len(direct) == 4
+
+
+@pytest.mark.parametrize("disabled", ["flag", "missing_key"])
+def test_timeout_without_configured_fallback_stays_a_failure(tmp_path, monkeypatch, disabled):
+    import requests
+
+    overrides = {"fallback_enabled": False} if disabled == "flag" else {"gemini_api_key": ""}
+    client, audit, direct = fallback_client(tmp_path, monkeypatch, **overrides)
+    monkeypatch.setattr(
+        client,
+        "_gateway_request",
+        lambda *args: (_ for _ in ()).throw(requests.exceptions.ReadTimeout()),
+    )
+    with pytest.raises(GatewayError) as caught:
+        client.generate("prompt", actor="alice")
+    assert caught.value.category == "timeout"
+    assert not direct
+    assert len([e for e in audit.events if e["event_kind"] == "attempt_started"]) == 1
 
 
 @pytest.mark.parametrize("helper", ["generate", "generate_json"])
@@ -93,7 +257,20 @@ def test_missing_direct_file_disables_only_fallback(tmp_path, monkeypatch, caplo
 
 
 @pytest.mark.parametrize("helper", ["generate", "generate_json"])
-@pytest.mark.parametrize("probe_error", [None, "unreachable", "auth", "quota", "outcome_unknown"])
+@pytest.mark.parametrize(
+    "probe_error",
+    [
+        None,
+        "unreachable",
+        "timeout",
+        "response",
+        "auth",
+        "quota",
+        "configuration",
+        "accounting",
+        "outcome_unknown",
+    ],
+)
 def test_probe_policy_and_second_incident(tmp_path, monkeypatch, helper, probe_error):
     clock = [10.0]
     monkeypatch.setattr("dms.gemini_client.time.monotonic", lambda: clock[0])
@@ -122,14 +299,15 @@ def test_probe_policy_and_second_incident(tmp_path, monkeypatch, helper, probe_e
         return GeminiResponse("recovered", route="gateway")
 
     monkeypatch.setattr(client, "_gateway_request", probe)
-    if probe_error in {"auth", "quota", "outcome_unknown"}:
+    if probe_error in {"auth", "quota", "configuration", "accounting"}:
         with pytest.raises(GatewayError):
             call()
     else:
         assert call().text == ("direct" if probe_error else "recovered")
     assert len(probes) == 1
-    assert len(direct) == (3 if probe_error == "unreachable" else 2)
-    if probe_error == "unreachable":
+    continued_fallback = probe_error in {"unreachable", "timeout", "response", "outcome_unknown"}
+    assert len(direct) == (3 if continued_fallback else 2)
+    if continued_fallback:
         assert client._incident_id == first
         call()
         assert len(probes) == 1

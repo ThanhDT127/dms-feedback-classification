@@ -248,8 +248,8 @@ def test_real_refused_connection_has_presend_budget(tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     "kind,category,retryable",
     [
-        ("ConnectTimeout", "unreachable", True),
-        ("ReadTimeout", "outcome_unknown", False),
+        ("ConnectTimeout", "timeout", True),
+        ("ReadTimeout", "timeout", False),
         ("ConnectionError", "outcome_unknown", False),
         ("SSLError", "configuration", False),
         ("ProxyError", "configuration", False),
