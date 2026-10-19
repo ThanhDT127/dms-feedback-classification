@@ -896,9 +896,7 @@ class ClassificationJobStore:
             )
 
             if has_usage:
-                usage_cols = {
-                    r[1] for r in conn.execute("PRAGMA table_info(gemini_usage_log)")
-                }
+                usage_cols = {r[1] for r in conn.execute("PRAGMA table_info(gemini_usage_log)")}
                 if "actual_total_tokens" in usage_cols and "actual_cost_usd" in usage_cols:
                     usage_subquery = """
                         SELECT

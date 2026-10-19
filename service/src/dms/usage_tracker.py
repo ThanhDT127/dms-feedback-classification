@@ -106,7 +106,12 @@ _MODEL_ALIAS_MAP: dict[str, str] = {
 
 def resolve_model_pricing(model: str | None, pricing_config: dict | None) -> dict | None:
     """Resolve model pricing entry from *pricing_config*, handling common aliases and provider prefixes."""
-    if not model or not isinstance(model, str) or not pricing_config or not isinstance(pricing_config, dict):
+    if (
+        not model
+        or not isinstance(model, str)
+        or not pricing_config
+        or not isinstance(pricing_config, dict)
+    ):
         return None
     model_key = model.strip().lower()
     for prefix in ("models/", "gemini/", "vertex_ai/", "google/"):
@@ -482,9 +487,7 @@ class UsageTracker:
             Keys: ``summary``, ``daily``, ``by_type``.
         """
         start, end = self._resolve_date_range(period, from_date, to_date)
-        totals_sql = (
-            _PARTIAL_ACCOUNTING_TOTALS_SQL if include_partial else _ACCOUNTING_TOTALS_SQL
-        )
+        totals_sql = _PARTIAL_ACCOUNTING_TOTALS_SQL if include_partial else _ACCOUNTING_TOTALS_SQL
 
         with self._lock:
             cur = self._conn.cursor()
@@ -585,9 +588,7 @@ class UsageTracker:
         start, end = self._resolve_date_range(
             "custom" if from_date else "month", from_date, to_date
         )
-        totals_sql = (
-            _PARTIAL_ACCOUNTING_TOTALS_SQL if include_partial else _ACCOUNTING_TOTALS_SQL
-        )
+        totals_sql = _PARTIAL_ACCOUNTING_TOTALS_SQL if include_partial else _ACCOUNTING_TOTALS_SQL
 
         with self._lock:
             cur = self._conn.cursor()

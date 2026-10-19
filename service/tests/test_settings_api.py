@@ -346,4 +346,3 @@ def test_put_settings_preserves_secrets_when_masked_value_provided(client, tmp_p
     env_content = (tmp_path / ".env").read_text(encoding="utf-8")
     assert "https://my-existing-webhook" in env_content
     assert "existing-key.json" in env_content
-

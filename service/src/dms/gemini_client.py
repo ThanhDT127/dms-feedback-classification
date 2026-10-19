@@ -16,17 +16,20 @@ import uuid
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 from urllib.parse import urlsplit
 
 import requests
-from urllib3.exceptions import NameResolutionError
+from urllib3.exceptions import NameResolutionError, ReadTimeoutError
 
 from .exceptions import GatewayError, GeminiError, GeminiStreamError, GeminiStreamTimeout
 from .settings import Settings
 
 logger = logging.getLogger("dms-watcher")
 gateway_logger = logging.getLogger("dms.gateway")
+
+_FALLBACK_ERRORS = frozenset({"unreachable", "timeout", "response", "outcome_unknown"})
 
 
 @dataclass
@@ -200,7 +203,10 @@ class GeminiClient:
         import time
 
         if self.settings.gemini_backend == "gateway":
-            return self._generate_gateway(prompt, temperature, True, actor, job_id, operation)
+            options = {"system_instruction": system_instruction} if system_instruction else {}
+            return self._generate_gateway(
+                prompt, temperature, True, actor, job_id, operation, **options
+            )
 
         last_err = None
         for attempt in range(1, self.settings.max_retry + 1):
@@ -269,8 +275,19 @@ class GeminiClient:
         temperature: float | None = None,
         model: str | None = None,
         max_output_tokens: int | None = None,
+        actor: str | None = None,
+        operation: str = "stream",
     ) -> GeminiStream:
         """Stream văn bản qua ``google-genai`` cho cả hai backend (design b04 D2–D7)."""
+        if self.settings.gemini_backend == "gateway":
+            return self._gateway_stream(
+                prompt,
+                system_instruction=system_instruction,
+                temperature=temperature,
+                max_output_tokens=max_output_tokens,
+                actor=actor,
+                operation=operation,
+            )
         target_model = model or self.settings.gemini_model
 
         # Dựng config ở luồng gọi: lần import SDK đầu tiên tốn cả giây, không được tính vào
@@ -309,7 +326,52 @@ class GeminiClient:
             max_retry=int(getattr(self.settings, "chat_llm_max_retry", 1)),
         )
 
-    def _generate_gateway(self, prompt, temperature, json_mode, actor, job_id, operation):
+    def _gateway_stream(
+        self, prompt, *, system_instruction, temperature, max_output_tokens, actor, operation
+    ) -> GeminiStream:
+        """Adapt a complete Gateway response to the chat iterator, using the same fallback policy.
+
+        The Gateway transport currently returns a complete response rather than SSE. Do not
+        retry at the iterator layer: the audited Gateway operation owns all retries.
+        """
+        options = {}
+        if system_instruction is not None:
+            options["system_instruction"] = system_instruction
+        if max_output_tokens is not None:
+            options["max_output_tokens"] = max_output_tokens
+
+        def open_stream():
+            response = self._generate_gateway(
+                prompt, temperature, False, actor, None, operation, **options
+            )
+            stream.model = response.model_actual or (
+                self.settings.gemini_model
+                if response.route == "direct_apikey"
+                else self.settings.gateway_model
+            )
+            yield SimpleNamespace(
+                text=response.text,
+                usage_metadata=SimpleNamespace(
+                    prompt_token_count=response.usage.get("prompt_tokens", 0),
+                    candidates_token_count=response.usage.get("completion_tokens", 0),
+                    total_token_count=response.usage.get("total_tokens", 0),
+                ),
+                candidates=[SimpleNamespace(finish_reason="STOP")],
+            )
+
+        total_timeout = float(self.settings.chat_stream_total_timeout_seconds)
+        stream = GeminiStream(
+            open_stream=open_stream,
+            model=self.settings.gateway_model,
+            first_chunk_timeout=total_timeout,
+            total_timeout=total_timeout,
+            max_retry=0,
+        )
+        return stream
+
+    def _generate_gateway(
+        self, prompt, temperature, json_mode, actor, job_id, operation, **request_options
+    ):
         config = copy.copy(self.settings)
         self._validate_gateway(config, actor)
         try:
@@ -338,11 +400,19 @@ class GeminiClient:
                 self._probe_inflight = True
         if probe:
             return self._probe(
-                config, event, incident, generation, prompt, temperature, json_mode, actor
+                config,
+                event,
+                incident,
+                generation,
+                prompt,
+                temperature,
+                json_mode,
+                actor,
+                **request_options,
             )
         if incident:
             return self._direct_attempt(
-                config, event, incident, prompt, temperature, json_mode, actor
+                config, event, incident, prompt, temperature, json_mode, actor, **request_options
             )
         for number in range(1, config.max_retry + 1):
             try:
@@ -353,13 +423,18 @@ class GeminiClient:
                     temperature,
                     json_mode,
                     actor,
+                    **request_options,
                 )
             except GatewayError as error:
-                if error.category == "unreachable":
+                if error.category in _FALLBACK_ERRORS:
                     with self._state_lock:
                         if generation == self._generation:
-                            self._unreachable += 1
-                            if fallback and self._unreachable >= config.fallback_fail_threshold:
+                            if error.category == "unreachable":
+                                self._unreachable += 1
+                            if fallback and (
+                                error.category != "unreachable"
+                                or self._unreachable >= config.fallback_fail_threshold
+                            ):
                                 self._generation += 1
                                 self._incident_id = uuid.uuid4().hex
                                 self._incident_started = time.monotonic()
@@ -374,7 +449,14 @@ class GeminiClient:
                         incident = self._incident_id if fallback else None
                     if incident:
                         return self._direct_attempt(
-                            config, event, incident, prompt, temperature, json_mode, actor
+                            config,
+                            event,
+                            incident,
+                            prompt,
+                            temperature,
+                            json_mode,
+                            actor,
+                            **request_options,
                         )
                 if not error.retryable or number == config.max_retry:
                     raise
@@ -390,21 +472,41 @@ class GeminiClient:
                         self._unreachable = 0
                 return result
 
-    def _probe(self, config, event, incident, generation, prompt, temperature, json_mode, actor):
+    def _probe(
+        self,
+        config,
+        event,
+        incident,
+        generation,
+        prompt,
+        temperature,
+        json_mode,
+        actor,
+        **request_options,
+    ):
         event = dict(event, incident_id=incident, attempt_id=uuid.uuid4().hex)
         try:
-            result = self._attempt(config, event, prompt, temperature, json_mode, actor)
+            result = self._attempt(
+                config, event, prompt, temperature, json_mode, actor, **request_options
+            )
         except GatewayError as error:
             with self._state_lock:
                 if generation == self._generation:
-                    if error.category == "unreachable":
+                    if error.category in _FALLBACK_ERRORS:
                         self._probe_inflight = False
                         self._probe_after = time.monotonic() + config.fallback_retry_after_s
                     else:
                         self._close_incident(error.category)
-            if error.category == "unreachable":
+            if error.category in _FALLBACK_ERRORS:
                 return self._direct_attempt(
-                    config, event, incident, prompt, temperature, json_mode, actor
+                    config,
+                    event,
+                    incident,
+                    prompt,
+                    temperature,
+                    json_mode,
+                    actor,
+                    **request_options,
                 )
             raise
         else:
@@ -443,24 +545,44 @@ class GeminiClient:
             gateway_logger.warning("fallback_disabled_missing_ai_studio_configuration")
         return available
 
-    def _direct_attempt(self, config, event, incident, prompt, temperature, json_mode, actor):
+    def _direct_attempt(
+        self, config, event, incident, prompt, temperature, json_mode, actor, **request_options
+    ):
         event = dict(
             event, route="direct_apikey", incident_id=incident, attempt_id=uuid.uuid4().hex
         )
-        return self._attempt(config, event, prompt, temperature, json_mode, actor)
+        return self._attempt(
+            config, event, prompt, temperature, json_mode, actor, **request_options
+        )
 
-    def _direct_request(self, config, prompt, temperature, json_mode):
+    def _direct_request(
+        self,
+        config,
+        prompt,
+        temperature,
+        json_mode,
+        *,
+        system_instruction=None,
+        max_output_tokens=None,
+    ):
         import google.generativeai as genai_legacy
 
         with self._init_lock:
             if self._direct_client is None:
                 genai_legacy.configure(api_key=config.gemini_api_key)
                 self._direct_client = genai_legacy.GenerativeModel(config.gemini_model)
+        model = self._direct_client
+        if system_instruction is not None:
+            model = genai_legacy.GenerativeModel(
+                config.gemini_model, system_instruction=system_instruction
+            )
         generation_config = {"temperature": temperature} if temperature is not None else {}
         if json_mode:
             generation_config["response_mime_type"] = "application/json"
+        if max_output_tokens is not None:
+            generation_config["max_output_tokens"] = max_output_tokens
         response = self._call_with_timeout(
-            self._direct_client.generate_content,
+            model.generate_content,
             prompt,
             generation_config=generation_config or None,
         )
@@ -470,7 +592,9 @@ class GeminiClient:
             error = GatewayError("response", outcome_unknown=True)
             error.usage = usage or None
             raise error
-        return GeminiResponse(text=text.strip(), usage=usage, route="direct_apikey")
+        return GeminiResponse(
+            text=text.strip(), usage=usage, route="direct_apikey", model_actual=config.gemini_model
+        )
 
     def _audit(self, config, **event):
         try:
@@ -520,7 +644,7 @@ class GeminiClient:
                 return cost
         return None
 
-    def _attempt(self, config, event, prompt, temperature, json_mode, actor):
+    def _attempt(self, config, event, prompt, temperature, json_mode, actor, **request_options):
         self._audit(config, event_kind="attempt_started", outcome="started", **event)
         start = time.monotonic()
         direct = event["route"] == "direct_apikey"
@@ -535,9 +659,11 @@ class GeminiClient:
                     self._direct_attempted += 1
         try:
             response = (
-                self._direct_request(config, prompt, temperature, json_mode)
+                self._direct_request(config, prompt, temperature, json_mode, **request_options)
                 if direct
-                else self._gateway_request(config, prompt, temperature, json_mode, actor)
+                else self._gateway_request(
+                    config, prompt, temperature, json_mode, actor, **request_options
+                )
             )
         except Exception as exc:
             if direct:
@@ -631,16 +757,32 @@ class GeminiClient:
         except (AttributeError, TypeError, ValueError):
             raise GatewayError("configuration") from None
 
-    def _gateway_request(self, config, prompt, temperature, json_mode, actor):
+    def _gateway_request(
+        self,
+        config,
+        prompt,
+        temperature,
+        json_mode,
+        actor,
+        *,
+        system_instruction=None,
+        max_output_tokens=None,
+    ):
+        messages = []
+        if system_instruction is not None:
+            messages.append({"role": "system", "content": system_instruction})
+        messages.append({"role": "user", "content": prompt})
         body = {
             "model": config.gateway_model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "user": actor,
         }
         if temperature is not None:
             body["temperature"] = temperature
         if json_mode:
             body["response_format"] = {"type": "json_object"}
+        if max_output_tokens is not None:
+            body["max_tokens"] = max_output_tokens
         with requests.Session() as session:
             # No adapter retries and no redirects on inference POSTs.
             response = session.post(
@@ -792,8 +934,11 @@ def _transport_error(exc):
         ),
     ):
         return GatewayError("configuration")
-    if isinstance(exc, requests.exceptions.ConnectTimeout):
-        return GatewayError("unreachable", retryable=True)
+    if isinstance(exc, (requests.exceptions.Timeout, TimeoutError, ReadTimeoutError)):
+        connect_timeout = isinstance(exc, requests.exceptions.ConnectTimeout)
+        return GatewayError(
+            "timeout", retryable=connect_timeout, outcome_unknown=not connect_timeout
+        )
     # Inspect typed causes only: a generic reset/message never proves pre-send.
     if isinstance(exc, requests.exceptions.ConnectionError):
         pending: list[Any] = [exc]
@@ -803,6 +948,8 @@ def _transport_error(exc):
             if id(cause) in visited:
                 continue
             visited.add(id(cause))
+            if isinstance(cause, (requests.exceptions.Timeout, TimeoutError, ReadTimeoutError)):
+                return GatewayError("timeout", outcome_unknown=True)
             if isinstance(cause, (ConnectionRefusedError, socket.gaierror, NameResolutionError)):
                 return GatewayError("unreachable", retryable=True)
             if isinstance(cause, BaseException):

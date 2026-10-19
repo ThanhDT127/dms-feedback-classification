@@ -502,4 +502,3 @@ def test_reset_failed_retries_web_upload_job_id(settings, monkeypatch):
     assert body["reset_count"] == 1
     assert job_id in body["retried_jobs"]
     assert store.get_job(job_id)["status"] == "queued"
-

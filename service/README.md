@@ -49,6 +49,32 @@ The service consists of two primary Docker containers running concurrently:
   - Supports manual batch file classification triggering (`api/classify`) and file synchronization/uploads (`api/files`).
   - Streamlines system logs via WebSockets (`/ws/logs`) and batch progress updates (`/ws/progress`).
 
+### 1.3. Chatbot through the Gateway
+
+Set `CHAT_ENABLED=true` and `GEMINI_BACKEND=gateway`, with the Gateway URL,
+Virtual Key and model alias in `GATEWAY_CHAT_COMPLETIONS_URL`, `GATEWAY_API_KEY`
+and `GATEWAY_MODEL`. Web chat sends the authenticated username as the Gateway
+actor. CLI calls without a chat context use `GATEWAY_SYSTEM_USER`.
+
+Both JSON planning and answer generation use the Gateway, including system
+instructions. Answers currently arrive as a complete response through the
+existing chat iterator rather than token-by-token SSE.
+
+If `FALLBACK_ENABLED=true`, configure `GEMINI_API_KEY` and `GEMINI_MODEL` for
+direct fallback. Keep `FALLBACK_FAIL_THRESHOLD <= CHAT_LLM_MAX_RETRY + 1`
+(for example, threshold `3` with chat retries `2`). Connect/read timeouts, empty
+or malformed API responses, ambiguous connection failures and HTTP server errors
+(including `500`, `502`, `503` and `504`) switch to direct fallback immediately.
+Connection refusal and DNS failures still use the threshold. Unknown Gateway
+outcomes remain recorded as unknown because the upstream may still be processing
+the request. Recovery probes with these failures keep direct fallback active;
+a successful probe restores Gateway routing. Authentication, TLS/configuration
+errors and HTTP `429` do not trigger fallback.
+Each route records its attempts, and chat usage uses the returned model.
+
+After pulling new dependencies or changing container environment values, run
+`docker compose up -d --build web redis` from this directory.
+
 ---
 
 ## 2. Directory & Package Structure

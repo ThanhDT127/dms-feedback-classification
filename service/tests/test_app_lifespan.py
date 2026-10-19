@@ -5,8 +5,9 @@ from fastapi.testclient import TestClient
 from dms.web import app as app_module
 
 
-def test_app_lifespan_replaces_on_event_handlers(monkeypatch):
+def test_app_lifespan_replaces_on_event_handlers(monkeypatch, tmp_path):
     calls: list[str] = []
+    monkeypatch.setattr(app_module, "SERVICE_DIR", tmp_path)
 
     async def fake_restore_state() -> None:
         calls.append("restore")

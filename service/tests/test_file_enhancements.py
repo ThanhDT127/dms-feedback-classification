@@ -231,6 +231,7 @@ class TestFileEnhancements:
         input_dir = tmp_path / "input"
         input_dir.mkdir(parents=True, exist_ok=True)
         workbook = input_dir / "retry_me.xlsx"
+        monkeypatch.setattr(files_module, "FOLDER_MAP", {"input": [input_dir]})
         pd.DataFrame({"Nội dung": ["Khách phản ánh lỗi đèn"]}).to_excel(workbook, index=False)
 
         seen_path = tmp_path / "seen_files.json"
@@ -282,4 +283,3 @@ class TestFileEnhancements:
         assert seen_done["sp-item-1"]["status"] == "done"
         assert seen_done["sp-item-1"]["failures"] == 0
         assert seen_done["sp-item-1"]["past_failures"] == 3
-
