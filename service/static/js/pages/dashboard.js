@@ -265,14 +265,17 @@ window.DashboardPage = (() => {
   function renderUsageStats(data) {
     const el = document.getElementById('dash-usage-stats');
     if (!el) return;
-    if (!window.App?.state?.user?.role === 'admin' || !data) {
+    if (window.App?.state?.user?.role !== 'admin' || !data) {
       el.innerHTML = '';
       return;
     }
 
     const todayTokens = data.today_tokens || 0;
-    const todayCost = data.today_cost || 0;
+    const todayCost = Number(data.today_cost || 0);
     const todayRequests = data.today_requests || 0;
+    const formattedCost = todayCost > 0 && todayCost < 0.0001
+      ? todayCost.toFixed(6)
+      : todayCost.toFixed(4);
 
     el.innerHTML = `
       <div style="margin-bottom:8px;margin-top:4px;">
@@ -291,7 +294,7 @@ window.DashboardPage = (() => {
         <div class="stat-card green animate-in animate-in-delay-1">
           <div class="stat-card-top">
             <div>
-              <div class="stat-card-value">$${todayCost.toFixed(2)}</div>
+              <div class="stat-card-value">$${formattedCost}</div>
               <div class="stat-card-label">Chi phí ước tính</div>
             </div>
             <div class="stat-card-icon">💰</div>

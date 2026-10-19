@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import copy
+import json
 import logging
 import math
 import os
@@ -490,10 +491,44 @@ class GeminiClient:
                 "accounting", outcome_unknown=event["event_kind"] == "attempt_finished"
             ) from None
 
+    @staticmethod
+    def _estimate_attempt_cost(
+        config,
+        model_actual: str | None,
+        fallback_model: str | None,
+        usage: dict | None,
+    ) -> float | None:
+        if not usage:
+            return None
+        from .usage_tracker import DEFAULT_MODEL_PRICING, estimate_attempt_cost
+
+        pricing = DEFAULT_MODEL_PRICING
+        raw_pricing = getattr(config, "gemini_model_pricing", None)
+        if isinstance(raw_pricing, str) and raw_pricing.strip():
+            try:
+                parsed = json.loads(raw_pricing)
+                if isinstance(parsed, dict) and parsed:
+                    pricing = {**DEFAULT_MODEL_PRICING, **parsed}
+            except Exception:
+                pass
+        elif isinstance(raw_pricing, dict) and raw_pricing:
+            pricing = {**DEFAULT_MODEL_PRICING, **raw_pricing}
+
+        for candidate in (model_actual, fallback_model):
+            cost = estimate_attempt_cost(candidate, usage, pricing)
+            if cost is not None:
+                return cost
+        return None
+
     def _attempt(self, config, event, prompt, temperature, json_mode, actor):
         self._audit(config, event_kind="attempt_started", outcome="started", **event)
         start = time.monotonic()
         direct = event["route"] == "direct_apikey"
+        fallback_model = (
+            getattr(config, "gemini_model", None)
+            if direct
+            else event.get("model_requested") or getattr(config, "gateway_model", None)
+        )
         if direct:
             with self._state_lock:
                 if event["incident_id"] == self._incident_id:
@@ -520,6 +555,9 @@ class GeminiClient:
                 outcome="unknown" if error.outcome_unknown else "failed",
                 error_category=error.category,
                 usage=error.usage,
+                estimated_cost_usd=self._estimate_attempt_cost(
+                    config, error.model_actual, fallback_model, error.usage
+                ),
                 response_id=error.response_id,
                 model_actual=error.model_actual,
                 duration_ms=int((time.monotonic() - start) * 1000),
@@ -533,7 +571,9 @@ class GeminiClient:
             model_actual=response.model_actual,
             response_id=response.response_id,
             usage=response.usage or None,
-            estimated_cost_usd=None,
+            estimated_cost_usd=self._estimate_attempt_cost(
+                config, response.model_actual, fallback_model, response.usage or None
+            ),
             duration_ms=int((time.monotonic() - start) * 1000),
         )
         if direct:

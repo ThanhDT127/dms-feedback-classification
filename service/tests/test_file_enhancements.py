@@ -214,3 +214,72 @@ class TestFileEnhancements:
         # Verify it was cleaned up and does not exist in target dir
         input_file = tmp_path / "input" / "invalid.xlsx"
         assert not input_file.exists()
+
+    def test_admin_can_reclassify_input_files_and_sync_seen_files(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """Admin can re-classify failed or selected input files and seen_files.json stays in sync."""
+        import json
+
+        import dms.web.api.files as files_module
+        from dms.classification_jobs import ClassificationJobStore
+        from dms.classification_worker import ClassificationWorkerManager
+        from dms.web import deps
+        from dms.web.app import create_app
+
+        monkeypatch.setattr(files_module, "WORK_DIR", tmp_path)
+        input_dir = tmp_path / "input"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        workbook = input_dir / "retry_me.xlsx"
+        pd.DataFrame({"Nội dung": ["Khách phản ánh lỗi đèn"]}).to_excel(workbook, index=False)
+
+        seen_path = tmp_path / "seen_files.json"
+        seen_path.write_text(
+            json.dumps(
+                {
+                    "sp-item-1": {
+                        "name": "retry_me.xlsx",
+                        "status": "failed",
+                        "failures": 3,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        store = ClassificationJobStore(tmp_path / "classification_jobs.db")
+        monkeypatch.setattr(deps, "get_classification_job_store", lambda: store)
+        monkeypatch.setattr(deps, "get_classification_worker_manager", lambda: None)
+
+        app = create_app()
+        apply_auth_overrides(app)
+        client = TestClient(app, raise_server_exceptions=True)
+
+        resp = client.post("/api/files/input/retry_me.xlsx/reclassify", json={})
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert len(payload["queued"]) == 1
+        job_id = payload["queued"][0]["job_id"]
+
+        seen_processing = json.loads(seen_path.read_text(encoding="utf-8"))
+        assert seen_processing["sp-item-1"]["status"] == "processing"
+
+        # Verify worker two-way sync back to seen_files.json when job finishes
+        from types import SimpleNamespace
+
+        worker = ClassificationWorkerManager(
+            settings=SimpleNamespace(work_dir=tmp_path),  # type: ignore[arg-type]
+            job_store=store,
+            runner_factory=lambda: None,
+            sharepoint_factory=lambda: None,
+        )
+        job_record = store.get_job(job_id)
+        worker._sync_seen_files_status(
+            job_record, status="done", total_rows=10, duration_seconds=1.2
+        )
+
+        seen_done = json.loads(seen_path.read_text(encoding="utf-8"))
+        assert seen_done["sp-item-1"]["status"] == "done"
+        assert seen_done["sp-item-1"]["failures"] == 0
+        assert seen_done["sp-item-1"]["past_failures"] == 3
+

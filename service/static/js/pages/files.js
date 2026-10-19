@@ -87,6 +87,19 @@ window.FilesPage = (() => {
     }
   }
 
+  async function reclassifyInputFile(filename, itemId = null) {
+    if (!isAdminRole() || _activeFolder !== 'input' || !filename) return;
+    try {
+      Toast.info(`🔁 Đang đưa "${filename}" vào hàng đợi phân loại...`);
+      const items = [{ name: filename, id: itemId || null }];
+      const res = await API.reclassifyInputFiles({ items });
+      Toast.success(res.message || `Đã đưa "${filename}" vào hàng đợi phân loại lại`);
+      refresh();
+    } catch (e) {
+      Toast.error('Không thể phân loại lại file: ' + e.message);
+    }
+  }
+
   function isEditableConfigAsset(filename) {
     const lower = String(filename || '').toLowerCase();
     return lower === 'kw_map.json'
@@ -207,8 +220,9 @@ window.FilesPage = (() => {
           <div style="display:flex;align-items:center;gap:12px;">
             <span style="font-size:13px;font-weight:500;">Đã chọn <span id="bulk-count">0</span> file</span>
           </div>
-          <div style="display:flex;gap:8px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" onclick="FilesPage.selectAllFiles()">☑️ Chọn tất cả</button>
+            <button class="btn btn-primary btn-sm" id="btn-bulk-reclassify" onclick="FilesPage.bulkReclassify()">🔁 Phân loại lại</button>
             <button class="btn btn-danger btn-sm" onclick="FilesPage.bulkDelete()">🗑️ Xóa local/cache</button>
             <button class="btn btn-secondary btn-sm" onclick="FilesPage.bulkDeleteSharePoint()">☁️ Xóa trên SharePoint</button>
             <button class="btn btn-ghost btn-sm" onclick="FilesPage.clearSelection()">✕ Bỏ chọn</button>
@@ -384,6 +398,9 @@ window.FilesPage = (() => {
     const ingestBtn = isAdminRole() && _activeFolder === 'input' && source === 'local_cache'
       ? `<button class="btn btn-ghost btn-sm" title="Đưa vào phân tích" aria-label="Đưa vào phân tích" onclick="FilesPage.ingestInputFile('${escAttr(name)}')">📊</button>`
       : '';
+    const reclassifyBtn = isAdminRole() && _activeFolder === 'input' && file.status !== 'processing'
+      ? `<button class="btn btn-ghost btn-sm" title="Phân loại lại file này" aria-label="Phân loại lại file này" onclick="FilesPage.reclassifyInputFile('${escAttr(name)}', '${escAttr(itemId)}')">🔁</button>`
+      : '';
 
     const isSelected = _selectedFiles.has(name);
     const isExpanded = _expandedRows.has(name);
@@ -412,6 +429,7 @@ window.FilesPage = (() => {
           <div style="display:flex;gap:4px;align-items:center;">
             <button class="btn btn-ghost btn-sm" title="Xem" onclick="FilesPage.preview('${escAttr(name)}')">👁️</button>
             ${editBtn}
+            ${reclassifyBtn}
             ${ingestBtn}
             ${downloadBtn}
             ${cloudBtn}
@@ -574,6 +592,11 @@ window.FilesPage = (() => {
     const uploadHint = document.getElementById('upload-hint-container');
     if (uploadHint) {
       uploadHint.style.display = isInput && isAdmin ? 'flex' : 'none';
+    }
+
+    const reclassifyBulkBtn = document.getElementById('btn-bulk-reclassify');
+    if (reclassifyBulkBtn) {
+      reclassifyBulkBtn.style.display = isInput && isAdmin ? 'inline-flex' : 'none';
     }
 
     // Render sortable thead (updated via _refreshSortHeaders)
@@ -1369,6 +1392,31 @@ window.FilesPage = (() => {
     });
   }
 
+  async function bulkReclassify() {
+    if (_selectedFiles.size === 0) return;
+    const items = selectedFileItems();
+    Toast.info(`🔁 Đang đưa ${items.length} file vào hàng đợi phân loại...`);
+    try {
+      const res = await API.reclassifyInputFiles({
+        filenames: items.map(i => i.name),
+        items,
+      });
+      const queued = res.queued || [];
+      const failed = res.failed || [];
+      if (failed.length > 0 && queued.length === 0) {
+        Toast.error(`Không thể phân loại lại: ${failed[0].error || 'Lỗi không xác định'}`);
+      } else if (failed.length > 0) {
+        Toast.warning(`Đã xếp hàng ${queued.length}/${items.length} file (${failed.length} file lỗi).`);
+      } else {
+        Toast.success(res.message || `Đã đưa ${queued.length} file vào hàng đợi phân loại`);
+      }
+      clearSelection();
+      refresh();
+    } catch (e) {
+      Toast.error('Lỗi phân loại lại: ' + e.message);
+    }
+  }
+
   function destroy() {
     _previewFile = null;
     // Clean up pending data and interaction tracking (task 6.2)
@@ -1410,10 +1458,10 @@ window.FilesPage = (() => {
 
   return {
     render, destroy, switchFolder, loadFiles, preview, closePreview, previewTemplate,
-    downloadTemplate, downloadFile, ingestInputFile,
+    downloadTemplate, downloadFile, ingestInputFile, reclassifyInputFile,
     refresh, handleUpload, syncSharePoint,
     applyPendingData,
-    toggleFileSelection, toggleSelectAll, selectAllFiles, clearSelection, bulkDelete, bulkDeleteSharePoint,
+    toggleFileSelection, toggleSelectAll, selectAllFiles, clearSelection, bulkDelete, bulkDeleteSharePoint, bulkReclassify,
     toggleRowDetail, editKeywordAsset,
     onSearch, onFilterStatus, onSort,
     _onBackdropClick,

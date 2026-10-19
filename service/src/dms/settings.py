@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     fallback_fail_threshold: int = Field(3, alias="FALLBACK_FAIL_THRESHOLD")
     fallback_retry_after_s: float = Field(60.0, alias="FALLBACK_RETRY_AFTER_S")
     gemini_model_pricing: str = Field(
-        '{"gemini-2.5-flash": {"input": 0.30, "output": 2.50}, "gemini-2.0-flash": {"input": 0.10, "output": 0.40}, "gemini-2.5-flash-lite": {"input": 0.025, "output": 0.30}, "gemini-3.5-flash": {"input": 1.50, "output": 9.00}, "gemini-3.1-flash-lite": {"input": 0.025, "output": 0.10}}',
+        '{"gemini-2.5-flash": {"input": 0.30, "output": 2.50}, "gemini-flash": {"input": 0.30, "output": 2.50}, "gemini-2.0-flash": {"input": 0.10, "output": 0.40}, "gemini-2.5-flash-lite": {"input": 0.025, "output": 0.30}, "gemini-flash-lite": {"input": 0.025, "output": 0.30}, "gemini-3.5-flash": {"input": 1.50, "output": 9.00}, "gemini-3.1-flash-lite": {"input": 0.025, "output": 0.10}}',
         alias="GEMINI_MODEL_PRICING",
     )
 

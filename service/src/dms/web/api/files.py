@@ -343,6 +343,275 @@ async def ingest_existing_input_file(
     }
 
 
+class SharePointDeleteItem(BaseModel):
+    name: str
+    id: str | None = None
+
+
+class ReclassifyInputRequest(BaseModel):
+    filenames: list[str] = []
+    items: list[SharePointDeleteItem] = []
+
+
+async def _reclassify_input_items(
+    requested: list[SharePointDeleteItem],
+    admin: dict,
+) -> dict:
+    """Queue classification jobs for one or more existing Input files (local or SharePoint)."""
+    import shutil
+
+    from ...time_utils import utc_now_iso
+    from ...utils import atomic_write_json
+    from .. import deps as _deps
+
+    if not requested:
+        raise HTTPException(status_code=400, detail="Danh sách file cần phân loại lại đang trống")
+
+    job_store = _deps.get_classification_job_store()
+    if job_store is None:
+        raise HTTPException(status_code=503, detail="Classification job store chưa sẵn sàng")
+
+    input_dir = _work_dir() / "input"
+    output_dir = _work_dir() / "output"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    seen_path = _work_dir() / "seen_files.json"
+    seen_data: dict = {}
+    if seen_path.is_file():
+        try:
+            loaded = json.loads(seen_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                seen_data = loaded
+        except Exception as exc:
+            logger.warning("Không thể đọc seen_files.json khi reclassify: %s", exc)
+
+    # Deduplicate requested items by safe filename
+    deduped: list[SharePointDeleteItem] = []
+    seen_req_names: set[str] = set()
+    failed: list[dict] = []
+
+    for item in requested:
+        raw_name = (item.name or "").strip()
+        if not raw_name:
+            continue
+        safe_name = Path(raw_name).name
+        if not safe_name or safe_name in seen_req_names:
+            continue
+        seen_req_names.add(safe_name)
+        if not safe_name.lower().endswith(".xlsx"):
+            failed.append({"name": safe_name, "reason": "Chỉ hỗ trợ phân loại file .xlsx"})
+            continue
+        deduped.append(SharePointDeleteItem(name=safe_name, id=item.id))
+
+    if not deduped and failed:
+        raise HTTPException(status_code=400, detail=failed[0]["reason"])
+
+    # Check currently active (queued/running) jobs to avoid duplicate queueing for same file
+    active_by_filename: dict[str, str] = {}
+    try:
+        for active_job in job_store.list_jobs(include_all=True, limit=200):
+            if active_job.get("status") in ("queued", "running") and active_job.get("filename"):
+                active_by_filename[active_job["filename"]] = active_job["job_id"]
+    except Exception:
+        pass
+
+    sp_folder_items_map: dict[str, str] | None = None
+    queued_jobs: list[dict] = []
+    reset_failed_metric_count = 0
+
+    for item in deduped:
+        safe_name = item.name
+        if safe_name in active_by_filename:
+            queued_jobs.append(
+                {
+                    "job_id": active_by_filename[safe_name],
+                    "filename": safe_name,
+                    "status": "already_active",
+                }
+            )
+            continue
+
+        # 1. Locate file locally across input folders
+        local_source: Path | None = None
+        for candidate_dir in [input_dir, *_get_folder_map().get("input", [])]:
+            try:
+                cand = _validate_safe_path(candidate_dir, safe_name)
+                if cand.is_file():
+                    local_source = cand
+                    break
+            except HTTPException:
+                continue
+
+        canonical_input_path = _validate_safe_path(input_dir, safe_name)
+        if local_source is not None and local_source.resolve() != canonical_input_path.resolve():
+            try:
+                shutil.copy2(local_source, canonical_input_path)
+                local_source = canonical_input_path
+            except Exception as exc:
+                logger.warning("Không thể copy file input về work/input: %s", exc)
+
+        # 2. If not found locally, try downloading from SharePoint Input folder
+        if local_source is None or not local_source.is_file():
+            sp_client = get_sharepoint_client()
+            sp_input_folder = get_settings().sp_input_folder
+            sp_item_id = item.id
+            if not sp_item_id:
+                for fid, s_info in seen_data.items():
+                    if (
+                        isinstance(s_info, dict)
+                        and s_info.get("name") == safe_name
+                        and not str(fid).startswith("local:")
+                    ):
+                        sp_item_id = str(fid)
+                        break
+            if not sp_item_id and sp_client is not None and sp_input_folder:
+                if sp_folder_items_map is None:
+                    sp_folder_items_map = {}
+                    try:
+                        sp_items = await run_sync_in_threadpool(
+                            sp_client.list_folder_items, sp_input_folder
+                        )
+                        for sp_it in sp_items:
+                            if "folder" not in sp_it and sp_it.get("name") and sp_it.get("id"):
+                                sp_folder_items_map[sp_it["name"]] = sp_it["id"]
+                    except Exception as exc:
+                        logger.warning("Không thể liệt kê SharePoint Input khi reclassify: %s", exc)
+                sp_item_id = sp_folder_items_map.get(safe_name)
+
+            if sp_client is not None and sp_item_id:
+                try:
+                    await run_sync_in_threadpool(
+                        sp_client.download_file, sp_item_id, canonical_input_path
+                    )
+                    if canonical_input_path.is_file():
+                        local_source = canonical_input_path
+                except Exception as exc:
+                    logger.warning(
+                        "Không thể tải file %s (id=%s) từ SharePoint để phân loại lại: %s",
+                        safe_name,
+                        sp_item_id,
+                        exc,
+                    )
+
+        if local_source is None or not local_source.is_file():
+            failed.append(
+                {
+                    "name": safe_name,
+                    "reason": "Không tìm thấy file trong bộ nhớ local hoặc SharePoint",
+                }
+            )
+            continue
+
+        # 3. Create classification job
+        job_id = str(uuid.uuid4())
+        output_path = output_dir / f"{job_id}_{Path(safe_name).stem}_output.xlsx"
+        job_store.create_job(
+            job_id=job_id,
+            owner_username=admin.get("username", "admin"),
+            owner_role=admin.get("role", "admin"),
+            filename=safe_name,
+            mode="reclassify",
+            input_path=local_source,
+            output_path=output_path,
+        )
+
+        # 4. Update seen_files.json status -> "processing"
+        matched_fids = [
+            fid
+            for fid, s_info in seen_data.items()
+            if isinstance(s_info, dict) and s_info.get("name") == safe_name
+        ]
+        if item.id and item.id in seen_data and item.id not in matched_fids:
+            matched_fids.append(item.id)
+        if not matched_fids:
+            target_fid = item.id or f"local:{safe_name}"
+            seen_data[target_fid] = {"name": safe_name}
+            matched_fids = [target_fid]
+
+        now_iso = utc_now_iso()
+        for fid in matched_fids:
+            info = seen_data[fid]
+            if info.get("status") == "failed":
+                reset_failed_metric_count += 1
+                prev_fail = int(info.get("failures", 0) or 0)
+                if prev_fail > 0:
+                    info["past_failures"] = max(int(info.get("past_failures", 0) or 0), prev_fail)
+            info["name"] = safe_name
+            info["status"] = "processing"
+            info["failures"] = 0
+            info["last_attempt"] = now_iso
+
+        queued_jobs.append(
+            {
+                "job_id": job_id,
+                "filename": safe_name,
+                "status": "queued",
+            }
+        )
+
+    if queued_jobs:
+        try:
+            atomic_write_json(seen_path, seen_data)
+        except Exception as exc:
+            logger.warning("Không thể lưu seen_files.json khi reclassify: %s", exc)
+
+        if reset_failed_metric_count > 0:
+            metrics_path = _work_dir() / "metrics.json"
+            if metrics_path.is_file():
+                try:
+                    metrics_data = json.loads(metrics_path.read_text(encoding="utf-8"))
+                    metrics_data["files_failed"] = max(
+                        0, int(metrics_data.get("files_failed", 0) or 0) - reset_failed_metric_count
+                    )
+                    atomic_write_json(metrics_path, metrics_data)
+                except Exception as exc:
+                    logger.warning("Không thể cập nhật metrics.json khi reclassify: %s", exc)
+
+        get_sharepoint_list_cache().invalidate("input")
+
+        try:
+            worker = _deps.get_classification_worker_manager()
+            if worker is not None:
+                worker.start()
+        except Exception as exc:
+            logger.warning("Không thể khởi động worker khi reclassify: %s", exc)
+
+    if not queued_jobs and failed:
+        raise HTTPException(
+            status_code=404,
+            detail=failed[0].get("reason", "Không thể đưa file vào hàng đợi phân loại"),
+        )
+
+    return {
+        "queued": queued_jobs,
+        "failed": failed,
+        "queued_count": len(queued_jobs),
+        "failed_count": len(failed),
+        "message": f"Đã đưa {len(queued_jobs)} file vào hàng đợi phân loại lại.",
+    }
+
+
+@router.post("/input/reclassify")
+async def reclassify_input_files_bulk(
+    payload: ReclassifyInputRequest,
+    admin: dict = Depends(get_admin_user),
+):
+    """Đưa một hoặc nhiều file trong thư mục Input vào hàng đợi phân loại lại (admin only)."""
+    requested: list[SharePointDeleteItem] = list(payload.items)
+    requested.extend(SharePointDeleteItem(name=name) for name in payload.filenames)
+    return await _reclassify_input_items(requested, admin)
+
+
+@router.post("/input/{filename}/reclassify")
+async def reclassify_single_input_file(
+    filename: str,
+    admin: dict = Depends(get_admin_user),
+):
+    """Đưa một file trong thư mục Input vào hàng đợi phân loại lại (admin only)."""
+    return await _reclassify_input_items([SharePointDeleteItem(name=filename)], admin)
+
+
 # ---------- Path parameter routes LAST ----------
 
 
@@ -385,8 +654,23 @@ async def list_files(
     seen_name_map = {
         s_info.get("name"): s_info.get("status", "done")
         for _fid, s_info in seen_data.items()
-        if s_info.get("name")
+        if isinstance(s_info, dict) and s_info.get("name")
     }
+
+    active_job_files: set[str] = set()
+    if folder_lower == "input":
+        try:
+            from .. import deps as _deps
+
+            job_store = _deps.get_classification_job_store()
+            if job_store is not None:
+                for j in job_store.list_jobs(include_all=True, limit=100):
+                    j_name = j.get("filename")
+                    j_status = j.get("status")
+                    if j_name and j_status in ("queued", "running"):
+                        active_job_files.add(j_name)
+        except Exception:
+            pass
 
     # Nếu có kết nối SharePoint
     if sp_client is not None and sp_folder:
@@ -404,7 +688,9 @@ async def list_files(
                 item_id = item.get("id")
 
                 # Đối chiếu chéo từ seen_files.json theo ID hoặc Tên file
-                if item_id and item_id in seen_data:
+                if folder_lower == "input" and name in active_job_files:
+                    status = "processing"
+                elif item_id and item_id in seen_data:
                     status = seen_data[item_id].get("status", "done")
                 elif name in seen_name_map:
                     status = seen_name_map[name]
@@ -450,7 +736,10 @@ async def list_files(
                 # Gán trạng thái cho file local
                 status = None
                 if folder_lower == "input":
-                    status = seen_name_map.get(item.name, "new")
+                    if item.name in active_job_files:
+                        status = "processing"
+                    else:
+                        status = seen_name_map.get(item.name, "new")
                 info["status"] = status
                 info["source"] = "local_cache"
                 info["id"] = None
@@ -464,11 +753,6 @@ async def list_files(
 class BulkDeleteRequest(BaseModel):
     folder: str
     filenames: list[str]
-
-
-class SharePointDeleteItem(BaseModel):
-    name: str
-    id: str | None = None
 
 
 class SharePointDeleteRequest(BaseModel):

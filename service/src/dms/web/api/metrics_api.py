@@ -182,16 +182,23 @@ async def get_metrics(user: dict = Depends(get_current_user)):
     )
 
     for wf in web_stats.get("recent_files", []):
+        job_id = wf.get("job_id")
+        file_id = (
+            f"job:{job_id}"
+            if job_id
+            else f"web_{hash(wf.get('filename', '') + wf.get('timestamp', ''))}"
+        )
         recent_files.append(
             {
-                "id": f"web_{hash(wf.get('filename', '') + wf.get('timestamp', ''))}",
+                "id": file_id,
+                "job_id": job_id,
                 "filename": wf.get("filename", "Unknown"),
                 "status": wf.get("status", "done"),
                 "timestamp": wf.get("timestamp", ""),
                 "total_rows": wf.get("total_rows", 0),
                 "duration_seconds": wf.get("duration_seconds", 0.0),
                 "failures": 0,
-                "last_error": "",
+                "last_error": wf.get("last_error", ""),
                 "source": "web",
             }
         )
@@ -257,57 +264,123 @@ async def reset_failed_files(
     admin: dict = Depends(get_admin_user),
 ):
     """Reset failed files to retry status (admin only)."""
+    from .. import deps as _deps
+
     seen_path = _work_dir() / "seen_files.json"
     metrics_path = _work_dir() / "metrics.json"
-
-    if not seen_path.is_file():
-        return {"reset_count": 0}
-
-    try:
-        seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        logger.warning("Cannot read seen_files.json for reset: %s", exc)
-        return {"reset_count": 0, "error": str(exc)}
-
     file_ids = body.file_ids if body else None
 
+    job_ids_to_retry = [
+        fid[4:] for fid in (file_ids or []) if isinstance(fid, str) and fid.startswith("job:")
+    ]
+    watcher_file_ids = (
+        [fid for fid in file_ids if not (isinstance(fid, str) and fid.startswith("job:"))]
+        if file_ids is not None
+        else None
+    )
+
     reset_count = 0
-    for file_id, info in seen_data.items():
-        if info.get("status") != "failed":
-            continue
-        if file_ids is not None and file_id not in file_ids:
-            continue
-        info["status"] = "retry"
-        info["failures"] = 0
-        reset_count += 1
+    seen_reset_count = 0
 
-    if reset_count > 0:
-        from ...utils import atomic_write_json
+    if seen_path.is_file() and (watcher_file_ids is None or len(watcher_file_ids) > 0):
+        try:
+            seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning("Cannot read seen_files.json for reset: %s", exc)
+            if not job_ids_to_retry:
+                return {"reset_count": 0, "error": str(exc)}
+            seen_data = {}
 
-        atomic_write_json(seen_path, seen_data)
+        for file_id, info in seen_data.items():
+            if info.get("status") != "failed":
+                continue
+            if watcher_file_ids is not None and file_id not in watcher_file_ids:
+                continue
+            info["status"] = "retry"
+            info["failures"] = 0
+            seen_reset_count += 1
 
-        # Update metrics.json to decrease files_failed
-        if metrics_path.is_file():
-            try:
-                metrics_data = json.loads(metrics_path.read_text(encoding="utf-8"))
-                metrics_data["files_failed"] = max(
-                    0, metrics_data.get("files_failed", 0) - reset_count
-                )
-                atomic_write_json(metrics_path, metrics_data)
-            except Exception as exc:
-                logger.warning("Failed to update metrics.json after reset: %s", exc)
+        if seen_reset_count > 0:
+            from ...utils import atomic_write_json
 
-    return {"reset_count": reset_count}
+            atomic_write_json(seen_path, seen_data)
+
+            # Update metrics.json to decrease files_failed
+            if metrics_path.is_file():
+                try:
+                    metrics_data = json.loads(metrics_path.read_text(encoding="utf-8"))
+                    metrics_data["files_failed"] = max(
+                        0, metrics_data.get("files_failed", 0) - seen_reset_count
+                    )
+                    atomic_write_json(metrics_path, metrics_data)
+                except Exception as exc:
+                    logger.warning("Failed to update metrics.json after reset: %s", exc)
+
+    reset_count += seen_reset_count
+
+    retried_job_ids: list[str] = []
+    if job_ids_to_retry or file_ids is None:
+        job_store = _deps.get_classification_job_store()
+        if job_store is not None:
+            target_jids = list(job_ids_to_retry)
+            if file_ids is None:
+                try:
+                    for j in job_store.list_jobs(include_all=True, limit=200):
+                        if j.get("status") == "error" and j.get("mode") != "watcher":
+                            target_jids.append(j["job_id"])
+                except Exception:
+                    pass
+            for jid in target_jids:
+                try:
+                    job = job_store.get_job(jid, include_results=False)
+                    if job and job.get("status") in ("error", "cancelled"):
+                        input_path = Path(job.get("input_path") or "")
+                        if input_path.is_file():
+                            job_store.retry_job(jid)
+                            retried_job_ids.append(jid)
+                except Exception as exc:
+                    logger.warning("Cannot retry job %s from reset-failed: %s", jid, exc)
+            if retried_job_ids:
+                reset_count += len(retried_job_ids)
+                try:
+                    worker = _deps.get_classification_worker_manager()
+                    if worker is not None:
+                        worker.start()
+                except Exception as exc:
+                    logger.warning("Cannot start worker after job retry: %s", exc)
+
+    return {"reset_count": reset_count, "retried_jobs": retried_job_ids}
+
+
+def _load_pricing_config() -> dict:
+    from ...usage_tracker import DEFAULT_MODEL_PRICING
+
+    pricing = dict(DEFAULT_MODEL_PRICING)
+    try:
+        custom = json.loads(get_settings().gemini_model_pricing)
+        if isinstance(custom, dict):
+            pricing.update(custom)
+    except Exception:
+        pass
+    return pricing
 
 
 @router.get("/metrics/by-user")
 async def get_metrics_by_user(admin: dict = Depends(get_admin_user)):
     """Return per-user classification statistics (admin only)."""
+    from .. import deps as _deps
     from ..deps import get_classification_job_store
 
     job_store = get_classification_job_store()
     if job_store is None:
         return {"users": []}
+
+    try:
+        usage_tracker = _deps.get_usage_tracker()
+        if usage_tracker is not None:
+            usage_tracker.backfill_missing_costs(_load_pricing_config())
+    except Exception:
+        pass
 
     try:
         user_stats = job_store.aggregate_stats_by_user()
@@ -475,17 +548,32 @@ async def get_usage_metrics(
             "top_jobs": [],
         }
 
-    result = usage_tracker.query_usage(period=period, from_date=from_date, to_date=to_date)
+    try:
+        usage_tracker.backfill_missing_costs(_load_pricing_config())
+    except Exception:
+        pass
+
+    result = usage_tracker.query_usage(
+        period=period,
+        from_date=from_date,
+        to_date=to_date,
+        include_partial=True,
+    )
     summary = result.get("summary", {})
     daily = result.get("daily", [])
     by_type = result.get("by_type", {})
 
     # Today stats (always query day period for today cards)
-    today = usage_tracker.query_usage(period="day")
+    today = usage_tracker.query_usage(period="day", include_partial=True)
     today_sum = today.get("summary", {})
 
     # Top jobs
-    top_jobs_raw = usage_tracker.get_top_jobs(limit=10, from_date=from_date, to_date=to_date)
+    top_jobs_raw = usage_tracker.get_top_jobs(
+        limit=10,
+        from_date=from_date,
+        to_date=to_date,
+        include_partial=True,
+    )
     # Enrich with filename from classification_jobs table
     job_store = _deps.get_classification_job_store()
     top_jobs = []
@@ -503,35 +591,35 @@ async def get_usage_metrics(
         top_jobs.append(
             {
                 "filename": filename,
-                "total_tokens": tj.get("total_tokens", 0),
-                "cost": tj.get("cost_usd", 0),
+                "total_tokens": tj.get("total_tokens") or 0,
+                "cost": tj.get("cost_usd") or 0,
                 "date": date_str,
             }
         )
 
     # Flatten cost_by_type for doughnut chart
-    cost_by_type = {k: v.get("cost_usd", 0) for k, v in by_type.items()}
+    cost_by_type = {k: (v.get("cost_usd") or 0) for k, v in by_type.items()}
 
     # Flatten daily for charts
     daily_flat = [
         {
             "date": d["date"],
-            "input_tokens": d.get("prompt_tokens", 0),
-            "output_tokens": d.get("completion_tokens", 0),
-            "cost": d.get("cost_usd", 0),
+            "input_tokens": d.get("prompt_tokens") or 0,
+            "output_tokens": d.get("completion_tokens") or 0,
+            "cost": d.get("cost_usd") or 0,
         }
         for d in daily
     ]
 
     return {
-        "today_tokens": today_sum.get("total_tokens", 0),
-        "today_cost": today_sum.get("total_cost_usd", 0),
-        "today_requests": today_sum.get("total_calls", 0),
-        "total_requests": summary.get("total_calls", 0),
-        "total_tokens": summary.get("total_tokens", 0),
-        "total_input_tokens": summary.get("total_prompt_tokens", 0),
-        "total_output_tokens": summary.get("total_completion_tokens", 0),
-        "total_cost": summary.get("total_cost_usd", 0),
+        "today_tokens": today_sum.get("total_tokens") or 0,
+        "today_cost": today_sum.get("total_cost_usd") or 0,
+        "today_requests": today_sum.get("total_calls") or 0,
+        "total_requests": summary.get("total_calls") or 0,
+        "total_tokens": summary.get("total_tokens") or 0,
+        "total_input_tokens": summary.get("total_prompt_tokens") or 0,
+        "total_output_tokens": summary.get("total_completion_tokens") or 0,
+        "total_cost": summary.get("total_cost_usd") or 0,
         "daily": daily_flat,
         "cost_by_type": cost_by_type,
         "top_jobs": top_jobs,
@@ -542,11 +630,13 @@ async def get_usage_metrics(
 async def get_usage_config(admin: dict = Depends(get_admin_user)):
     """Return the current Gemini model pricing configuration."""
     settings = get_settings()
-    try:
-        pricing = json.loads(settings.gemini_model_pricing)
-    except Exception:
-        pricing = {}
+    pricing = _load_pricing_config()
+    current_model = (
+        settings.gateway_model
+        if settings.gemini_backend == "gateway" and settings.gateway_model
+        else settings.gemini_model
+    )
     return {
-        "current_model": settings.gemini_model,
+        "current_model": current_model,
         "pricing": pricing,
     }

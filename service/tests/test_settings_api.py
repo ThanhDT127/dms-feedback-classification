@@ -59,6 +59,8 @@ def client(tmp_path, monkeypatch):
             sharepoint_root_folder_id="root",
             gemini_backend="vertex",
             gcp_project_id="project",
+            teams_webhook_url="https://outlook.office.com/webhook/test-token",
+            gcp_service_account_json="test-sa.json",
             keyword_dir_override=kw_dir,
             data_dir=tmp_path,
             work_dir=tmp_path / "work",
@@ -75,6 +77,8 @@ def client(tmp_path, monkeypatch):
             sharepoint_root_folder_id="root",
             gemini_backend="vertex",
             gcp_project_id="project",
+            teams_webhook_url="https://outlook.office.com/webhook/test-token",
+            gcp_service_account_json="test-sa.json",
             keyword_dir_override=kw_dir,
             data_dir=tmp_path,
             work_dir=tmp_path / "work",
@@ -97,6 +101,10 @@ def test_get_settings(client):
     data = response.json()
     assert data["azure_tenant_id"] == "tenant"
     assert data["gemini_backend"] == "vertex"
+    assert data["teams_webhook_url"] == "••••••••••••"
+    assert data["gcp_service_account_json"] == "••••••••••••"
+    assert "test-token" not in response.text
+    assert "test-sa.json" not in response.text
 
 
 def test_put_settings_success(client, tmp_path):
@@ -261,3 +269,81 @@ def test_products_list_and_save(client, tmp_path):
         assert updated_df2.iloc[0]["Từ khóa"] == "Ast18-Updated"
         assert len(updated_df3) == 1
         assert updated_df3.iloc[0]["Sản phẩm"] == "Aptomat"
+
+
+def test_get_settings_masks_teams_webhook_and_gcp_service_account(client, monkeypatch):
+    """DEF-CODE-001: Calling GET /api/settings must return masked values for
+    teams_webhook_url and gcp_service_account_json, preventing secret leakage.
+    """
+    teams_secret = "https://outlook.office.com/webhook/secret-token-12345"
+    gcp_secret = '{"type": "service_account", "private_key": "sensitive-key"}'
+
+    monkeypatch.setattr(
+        deps,
+        "get_settings_partial",
+        lambda: {
+            "teams_webhook_url": teams_secret,
+            "gcp_service_account_json": gcp_secret,
+            "azure_client_secret": "azure-secret-val",
+            "gemini_api_key": "gemini-key-val",
+            "public_field": "public_value",
+        },
+    )
+
+    response = client.get("/api/settings")
+    assert response.status_code == 200
+    data = response.json()
+
+    # Sensitive values must be masked
+    assert data["teams_webhook_url"] == "••••••••••••"
+    assert data["gcp_service_account_json"] == "••••••••••••"
+    assert data["azure_client_secret"] == "••••••••••••"
+    assert data["gemini_api_key"] == "••••••••••••"
+    assert data["public_field"] == "public_value"
+
+    # Raw secrets must never appear anywhere in the response body
+    assert teams_secret not in response.text
+    assert gcp_secret not in response.text
+    assert "azure-secret-val" not in response.text
+    assert "gemini-key-val" not in response.text
+
+
+@pytest.mark.parametrize(
+    "key,val",
+    [
+        ("TEAMS_WEBHOOK_URL", "https://teams.microsoft.com/l/webhook/token"),
+        ("teams_webhook_url", "https://teams.microsoft.com/l/webhook/token"),
+        ("Teams_Webhook_Url", "https://teams.microsoft.com/l/webhook/token"),
+        ("GCP_SERVICE_ACCOUNT_JSON", '{"private_key_id": "secret-sa-id"}'),
+        ("gcp_service_account_json", '{"private_key_id": "secret-sa-id"}'),
+        ("Gcp_Service_Account_Json", '{"private_key_id": "secret-sa-id"}'),
+    ],
+)
+def test_get_settings_masks_sensitive_keys_case_variations(client, monkeypatch, key, val):
+    """Verify that case variations (upper, lower, mixed) of sensitive keys are all masked."""
+    monkeypatch.setattr(deps, "get_settings_partial", lambda: {key: val})
+    response = client.get("/api/settings")
+    assert response.status_code == 200
+    data = response.json()
+    assert data[key] == "••••••••••••"
+    assert val not in response.text
+
+
+def test_put_settings_preserves_secrets_when_masked_value_provided(client, tmp_path):
+    """Updating settings with masked secret strings (bullets or asterisks) preserves the existing secret."""
+    (tmp_path / ".env").write_text(
+        "TEAMS_WEBHOOK_URL=https://my-existing-webhook\n"
+        "GCP_SERVICE_ACCOUNT_JSON=existing-key.json\n",
+        encoding="utf-8",
+    )
+    payload = {
+        "teams_webhook_url": "••••••••••••",
+        "gcp_service_account_json": "******",
+    }
+    response = client.put("/api/settings", json=payload)
+    assert response.status_code == 200
+
+    env_content = (tmp_path / ".env").read_text(encoding="utf-8")
+    assert "https://my-existing-webhook" in env_content
+    assert "existing-key.json" in env_content
+

@@ -277,7 +277,10 @@ window.ClassifyPage = (() => {
           <div style="font-weight:600;font-size:13px;color:var(--accent-red);">Job thất bại</div>
           <div class="text-muted" style="font-size:12px;margin-top:2px;">${esc(job.error_summary || job.error || 'Vui lòng thử lại hoặc liên hệ admin.')}</div>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="ClassifyPage.resetJob()">Chọn file khác</button>
+        <div style="display:flex;gap:6px;align-items:center;">
+          ${jobId ? `<button class="btn btn-primary btn-sm" onclick="ClassifyPage.retryCurrentJob('${escAttr(jobId)}')">🔁 Thử lại</button>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="ClassifyPage.resetJob()">Chọn file khác</button>
+        </div>
       `;
     } else if (job.status === 'cancelled') {
       infoBar.style.borderColor = 'var(--border)';
@@ -286,8 +289,28 @@ window.ClassifyPage = (() => {
           <div style="font-weight:600;font-size:13px;">Job đã hủy</div>
           <div class="text-muted" style="font-size:12px;margin-top:2px;">Tiến trình đã dừng và sẽ không tiếp tục xử lý.</div>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="ClassifyPage.resetJob()">Chọn file khác</button>
+        <div style="display:flex;gap:6px;align-items:center;">
+          ${jobId ? `<button class="btn btn-primary btn-sm" onclick="ClassifyPage.retryCurrentJob('${escAttr(jobId)}')">🔁 Thử lại</button>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="ClassifyPage.resetJob()">Chọn file khác</button>
+        </div>
       `;
+    }
+  }
+
+  async function retryCurrentJob(jobId) {
+    const id = jobId || (_currentJob && (_currentJob.job_id || _currentJob.id));
+    if (!id) return;
+    try {
+      const job = await API.retryJob(id);
+      _currentJob = { ...(_currentJob || {}), ...job, terminal: false };
+      sessionStorage.setItem('classify_active_job_id', id);
+      sessionStorage.removeItem('classify_reset');
+      document.getElementById('output-info-bar')?.remove();
+      restoreActiveJobUI(_currentJob);
+      connectJobWS(id);
+      Toast.success('Đã đưa job vào hàng đợi thử lại');
+    } catch (e) {
+      Toast.error('Không thể thử lại job: ' + e.message);
     }
   }
 
@@ -1455,8 +1478,13 @@ window.ClassifyPage = (() => {
           <button class="btn btn-ghost btn-sm" onclick="ClassifyPage.downloadJob('${state.jobId}')" title="Tải kết quả" style="padding: 2px 6px; margin-left: 4px; font-size: 11px;">📥 Tải</button>
           ${spLink}
         `;
-      } else if (state.status === 'failed') {
-        statusHtml = `<span class="badge badge-red" id="batch-status-${i}" title="${esc(state.error || 'Lỗi không xác định')}">❌ Thất bại</span>`;
+      } else if (state.status === 'failed' || state.status === 'cancelled') {
+        const badgeLabel = state.status === 'cancelled' ? '❌ Đã hủy' : '❌ Thất bại';
+        const badgeClass = state.status === 'cancelled' ? 'badge-muted' : 'badge-red';
+        statusHtml = `
+          <span class="badge ${badgeClass}" id="batch-status-${i}" title="${esc(state.error || 'Lỗi không xác định')}">${badgeLabel}</span>
+          <button class="btn btn-ghost btn-sm" onclick="ClassifyPage.retryBatchItem(${i})" title="Thử lại file này" style="padding: 2px 6px; margin-left: 4px; font-size: 11px;">🔁 Thử lại</button>
+        `;
       }
 
       return `
@@ -1529,14 +1557,33 @@ window.ClassifyPage = (() => {
           ${spLink}
         `;
       } else if (state.status === 'cancelled') {
-        statusEl.innerHTML = `<span class="badge badge-muted">❌ Đã hủy</span>`;
+        statusEl.innerHTML = `
+          <span class="badge badge-muted">❌ Đã hủy</span>
+          <button class="btn btn-ghost btn-sm" onclick="ClassifyPage.retryBatchItem(${i})" title="Thử lại file này" style="padding: 2px 6px; margin-left: 4px; font-size: 11px;">🔁 Thử lại</button>
+        `;
       } else if (state.status === 'failed') {
-        statusEl.innerHTML = `<span class="badge badge-red" title="${esc(state.error || 'Lỗi không xác định')}">❌ Thất bại</span>`;
+        statusEl.innerHTML = `
+          <span class="badge badge-red" title="${esc(state.error || 'Lỗi không xác định')}">❌ Thất bại</span>
+          <button class="btn btn-ghost btn-sm" onclick="ClassifyPage.retryBatchItem(${i})" title="Thử lại file này" style="padding: 2px 6px; margin-left: 4px; font-size: 11px;">🔁 Thử lại</button>
+        `;
       }
     }
 
     if (barEl) {
       barEl.style.width = `${state.percent}%`;
+    }
+  }
+
+  async function retryBatchItem(index) {
+    const state = _batchState[index];
+    if (!state) return;
+    if (state.status === 'running' || state.status === 'queued') return;
+    state.status = 'pending';
+    state.percent = 0;
+    state.error = null;
+    updateBatchRowUI(index);
+    if (!_isBatchRunning) {
+      await startBatch();
     }
   }
 
@@ -2369,8 +2416,8 @@ window.ClassifyPage = (() => {
     render, destroy, setMode, reset,
     updateCharCount, clearInput, classifyText,
     fileDragOver, fileDragLeave, fileDrop, handleFile, clearFile,
-    startFileClassify, togglePause, stopClassify, downloadResult, resetJob,
-    batchDrop, handleBatchFiles, startBatch, clearBatch, removeBatchFile,
+    startFileClassify, togglePause, stopClassify, downloadResult, resetJob, retryCurrentJob,
+    batchDrop, handleBatchFiles, startBatch, clearBatch, removeBatchFile, retryBatchItem,
     pushToSharePoint,
     loadAdminJobs, cancelAdminJob, retryAdminJob,
     previewTemplate, downloadTemplate, downloadJob, openPromptEditor, openKeywordEditor, quickAddKeyword,

@@ -77,6 +77,64 @@ _ACCOUNTING_TOTALS_SQL = ", ".join(
     )
 )
 
+# Dashboard / UI mode: sum known non-null records so failed/unknown attempts do not zero/null out period totals.
+_PARTIAL_ACCOUNTING_TOTALS_SQL = ", ".join(
+    f"COALESCE(SUM({column}), 0) AS {alias}"
+    for column, alias in (
+        ("prompt_tokens", "total_prompt"),
+        ("completion_tokens", "total_completion"),
+        ("total_tokens", "total_tokens"),
+        ("estimated_cost_usd", "total_cost"),
+    )
+)
+
+DEFAULT_MODEL_PRICING: dict[str, dict[str, float]] = {
+    "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+    "gemini-flash": {"input": 0.30, "output": 2.50},
+    "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
+    "gemini-2.5-flash-lite": {"input": 0.025, "output": 0.30},
+    "gemini-flash-lite": {"input": 0.025, "output": 0.30},
+    "gemini-3.5-flash": {"input": 1.50, "output": 9.00},
+    "gemini-3.1-flash-lite": {"input": 0.025, "output": 0.10},
+}
+
+_MODEL_ALIAS_MAP: dict[str, str] = {
+    "gemini-flash-lite": "gemini-2.5-flash-lite",
+    "gemini-flash": "gemini-2.5-flash",
+}
+
+
+def resolve_model_pricing(model: str | None, pricing_config: dict | None) -> dict | None:
+    """Resolve model pricing entry from *pricing_config*, handling common aliases and provider prefixes."""
+    if not model or not isinstance(model, str) or not pricing_config or not isinstance(pricing_config, dict):
+        return None
+    model_key = model.strip().lower()
+    for prefix in ("models/", "gemini/", "vertex_ai/", "google/"):
+        if model_key.startswith(prefix):
+            model_key = model_key[len(prefix) :]
+            break
+    if not model_key:
+        return None
+
+    norm_pricing = {
+        str(k).strip().lower(): v for k, v in pricing_config.items() if isinstance(v, dict)
+    }
+    candidates = [model_key]
+    if model_key in _MODEL_ALIAS_MAP:
+        candidates.append(_MODEL_ALIAS_MAP[model_key])
+
+    for cand in candidates:
+        if cand in norm_pricing:
+            return norm_pricing[cand]
+
+    # Sort keys longest-first so "gemini-2.5-flash-lite" matches before "gemini-2.5-flash"
+    sorted_keys = sorted(norm_pricing.keys(), key=len, reverse=True)
+    for cand in candidates:
+        for key in sorted_keys:
+            if cand.startswith(key) or key.startswith(cand):
+                return norm_pricing[key]
+    return None
+
 
 def calculate_cost(
     model: str,
@@ -88,18 +146,39 @@ def calculate_cost(
 
     Prices in *pricing_config* are expressed as USD per **1 million tokens**.
     """
-    model_key = model.lower()
-    # Try exact match first, then prefix match
-    prices = pricing_config.get(model_key)
-    if not prices:
-        for key in pricing_config:
-            if model_key.startswith(key) or key.startswith(model_key):
-                prices = pricing_config[key]
-                break
+    prices = resolve_model_pricing(model, pricing_config)
     if not prices:
         return 0.0
     input_price = prices.get("input", 0)  # per 1M tokens
     output_price = prices.get("output", 0)
+    return (prompt_tokens * input_price + completion_tokens * output_price) / 1_000_000
+
+
+def estimate_attempt_cost(
+    model: str | None,
+    usage: dict | None,
+    pricing_config: dict | None,
+) -> float | None:
+    """Estimate USD cost for a gateway/direct attempt when token usage and model pricing are known.
+
+    Returns ``None`` if usage is incomplete or the model is not recognized in *pricing_config*.
+    """
+    if not isinstance(usage, dict):
+        return None
+    prompt_tokens = usage.get("prompt_tokens")
+    completion_tokens = usage.get("completion_tokens")
+    if (
+        type(prompt_tokens) is not int
+        or type(completion_tokens) is not int
+        or prompt_tokens < 0
+        or completion_tokens < 0
+    ):
+        return None
+    prices = resolve_model_pricing(model, pricing_config)
+    if not prices:
+        return None
+    input_price = float(prices.get("input", 0))
+    output_price = float(prices.get("output", 0))
     return (prompt_tokens * input_price + completion_tokens * output_price) / 1_000_000
 
 
@@ -305,6 +384,73 @@ class UsageTracker:
             row["estimated_cost_usd"] = row.pop("actual_cost_usd")
         return rows
 
+    def backfill_missing_costs(self, pricing_config: dict | None = None) -> int:
+        """Backfill cost for historical ``attempt_finished`` and ``legacy`` rows with known tokens."""
+        pricing = pricing_config or DEFAULT_MODEL_PRICING
+        if not pricing:
+            return 0
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT id, event_kind, model, model_actual, model_requested,
+                       actual_prompt_tokens, actual_completion_tokens,
+                       prompt_tokens, completion_tokens
+                FROM gemini_usage_log
+                WHERE (
+                    event_kind = 'attempt_finished'
+                    AND (actual_cost_usd IS NULL OR actual_cost_usd = 0)
+                    AND actual_prompt_tokens IS NOT NULL
+                    AND actual_completion_tokens IS NOT NULL
+                ) OR (
+                    event_kind = 'legacy'
+                    AND (estimated_cost_usd IS NULL OR estimated_cost_usd = 0)
+                    AND (prompt_tokens > 0 OR completion_tokens > 0)
+                )
+                """
+            ).fetchall()
+            if not rows:
+                return 0
+            attempt_updates: list[tuple[float, int]] = []
+            legacy_updates: list[tuple[float, int]] = []
+            for (
+                row_id,
+                event_kind,
+                model,
+                model_actual,
+                model_requested,
+                act_p,
+                act_c,
+                leg_p,
+                leg_c,
+            ) in rows:
+                if event_kind == "attempt_finished":
+                    usage = {"prompt_tokens": int(act_p), "completion_tokens": int(act_c)}
+                else:
+                    usage = {"prompt_tokens": int(leg_p or 0), "completion_tokens": int(leg_c or 0)}
+                cost = None
+                for cand in (model_actual, model, model_requested):
+                    cost = estimate_attempt_cost(cand, usage, pricing)
+                    if cost is not None:
+                        break
+                if cost is not None and cost > 0:
+                    if event_kind == "attempt_finished":
+                        attempt_updates.append((cost, int(row_id)))
+                    else:
+                        legacy_updates.append((cost, int(row_id)))
+            if attempt_updates:
+                self._conn.executemany(
+                    "UPDATE gemini_usage_log SET actual_cost_usd = ? WHERE id = ?",
+                    attempt_updates,
+                )
+            if legacy_updates:
+                self._conn.executemany(
+                    "UPDATE gemini_usage_log SET estimated_cost_usd = ? WHERE id = ?",
+                    legacy_updates,
+                )
+            if attempt_updates or legacy_updates:
+                self._conn.commit()
+            return len(attempt_updates) + len(legacy_updates)
+
     # ------------------------------------------------------------------
     # query_usage
     # ------------------------------------------------------------------
@@ -314,16 +460,21 @@ class UsageTracker:
         period: str = "week",
         from_date: str | None = None,
         to_date: str | None = None,
+        *,
+        include_partial: bool = False,
     ) -> dict:
         """Return aggregated usage statistics.
 
         Parameters
         ----------
         period : str
-            One of ``'day'``, ``'week'``, ``'month'``, ``'custom'``.
+            One of ``'day'``, ``'today'``, ``'week'``, ``'month'``, ``'custom'``.
         from_date, to_date : str | None
             ISO-format date strings (``YYYY-MM-DD``).  Required when
             *period* is ``'custom'``.
+        include_partial : bool
+            When ``True``, sums known non-null records via ``COALESCE(SUM(...), 0)``
+            instead of returning ``None`` when any attempt has unknown usage/cost.
 
         Returns
         -------
@@ -331,6 +482,9 @@ class UsageTracker:
             Keys: ``summary``, ``daily``, ``by_type``.
         """
         start, end = self._resolve_date_range(period, from_date, to_date)
+        totals_sql = (
+            _PARTIAL_ACCOUNTING_TOTALS_SQL if include_partial else _ACCOUNTING_TOTALS_SQL
+        )
 
         with self._lock:
             cur = self._conn.cursor()
@@ -340,7 +494,7 @@ class UsageTracker:
                 f"""
                 SELECT
                     COUNT(*) AS total_calls,
-                    {_ACCOUNTING_TOTALS_SQL},
+                    {totals_sql},
                     SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) AS success_count,
                     SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) AS fail_count
                 FROM gemini_usage_accounting
@@ -368,7 +522,7 @@ class UsageTracker:
                 SELECT
                     SUBSTR(timestamp, 1, 10) AS day,
                     COUNT(*) AS calls,
-                    {_ACCOUNTING_TOTALS_SQL}
+                    {totals_sql}
                 FROM gemini_usage_accounting
                 WHERE timestamp >= ? AND timestamp <= ?
                 GROUP BY day
@@ -394,7 +548,7 @@ class UsageTracker:
                 SELECT
                     call_type,
                     COUNT(*) AS calls,
-                    {_ACCOUNTING_TOTALS_SQL}
+                    {totals_sql}
                 FROM gemini_usage_accounting
                 WHERE timestamp >= ? AND timestamp <= ?
                 GROUP BY call_type
@@ -424,10 +578,15 @@ class UsageTracker:
         limit: int = 10,
         from_date: str | None = None,
         to_date: str | None = None,
+        *,
+        include_partial: bool = False,
     ) -> list[dict]:
         """Return the jobs with the highest total token usage."""
         start, end = self._resolve_date_range(
             "custom" if from_date else "month", from_date, to_date
+        )
+        totals_sql = (
+            _PARTIAL_ACCOUNTING_TOTALS_SQL if include_partial else _ACCOUNTING_TOTALS_SQL
         )
 
         with self._lock:
@@ -437,7 +596,7 @@ class UsageTracker:
                 SELECT
                     job_id,
                     COUNT(*) AS calls,
-                    {_ACCOUNTING_TOTALS_SQL}
+                    {totals_sql}
                 FROM gemini_usage_accounting
                 WHERE job_id IS NOT NULL
                   AND timestamp >= ? AND timestamp <= ?
@@ -504,7 +663,7 @@ class UsageTracker:
         now = utc_now()
         if from_date:
             fallback_start = None
-        elif period == "day":
+        elif period in ("day", "today"):
             fallback_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         elif period == "week":
             fallback_start = (now - timedelta(days=7)).replace(
