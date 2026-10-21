@@ -23,14 +23,17 @@ from ..guardrails.plan_guard import PlanGuard
 from ..guardrails.sql_guard import SqlErrorCode, SqlGuard, SqlGuardError, context_for
 from . import similar_terms
 from .answer_events import Stage
+from .block_builders import CODE_LOOKUP_FUNCTION
 from .function_catalog import FUNCTION_CATALOG
 from .intents import Intent
+from .issue_codes import codes_in
 from .query_planner import ANALYSIS_REQUEST_PARAM, QueryPlanner
 from .refusal_templates import join_vi, render
 from .reports.report_runner import ReportRunConfig, ReportRunner
 from .result_interpreter import ResultInterpreter
 from .sql_generator import SqlGenerator, SqlGeneratorConfig
 from .types import (
+    FLAG_CODE_LOOKUP,
     FLAG_EXPORT_REPLAY,
     Decision,
     ErrorCode,
@@ -86,8 +89,9 @@ class OrchestratorConfig:
     max_steps: int = MAX_STEPS
     similar_top_terms: int = 8
     fts_max_relax: int = 2
-    # Executor lọc được get_issues theo issue_code (Dev A chưa có ở v1.0 — b08 D6).
-    code_lookup_available: bool = False
+    # Executor lọc được get_issues theo issue_code (b08 D6); tắt thì tìm tương tự theo mã báo
+    # LOOKUP_BY_CODE_UNAVAILABLE.
+    code_lookup_available: bool = True
     sql_max_repair: int = 2
     # Chế độ báo cáo (b10 D3): nhiều bước hơn và timeout lượt riêng.
     report_max_steps: int = 8
@@ -302,6 +306,11 @@ class ChatOrchestrator:
         if validated.report_type is not None or validated.export_request:
             outcome = self._execute_report(
                 request_id, turn, query, validated, started, timings, should_cancel=should_cancel
+            )
+            return self._finish(outcome, started, timings, llm)
+        if FLAG_CODE_LOOKUP in validated.flags:
+            outcome = self._execute_code_lookup(
+                request_id, turn, query, validated, started, timings
             )
             return self._finish(outcome, started, timings, llm)
         exclude_ids: frozenset[Any] = frozenset()
@@ -812,6 +821,89 @@ class ChatOrchestrator:
             )
         return step_result
 
+    # ── Tra theo mã vấn đề ──
+
+    def _execute_code_lookup(
+        self,
+        request_id: str,
+        turn: TurnRequest,
+        query,
+        validated: ValidatedPlan,
+        started: float,
+        timings: dict[str, int],
+    ) -> TurnOutcome:
+        """Mỗi mã một bước get_issues; gộp mọi phản hồi tìm được thành một kết quả."""
+        scope = self._execution_scope(turn.scope, validated)
+        notices = list(validated.notices)
+        items: list[dict[str, Any]] = []
+        missing: list[str] = []
+        mark = time.monotonic()
+        for index, step in enumerate(validated.steps, start=1):
+            remaining = self.config.turn_timeout_seconds - (time.monotonic() - started)
+            try:
+                if remaining <= 0:
+                    raise FutureTimeout()
+                result = self._run_step(
+                    step, scope, min(self.config.step_timeout_seconds, remaining)
+                )
+            except FutureTimeout:
+                timings["execute_1"] = _ms_since(mark)
+                return self._timeout_outcome(request_id, turn, query, validated, [], notices, False)
+            status = self.interpreter.interpret(result, request_id=request_id, step=index)
+            if status.state in (StepState.FORBIDDEN, StepState.ERROR):
+                timings["execute_1"] = _ms_since(mark)
+                if status.state is StepState.FORBIDDEN:
+                    reason, message = (
+                        Reason.UNAUTHORIZED_SCOPE,
+                        render(
+                            Reason.UNAUTHORIZED_SCOPE,
+                            dropped_units="dữ liệu ngoài phạm vi",
+                            allowed_units=join_vi(validated.scope_units) or "đơn vị của bạn",
+                        ),
+                    )
+                else:
+                    reason = self.interpreter.reason_for(status) or Reason.INTERNAL
+                    message = render(reason)
+                return self._outcome_from(
+                    request_id, turn, query, validated, reason=reason, message=message
+                )
+            found = _issue_items(result)
+            if not found:
+                missing.append(str(step.params.get("issue_code")))
+            items.extend(found)
+        duration = _ms_since(mark)
+        timings["execute_1"] = duration
+        self._log(request_id, "code_lookup_done", codes=len(validated.steps), rows=len(items))
+
+        if not items:
+            # Cùng một câu cho "không có" và "ngoài phạm vi": không lộ phản hồi của đơn vị khác.
+            return self._outcome_from(
+                request_id,
+                turn,
+                query,
+                validated,
+                notices=notices,
+                reason=Reason.CODE_NOT_FOUND,
+                message=render(Reason.CODE_NOT_FOUND, codes=join_vi(missing)),
+            )
+        if missing:
+            notices.append(
+                Notice(
+                    Reason.CODE_NOT_FOUND,
+                    render(Reason.CODE_NOT_FOUND, codes=join_vi(missing)),
+                )
+            )
+        step_result = StepResult(
+            index=1,
+            function_name=CODE_LOOKUP_FUNCTION,
+            status=StepStatus(StepState.OK),
+            result=QueryResult.ok(items),
+            duration_ms=duration,
+        )
+        return self._outcome_from(
+            request_id, turn, query, validated, step_results=[step_result], notices=notices
+        )
+
     # ── LOOKUP_SIMILAR (b08 D6) ──
 
     def _prepare_similar(
@@ -829,7 +921,10 @@ class ChatOrchestrator:
             )
 
         reference: Mapping[str, Any] | None = None
-        code = _ISSUE_CODE.search(turn.question)
+        # Mã DMS thật là số thuần ("giống mã 241659"); dạng "NT-0106" không cần chữ "mã".
+        code = next(iter(codes_in(query.match_text)), None)
+        if code is None and (match := _ISSUE_CODE.search(turn.question)):
+            code = match.group(0).upper()
         if code:
             if not self.config.code_lookup_available:
                 return stop(Decision.NOT_SUPPORTED, Reason.LOOKUP_BY_CODE_UNAVAILABLE)
@@ -838,14 +933,14 @@ class ChatOrchestrator:
                 answer_shape=AnswerShape.LIST,
                 original_query=query.rewritten_query,
                 function_name="get_issues",
-                params={"issue_code": code.group(0).upper()},
+                params={"issue_code": code},
             )
             found = self._run_step(
                 lookup,
                 self._execution_scope(turn.scope, validated),
                 self.config.step_timeout_seconds,
             )
-            reference = found.data[0] if found.data else None
+            reference = next(iter(_issue_items(found)), None)
         else:
             reference = _quote_by_ordinal(turn.previous_quotes, query.match_text)
             if reference is not None and not _in_scope(reference, turn.scope, validated):
@@ -1065,6 +1160,17 @@ def _quote_by_ordinal(
     if "cuoi" in match_text.split():
         return quotes[-1]
     return quotes[0] if len(quotes) == 1 else None
+
+
+def _issue_items(result: QueryResult) -> list[dict[str, Any]]:
+    """Dòng phản hồi trong kết quả get_issues.
+
+    Registry thật trả một dict ``{items, total, ...}``; executor giả của test trả thẳng các dòng.
+    """
+    rows = list(result.data or [])
+    if len(rows) == 1 and isinstance(rows[0].get("items"), list):
+        return [dict(item) for item in rows[0]["items"]]
+    return [dict(row) for row in rows if row.get("issue_code") is not None]
 
 
 def _in_scope(reference: Mapping[str, Any], scope: UserScope, validated: ValidatedPlan) -> bool:

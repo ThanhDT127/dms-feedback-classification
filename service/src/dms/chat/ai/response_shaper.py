@@ -332,13 +332,28 @@ class AnswerComposer:
                 },
             )
 
+        missing_codes = [n for n in outcome.notices if n.kind is Reason.CODE_NOT_FOUND]
+        if missing_codes:
+            # Tra nhiều mã mà có mã không thấy: các mã còn lại vẫn hiển thị bên dưới.
+            emitter.emit(
+                EventType.REFUSAL,
+                {
+                    "reason": Reason.CODE_NOT_FOUND.value,
+                    "text": " ".join(n.message for n in missing_codes),
+                    "partial": True,
+                },
+            )
+
         dates = _dates(outcome)
         range_text = format_date_range(dates.get("date_from"), dates.get("date_to"))
         subtitle = _subtitle(dates, outcome.scope_units)
         blocks = build_blocks(outcome.step_results, config=self.config.blocks, subtitle=subtitle)
 
         if not blocks:
-            if outcome.reason in (Reason.NO_MATCH, Reason.NO_DATA_FILTERED) and outcome.message:
+            if (
+                outcome.reason in (Reason.NO_MATCH, Reason.NO_DATA_FILTERED, Reason.CODE_NOT_FOUND)
+                and outcome.message
+            ):
                 text = outcome.message
             else:
                 text = render(Reason.NO_DATA, range=range_text or "đã chọn")

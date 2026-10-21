@@ -358,6 +358,7 @@ class Reason(StrEnum):
     NO_SEARCH_TERMS = "NO_SEARCH_TERMS"
     RELAXED_SEARCH = "RELAXED_SEARCH"
     LOOKUP_BY_CODE_UNAVAILABLE = "LOOKUP_BY_CODE_UNAVAILABLE"
+    CODE_NOT_FOUND = "CODE_NOT_FOUND"
     FILE_LOOKUP_UNAVAILABLE = "FILE_LOOKUP_UNAVAILABLE"
     SIMILAR_REFERENCE_UNKNOWN = "SIMILAR_REFERENCE_UNKNOWN"
     # Pattern 2 (b09)
@@ -395,6 +396,8 @@ class ErrorCode(StrEnum):
 
 FLAG_COMPARISON_DISALLOWED = "comparison_disallowed"
 FLAG_NEEDS_SEMANTIC_FALLBACK = "needs_semantic_fallback"
+# Tra phản hồi theo mã vấn đề: Orchestrator gộp kết quả thành khối chi tiết phản hồi.
+FLAG_CODE_LOOKUP = "code_lookup"
 # Yêu cầu xuất lại câu trả lời trước: bước lấy từ ``metadata.plans`` của lượt cũ (b10 D7).
 FLAG_EXPORT_REPLAY = "export_replay"
 

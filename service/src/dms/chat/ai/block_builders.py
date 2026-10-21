@@ -31,6 +31,21 @@ MAX_QUOTES = 5
 FTS_FUNCTION = "fts5_search"
 FTS_FILE_FUNCTION = "fts5_file_lookup"
 FTS_MAX_QUOTES = 10
+# Tra theo mã vấn đề: bảng thông tin + nội dung gần như đầy đủ của từng phản hồi.
+CODE_LOOKUP_FUNCTION = "issue_code_lookup"
+CODE_LOOKUP_QUOTE_MAX_CHARS = 1000
+CODE_LOOKUP_COLUMNS = (
+    ("issue_code", "Mã vấn đề", "text"),
+    ("issue_date", "Ngày", "date"),
+    ("unit_name", "Đơn vị", "text"),
+    ("source", "Nguồn", "text"),
+    ("product", "Sản phẩm", "text"),
+    ("business_status", "Trạng thái", "text"),
+    ("sentiment", "Cảm xúc", "text"),
+    ("labels", "Nhãn", "text"),
+    ("source_file_name", "File nguồn", "text"),
+    ("source_row_number", "Dòng", "text"),
+)
 SEMANTIC_FUNCTION = "semantic_view"
 SQL_RANKING_MAX_ROWS = 20
 SQL_FACT_ROWS = 10
@@ -107,6 +122,13 @@ def build_blocks(
                     config=cfg,
                     subtitle=subtitle,
                     output_columns=getattr(step, "output_columns", ()),
+                )
+            )
+            continue
+        if step.function_name == CODE_LOOKUP_FUNCTION:
+            blocks.extend(
+                build_code_lookup_blocks(
+                    payload_rows, step_index=step.index, config=cfg, subtitle=subtitle
                 )
             )
             continue
@@ -413,6 +435,49 @@ def build_lookup_blocks(
     )
     blocks.append(quote)
     return blocks
+
+
+def build_code_lookup_blocks(
+    rows: list[dict[str, Any]],
+    *,
+    step_index: int = 1,
+    config: BlockConfig | None = None,
+    subtitle: str = "",
+) -> list[DataBlock]:
+    """Khối cho tra theo mã: bảng thông tin từng phản hồi và nội dung của chúng."""
+    cfg = config or BlockConfig()
+    prefix = f"s{step_index}.{CODE_LOOKUP_FUNCTION}"
+    # Ô trống để rỗng thay vì "chưa đủ dữ liệu": đây là một phản hồi, không phải chỉ tiêu.
+    table_rows = [
+        {
+            key: ", ".join(map(str, value)) if isinstance(value, list) else value
+            for key, value in row.items()
+        }
+        for row in rows
+    ]
+    for row in table_rows:
+        for key, _, _ in CODE_LOOKUP_COLUMNS:
+            if row.get(key) in (None, ""):
+                row[key] = ""
+    spec = BlockSpec(
+        kind="table", title="Thông tin phản hồi", columns=CODE_LOOKUP_COLUMNS, items_path="rows"
+    )
+    table = _build_table(f"{prefix}.table", spec.title, subtitle, {"rows": table_rows}, spec, cfg)
+    # Một phản hồi nạp từ nhiều file thành nhiều dòng: bảng giữ đủ các file, nội dung chỉ một lần.
+    distinct: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        distinct.setdefault((str(row.get("issue_code")), str(row.get("content") or "")), row)
+    quote_spec = BlockSpec(kind="quote", title="Nội dung phản hồi", items_path="rows")
+    quotes = _build_quote(
+        f"{prefix}.quotes",
+        quote_spec.title,
+        subtitle,
+        {"rows": list(distinct.values())},
+        quote_spec,
+        replace(cfg, quote_max_chars=max(cfg.quote_max_chars, CODE_LOOKUP_QUOTE_MAX_CHARS)),
+        limit=FTS_MAX_QUOTES,
+    )
+    return [table, quotes]
 
 
 # ── Từng loại khối ──

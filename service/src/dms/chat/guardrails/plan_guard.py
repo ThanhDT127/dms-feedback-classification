@@ -29,6 +29,7 @@ from ..ai.intents import (
     supports_semantic,
 )
 from ..ai.intents import supported_functions as intent_functions
+from ..ai.issue_codes import MAX_CODES, codes_in, normalize_codes
 from ..ai.query_planner import ANALYSIS_REQUEST_PARAM, PlannerOutput
 from ..ai.refusal_templates import format_options, join_vi, render
 from ..ai.reports.templates import (
@@ -39,6 +40,7 @@ from ..ai.reports.templates import (
 )
 from ..ai.text_match import match_tokens, normalize_match_text, phrase_starts, rank_values
 from ..ai.types import (
+    FLAG_CODE_LOOKUP,
     FLAG_COMPARISON_DISALLOWED,
     FLAG_EXPORT_REPLAY,
     FLAG_NEEDS_SEMANTIC_FALLBACK,
@@ -58,6 +60,7 @@ from ..ai.unit_aliases import DEFAULT_ALIASES, AliasTable
 from ..contract import (
     CLASSIFICATION_LABELS,
     SENTIMENT_LABELS,
+    AnswerShape,
     QueryPattern,
     QueryPlan,
     UserScope,
@@ -95,13 +98,13 @@ FUNCTION_DIMENSIONS: dict[str, list[str]] = {
     "get_daily_trend": ["issue_date"],
 }
 ISSUE_CODE_PATTERN = re.compile(r"\b[A-Za-z][A-Za-z0-9]{1,5}-\d{3,}\b")
-# "mã 206501", "mã vấn đề NT-0106" trên ``match_text`` (đã bỏ dấu, chữ thường).
-CODE_LOOKUP_PATTERN = re.compile(
-    r"\bma (?:van de |phan hoi |so )?(?:la )?#?(?:[a-z][a-z0-9]{1,5}-)?\d{3,}\b"
-)
+# Intent mà câu có "mã <số>" được tra thẳng theo mã; None là Planner chưa chọn được intent.
 CODE_LOOKUP_INTENTS = frozenset({Intent.LOOKUP_FEEDBACK, Intent.LOOKUP_FILE})
-# Tham số Planner tự chế để tra theo mã; chưa hàm nào nhận nên báo LOOKUP_BY_CODE_UNAVAILABLE.
+# Tham số Planner dùng để chỉ một phản hồi theo mã; chỉ ``get_issues`` nhận ``issue_code``.
 CODE_PARAMS = frozenset({"issue_code", "feedback_id", "code", "ma_van_de"})
+CODE_LOOKUP_FUNCTION = "get_issues"
+# Một mã có thể lặp ở vài dòng (cùng phản hồi nạp từ nhiều file); đủ để thấy hết các dòng đó.
+CODE_LOOKUP_PAGE_SIZE = 20
 # Chiều mà Normalizer nhận ra bằng bảng cụm từ (độ chính xác cao) — Planner bỏ mất thì khôi phục.
 RESTORABLE_DIMENSIONS: dict[str, str] = {
     Dimension.SENTIMENT.value: "sentiment",
@@ -110,6 +113,23 @@ RESTORABLE_DIMENSIONS: dict[str, str] = {
 _RATE_WORDS = re.compile(r"\b(?:ti le|ty le|phan tram|bao nhieu %)\b|%")
 # "liệt kê phản hồi trong file X.xlsx" — chưa có bộ lọc source_file_name (b08 D7).
 _FILE_LISTING = re.compile(r"\.(xlsx|xlsm|xls|csv)\b|\btrong (file|tep)\b")
+# Lời yêu cầu lập báo cáo ("Báo cáo", "cho tôi báo cáo tuần"); "được báo cáo" không tính.
+_REPORT_REQUEST = re.compile(
+    r"^(?:(?:cho|gui) (?:toi|minh|em) )?(?:xem )?bao cao\b"
+    r"|\b(?:lap|tao|lam|xem|gui|can|muon) (?:mot |cai )?bao cao\b"
+)
+_REPORT_EXPORT_WORDS = re.compile(r"\b(?:xuat|tai|export|excel|file)\b")
+_REPORT_WEEK = re.compile(r"\bbao cao (?:hang )?tuan\b|\btuan (?:nay|truoc|qua|roi)\b")
+_REPORT_DAY = re.compile(r"\bbao cao (?:hang )?ngay\b|\bhom (?:nay|qua)\b")
+# Intent Planner hay chọn nhầm cho "Báo cáo" (spec: có "báo cáo" là intent báo cáo).
+_REPORT_MISREAD_INTENTS = frozenset({Intent.OVERVIEW, Intent.TREND})
+# Tìm theo chữ trong nội dung phản hồi ("có chữ chập chờn", "nhắc đến ...", "“...”").
+_CONTENT_SEARCH = re.compile(
+    r"\b(?:co|chua|ghi|viet|nhac(?: den| toi)?) (?:chu|tu|cum tu|tu khoa)\b"
+    r"|\btu khoa\b|\bnoi dung (?:co|chua|nhac|ghi|noi)\b|\bnhac (?:den|toi)\b"
+)
+_QUOTED_TEXT = re.compile(r"[\"“”][^\"“”]{2,}[\"“”]")
+_DATE_PARAMS = ("date_from", "date_to", "compare_from", "compare_to")
 
 # Tham số lọc → (khoá của MetadataProvider, chiều alias). None = dùng hằng số của contract.
 PARAM_DIMENSIONS: dict[str, tuple[str | None, str | None]] = {
@@ -202,29 +222,48 @@ class PlanGuard:
     ) -> ValidatedPlan:
         """Chạy 10 bước của design D2; dừng ở bước đầu tiên cho quyết định kết thúc."""
         # Bước 1–3
+        # "Tra phản hồi mã 206501": tra thẳng theo mã, kể cả khi Planner chưa chọn được intent.
+        codes = self._lookup_codes(output, query)
+        if codes:
+            return self._check_code_lookup(output, query, scope, codes)
+
+        # "Báo cáo" mà Planner xếp vào OVERVIEW: vẫn là báo cáo, thiếu kỳ thì hỏi lại.
+        report_intent = self._report_intent_from_text(output, query)
+        if report_intent is not None:
+            return self._check_report(output, report_intent, query, scope)
+
         terminal = self._check_state_and_intent(output)
         if terminal is not None:
+            # "Vùng 1 và Vùng 2 cái nào nhiều hơn?": Planner bí, nhưng lý do thật là giới hạn
+            # một đơn vị mỗi lượt.
+            if terminal.reason is Reason.INVALID_PLAN:
+                multi = self._multi_unit_refusal(output, terminal.intent, query, scope, ())
+                if multi is not None:
+                    return multi
             return terminal
 
         assert output.intent is not None
         intent = output.intent
 
-        # "Tra phản hồi mã 206501": mã thật là số thuần nên Planner hay chế tham số issue_code.
-        if intent in CODE_LOOKUP_INTENTS and CODE_LOOKUP_PATTERN.search(query.match_text):
-            logger.info("plan_guard_code_lookup_unavailable", extra={"intent": intent.value})
-            return self._terminal(
-                output, Decision.NOT_SUPPORTED, Reason.LOOKUP_BY_CODE_UNAVAILABLE, intent=intent
-            )
-
         # Báo cáo: bước do template dựng sau khi áp phạm vi, không từ Planner (b10 D1).
         if intent in REPORT_INTENTS and supports_report(intent, self.config.milestone):
             return self._check_report(output, intent, query, scope)
+
+        content_search = self._check_content_search(output, intent, query)
+        if content_search is not None:
+            return content_search
+        # Trước bước 4: plan sai cấu trúc vì Planner cố gộp hai đơn vị thì báo đúng giới hạn.
+        # Chỉ xét đơn vị trong câu; tham số Planner chưa qua bước 7 nên có thể chưa chuẩn hoá.
+        multi = self._multi_unit_refusal(output, intent, query, scope, ())
+        if multi is not None:
+            return multi
 
         # Bước 4–6
         for step_check in (
             self._check_structure(output, intent),
             self._check_confidence(output),
             self._check_dates(output, query),
+            self._check_comparison_period(output, intent, query),
         ):
             if step_check is not None:
                 return step_check
@@ -270,6 +309,143 @@ class PlanGuard:
                 output, Decision.NOT_SUPPORTED, Reason.INTENT_NOT_SUPPORTED, intent=output.intent
             )
         return None
+
+    def _report_intent_from_text(
+        self, output: PlannerOutput, query: NormalizedQuery
+    ) -> Intent | None:
+        """Intent báo cáo khi câu là lời yêu cầu báo cáo mà Planner chọn OVERVIEW/TREND."""
+        if output.system_state is PlannerState.OUT_OF_DOMAIN:
+            return None
+        if output.intent is not None and output.intent not in _REPORT_MISREAD_INTENTS:
+            return None
+        text = query.match_text
+        if not _REPORT_REQUEST.search(text) or _REPORT_EXPORT_WORDS.search(text):
+            return None
+        if _REPORT_WEEK.search(text):
+            intent = Intent.REPORT_WEEKLY
+        elif _REPORT_DAY.search(text):
+            intent = Intent.REPORT_DAILY
+        else:
+            intent = Intent.REPORT_CUSTOM
+        if not supports_report(intent, self.config.milestone):
+            return None
+        logger.info(
+            "plan_guard_report_intent_from_text",
+            extra={"planner_intent": output.intent.value if output.intent else None},
+        )
+        return intent
+
+    def _check_content_search(
+        self, output: PlannerOutput, intent: Intent, query: NormalizedQuery
+    ) -> ValidatedPlan | None:
+        """Tìm theo chữ khi mốc này chưa bật FTS: báo chưa hỗ trợ, đừng liệt kê bừa."""
+        if intent not in CODE_LOOKUP_INTENTS:
+            return None
+        if supports_fts(intent, self.config.milestone, self.config.enabled_patterns):
+            return None
+        if not (
+            _CONTENT_SEARCH.search(query.match_text) or _QUOTED_TEXT.search(query.rewritten_query)
+        ):
+            return None
+        logger.info("plan_guard_content_search_unavailable", extra={"intent": intent.value})
+        return self._terminal(
+            output,
+            Decision.NOT_SUPPORTED,
+            Reason.FILTER_NOT_SUPPORTED,
+            intent=intent,
+            filter_name="nội dung phản hồi",
+        )
+
+    def _check_comparison_period(
+        self, output: PlannerOutput, intent: Intent, query: NormalizedQuery
+    ) -> ValidatedPlan | None:
+        """ "So sánh với kỳ trước" mà chưa có kỳ nào: hỏi khoảng thời gian thay vì chạy tổng."""
+        if intent is not Intent.COMPARISON:
+            return None
+        if query.date_range is not None or query.compare_range is not None:
+            return None
+        if any(step.params.get(name) for step in output.steps for name in _DATE_PARAMS):
+            return None
+        # get_comparison thiếu ngày đã được hỏi lại ở ``_missing_required``; bước semantic có
+        # thể so sánh theo chiều khác.
+        if any(
+            step.pattern is not QueryPattern.SQL_TEMPLATE or step.function_name != "get_overview"
+            for step in output.steps
+        ):
+            return None
+        # "So sánh Vùng 1 với Vùng 3", "sản phẩm A với B": so hai đối tượng, không cần kỳ.
+        if len(_compared_mentions(query)) >= 2:
+            return None
+        logger.info("plan_guard_comparison_period_missing")
+        return self._terminal(
+            output,
+            Decision.CLARIFY,
+            Reason.FILTER_REQUIRED,
+            intent=intent,
+            filter_name="khoảng thời gian",
+        )
+
+    # ── Tra theo mã vấn đề ──
+
+    def _lookup_codes(self, output: PlannerOutput, query: NormalizedQuery) -> tuple[str, ...]:
+        """Mã cần tra, hoặc rỗng nếu câu hỏi không phải tra theo mã."""
+        if output.system_state is PlannerState.OUT_OF_DOMAIN:
+            return ()
+        # "Giống mã 241659" do Orchestrator lấy phản hồi gốc rồi tìm tương tự (b08 D6).
+        if output.intent is Intent.LOOKUP_SIMILAR or output.intent in REPORT_INTENTS:
+            return ()
+        planner_codes = normalize_codes(
+            value
+            for step in output.steps
+            for key, value in step.params.items()
+            if key in CODE_PARAMS
+        )
+        # Intent khác (vd. OVERVIEW) chỉ tính là tra theo mã khi Planner cũng lọc theo mã.
+        if output.intent is not None and output.intent not in CODE_LOOKUP_INTENTS:
+            if not planner_codes:
+                return ()
+        return codes_in(query.match_text) or planner_codes
+
+    def _check_code_lookup(
+        self,
+        output: PlannerOutput,
+        query: NormalizedQuery,
+        scope: UserScope,
+        codes: tuple[str, ...],
+    ) -> ValidatedPlan:
+        intent = output.intent if output.intent in CODE_LOOKUP_INTENTS else Intent.LOOKUP_FEEDBACK
+        assert intent is not None
+        if QueryPattern.SQL_TEMPLATE.value not in self.config.enabled_patterns:
+            return self._terminal(
+                output, Decision.NOT_SUPPORTED, Reason.LOOKUP_BY_CODE_UNAVAILABLE, intent=intent
+            )
+        # Bước dựng ở đây, không lấy từ Planner: bộ lọc ngày/nội dung Planner đoán thêm sẽ
+        # làm trượt mất phản hồi đúng mã.
+        steps = tuple(
+            QueryPlan(
+                pattern=QueryPattern.SQL_TEMPLATE,
+                answer_shape=AnswerShape.LIST,
+                original_query=query.rewritten_query,
+                function_name=CODE_LOOKUP_FUNCTION,
+                params={"issue_code": code, "page_size": CODE_LOOKUP_PAGE_SIZE},
+            )
+            for code in codes[:MAX_CODES]
+        )
+        scoped = self._apply_scope(output, intent, query, scope, steps)
+        if scoped.decision is not Decision.RUN:
+            return scoped
+        logger.info("plan_guard_code_lookup", extra={"codes": len(codes)})
+        notices = scoped.notices
+        if len(codes) > MAX_CODES:
+            notices += (
+                Notice(
+                    Reason.RELAXED_SEARCH,
+                    f"Mỗi lần tôi tra tối đa {MAX_CODES} mã; "
+                    f"chưa tra {join_vi(codes[MAX_CODES:])}.",
+                    details={"dropped_terms": list(codes[MAX_CODES:])},
+                ),
+            )
+        return replace(scoped, flags=scoped.flags | {FLAG_CODE_LOOKUP}, notices=notices)
 
     # ── Bước 4–6 ──
 
@@ -670,16 +846,9 @@ class PlanGuard:
         mentioned = self._mentioned_units(query, steps)
 
         if scope.is_admin:
-            if len(mentioned) >= 2:
-                return ValidatedPlan(
-                    planner_output=output,
-                    decision=Decision.NOT_SUPPORTED,
-                    reason=Reason.MULTI_UNIT_FILTER_UNAVAILABLE,
-                    intent=intent,
-                    message=render(
-                        Reason.MULTI_UNIT_FILTER_UNAVAILABLE, options=format_options(mentioned)
-                    ),
-                )
+            multi = self._multi_unit_refusal(output, intent, query, scope, steps, mentioned)
+            if multi is not None:
+                return multi
             steps = self._with_unit(steps, mentioned[0] if mentioned else None)
             return ValidatedPlan(
                 planner_output=output, decision=Decision.RUN, intent=intent, steps=steps
@@ -761,6 +930,30 @@ class PlanGuard:
             notices=tuple(notices),
         )
 
+    def _multi_unit_refusal(
+        self,
+        output: PlannerOutput,
+        intent: Intent | None,
+        query: NormalizedQuery,
+        scope: UserScope,
+        steps: Sequence[QueryPlan],
+        mentioned: tuple[str, ...] | None = None,
+    ) -> ValidatedPlan | None:
+        """Admin nhắc từ hai đơn vị trở lên: mỗi lượt chỉ lọc được một đơn vị."""
+        if not scope.is_admin:
+            return None
+        if mentioned is None:
+            mentioned = self._mentioned_units(query, steps)
+        if len(mentioned) < 2:
+            return None
+        return ValidatedPlan(
+            planner_output=output,
+            decision=Decision.NOT_SUPPORTED,
+            reason=Reason.MULTI_UNIT_FILTER_UNAVAILABLE,
+            intent=intent,
+            message=render(Reason.MULTI_UNIT_FILTER_UNAVAILABLE, options=format_options(mentioned)),
+        )
+
     def _mentioned_units(
         self, query: NormalizedQuery, steps: Sequence[QueryPlan]
     ) -> tuple[str, ...]:
@@ -819,6 +1012,19 @@ class PlanGuard:
     def _check_params(
         self, plan: ValidatedPlan, *, rates: Mapping[str, str] | None = None
     ) -> ValidatedPlan:
+        # "Giống mã 241659": Orchestrator lấy phản hồi gốc theo mã trong câu (b08 D6); giữ bộ lọc
+        # mã Planner thêm thì chỉ tìm lại đúng phản hồi gốc.
+        if plan.intent is Intent.LOOKUP_SIMILAR:
+            plan = replace(
+                plan,
+                steps=tuple(
+                    replace(
+                        step,
+                        params={k: v for k, v in step.params.items() if k not in CODE_PARAMS},
+                    )
+                    for step in plan.steps
+                ),
+            )
         # param -> giá trị người dùng nêu, để thông báo nói rõ điều kiện nào bị chặn (D10).
         unsupported: dict[str, str] = {}
 
@@ -845,20 +1051,24 @@ class PlanGuard:
         if missing is not None:
             return missing
 
+        # Mã hợp lệ đã được tra ở ``_check_code_lookup``; tới đây là Planner tự chế một giá trị
+        # không giống mã (vd. "phản hồi số 12"), nên hỏi lại mã thay vì lọc theo nó.
+        if any(CODE_PARAMS & set(step.params) for step in plan.steps):
+            logger.info("plan_guard_code_unrecognized")
+            return replace(
+                plan,
+                decision=Decision.CLARIFY,
+                reason=Reason.FILTER_REQUIRED,
+                steps=(),
+                message=render(
+                    Reason.FILTER_REQUIRED, filter_name="mã vấn đề của phản hồi (ví dụ: mã 241659)"
+                ),
+            )
+
         for param, value in (rates or {}).items():
             unsupported.setdefault(param, value)
         if not unsupported:
             return plan
-
-        if CODE_PARAMS & set(unsupported):
-            logger.info("plan_guard_code_lookup_unavailable", extra={"params": list(unsupported)})
-            return replace(
-                plan,
-                decision=Decision.NOT_SUPPORTED,
-                reason=Reason.LOOKUP_BY_CODE_UNAVAILABLE,
-                steps=(),
-                message=render(Reason.LOOKUP_BY_CODE_UNAVAILABLE),
-            )
 
         fallback = self._semantic_fallback(plan, unsupported, rates=rates or {})
         if fallback is not None:
@@ -1062,6 +1272,15 @@ def param_label_vi(param: str) -> str:
     if any(word in lowered for word in ("content", "keyword", "search", "text", "noi_dung")):
         return "nội dung phản hồi"
     return "điều kiện"
+
+
+def _compared_mentions(query: NormalizedQuery) -> set[tuple[str, str]]:
+    """Các đối tượng (chiều, cụm từ) câu hỏi nhắc tới, mỗi cụm tính một lần."""
+    return {
+        (dimension, candidate.mention)
+        for dimension, candidates in query.entities.items()
+        for candidate in candidates
+    }
 
 
 def _dropped_filter_notice(dropped: Sequence[tuple[str, str]]) -> Notice:

@@ -102,6 +102,10 @@ TEMPLATES: dict[Reason, str] = {
         "Hiện tôi chưa tra được phản hồi theo mã vấn đề. Bạn có thể mô tả nội dung phản hồi "
         "cần tìm, hoặc hỏi phản hồi tương tự một trích dẫn vừa hiển thị."
     ),
+    Reason.CODE_NOT_FOUND: (
+        "Không tìm thấy phản hồi có mã {codes} trong phạm vi dữ liệu bạn được xem. "
+        "Bạn kiểm tra lại mã giúp tôi."
+    ),
     Reason.FILE_LOOKUP_UNAVAILABLE: (
         "Hiện tôi chưa xem được phản hồi nằm ở file và dòng nào. Tính năng này sẽ có khi dữ liệu "
         "trích dẫn nguồn sẵn sàng."
@@ -127,7 +131,7 @@ TEMPLATES: dict[Reason, str] = {
     Reason.HELP: (
         "Tôi trả lời câu hỏi về phản hồi của khách hàng: tổng quan theo kỳ, xu hướng theo ngày, "
         "so sánh hai kỳ, phân bổ theo sản phẩm, đơn vị, địa bàn, loại vấn đề, "
-        "và tra cứu nội dung phản hồi."
+        "tra cứu nội dung phản hồi và tra một phản hồi theo mã vấn đề."
     ),
 }
 

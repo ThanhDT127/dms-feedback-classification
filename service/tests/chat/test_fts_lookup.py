@@ -294,6 +294,20 @@ def test_similar_code_inside_scope_runs():
     assert tv1["feedback_id"] not in {r["feedback_id"] for r in outcome.step_results[0].result.data}
 
 
+def test_similar_code_ignores_planner_code_filter():
+    """Planner hay chép mã vào bộ lọc; giữ lại thì bot hỏi lại mã người dùng đã nêu."""
+    tv1 = next(r for r in RECORDS.values() if r["unit_name"] == TV1 and "chập chờn" in r["content"])
+    executor = SqliteFtsFakeExecutor(code_lookup=True)
+    orchestrator, _, _ = build(
+        [plan_json(intent="LOOKUP_SIMILAR", filters={"issue_code": tv1["issue_code"]})],
+        executor=executor,
+        code_lookup=True,
+    )
+    outcome = orchestrator.handle(turn(f"tìm phản hồi giống mã {tv1['issue_code']}", TV1))
+    assert outcome.decision is Decision.RUN
+    assert tv1["feedback_id"] not in {r["feedback_id"] for r in outcome.step_results[0].result.data}
+
+
 def test_similar_by_code_without_code_filter_is_not_supported():
     orchestrator, _, executor = build([plan_json(intent="LOOKUP_SIMILAR")])
     outcome = orchestrator.handle(turn("tìm phản hồi giống mã TV1-0101"))

@@ -65,6 +65,12 @@ USERS: dict[str, dict] = {
         "display_name": "Suite TV1",
         "unit_ids": [TV1],
     },
+    "tv13": {
+        "username": "suite_tv13",
+        "role": "user",
+        "display_name": "Suite TV1+TV3",
+        "unit_ids": [TV1, TV3],
+    },
 }
 
 # Cấu hình theo mốc (mục "Cấu hình để test đủ các mốc").
@@ -331,8 +337,13 @@ CASES: list[Case] = [
         "Tìm phản hồi về zzzqqq", not_status("error"), reason("NO_MATCH"),
     )]),
     Case("27", "M3", "Tra theo mã", [T(
-        "Tra phản hồi mã 206501", not_status("error"), reason("LOOKUP_BY_CODE_UNAVAILABLE"),
-        no_technical_keys(),
+        "Tra phản hồi mã 206501", status("ok"), intent("LOOKUP_FEEDBACK"),
+        no_reason("LOOKUP_BY_CODE_UNAVAILABLE"), block("table"), quotes(1),
+        text_contains("206501", "Led bulb 50w"), no_technical_keys(),
+    )]),
+    Case("27b", "M3", "Tra theo mã không tồn tại", [T(
+        "Tra phản hồi mã 999999", not_status("error"), reason("CODE_NOT_FOUND"),
+        text_contains("999999"), no_technical_keys(),
     )]),
     # ── M4 — text2sql ──
     Case("28", "M4", "Sản phẩm bị Báo lỗi nhiều nhất tháng 8", [T(
@@ -374,6 +385,10 @@ CASES: list[Case] = [
         "Truyền thống Vùng 2 có bao nhiêu vấn đề?",
         reason("UNAUTHORIZED_SCOPE"), _no_data_blocks(),
     )], user="tv1"),
+    Case("34b", "M4-quyền", "User Vùng 1+3 hỏi tổng tháng 8 (bảo mật)", [T(
+        "Tháng 8/2026 có bao nhiêu vấn đề?",
+        status("ok", "partial"), kpi("total_issues", 1102), nowhere(TV2),
+    )], user="tv13", note="1102 = Vùng 1 (673) + Vùng 3 (429); 2284 là lộ số của mọi đơn vị."),
     # ── M5 — báo cáo, xuất Excel ──
     Case("35", "M5", "Báo cáo ngày", [T(
         "Báo cáo ngày 05/09/2026",
@@ -382,7 +397,7 @@ CASES: list[Case] = [
     )]),
     Case("36", "M5", "Báo cáo tuần", [T(
         "Báo cáo tuần", not_status("error"), intent("REPORT_WEEKLY"), report_sections(5),
-    )], note="Dữ liệu dừng ở 05/09/2026 nên tuần hiện tại rỗng một cách hợp lệ."),
+    )], note="Không nêu tuần thì lấy tuần trước đủ 7 ngày (thứ Hai–Chủ nhật), đã chốt 20/10."),
     Case("37", "M5", "Báo cáo tháng 6", [T(
         "Báo cáo tháng 6/2026",
         status("ok", "partial"), intent("REPORT_CUSTOM"), report_range("2026-06-01", "2026-06-30"),

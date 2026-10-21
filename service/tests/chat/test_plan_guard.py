@@ -502,24 +502,6 @@ def test_open_start_date_asks_for_end_date(guard):
     assert "đến ngày" in plan.message
 
 
-def test_numeric_code_lookup_is_not_supported(guard):
-    """Ca 27: mã thật là số thuần; không lộ tên khoá issue_code."""
-    plan = guard.check(
-        make_output(
-            intent=Intent.LOOKUP_FEEDBACK,
-            function_name="get_issues",
-            params={"issue_code": "206501"},
-        ),
-        make_query("Tra phản hồi mã 206501"),
-        ADMIN,
-    )
-    assert (plan.decision, plan.reason) == (
-        Decision.NOT_SUPPORTED,
-        Reason.LOOKUP_BY_CODE_UNAVAILABLE,
-    )
-    assert "issue_code" not in (plan.message or "")
-
-
 def test_unknown_param_name_never_reaches_the_user(guard):
     """Ca 20-M1: tham số Planner tự chế được gọi bằng tên tiếng Việt."""
     plan = guard.check(
