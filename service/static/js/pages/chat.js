@@ -567,6 +567,7 @@ window.ChatPage = (() => {
         ChatBlocks.renderEvent(view, { type: 'commentary', data: { text: message.content } }, {});
       }
       if (meta.truncated_for_storage) ChatBlocks.renderNote(view, 'Bảng đã được rút gọn khi lưu');
+      if (meta.persist_degraded) ChatBlocks.renderNote(view, 'Bảng và biểu đồ của câu trả lời này không lưu được');
       ChatBlocks.renderEvent(view, { type: 'done', data: { status: meta.done_status || 'ok' } }, {});
       ChatState.trackAnswer(answerId, { done: true });
       lastUser = null;

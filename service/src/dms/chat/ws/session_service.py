@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import time
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -51,6 +52,8 @@ class SessionNotFound(LookupError):
 class SessionServiceConfig:
     metadata_max_bytes: int = 262144
     ttl_days: int = SESSION_TTL_DAYS
+    # Chờ giữa các lần thử lại khi lưu câu trả lời lỗi (SQLite "database is locked").
+    persist_retry_delays: tuple[float, ...] = (0.2, 0.5)
 
     @classmethod
     def from_settings(cls, settings: Settings) -> SessionServiceConfig:
@@ -133,12 +136,23 @@ class ChatSessionService:
         )
 
     def persist_turn(self, record: TurnRecord) -> None:
-        """Finalizer của runner; lỗi chỉ ghi log, không ảnh hưởng câu trả lời đã stream."""
+        """Finalizer của runner; lỗi chỉ ghi log, không ảnh hưởng câu trả lời đã stream.
+
+        ``done`` đã gửi nên không còn báo được người dùng; vì vậy cố hết sức giữ lượt trong lịch
+        sử (QA-046): thử lại khi DB bận, và nếu metadata làm hỏng việc lưu thì lưu câu trả lời
+        với metadata rút gọn (mất khối dữ liệu và plan để xuất lại, nhưng còn nội dung).
+        """
         try:
             metadata = self.build_metadata(record)
-            self.store.add_message(
-                record.session_id, MessageRole.ASSISTANT, record.summary, metadata=metadata
-            )
+            error = self._add_assistant(record, metadata, retry=True)
+        except Exception as exc:  # metadata không dựng được
+            error = exc
+        if error is not None:
+            if self._add_assistant(record, self._minimal_metadata(record), retry=False) is not None:
+                self._log_persist(record, error, "chat_persist_failed", stage="message")
+                return
+            self._log_persist(record, error, "chat_persist_degraded", stage="message")
+        try:
             # Hạn phiên trượt (b11 D10): mỗi lượt hoàn tất gia hạn thêm CHAT_SESSION_TTL_DAYS.
             expires_at = (self._now() + timedelta(days=self.config.ttl_days)).isoformat()
             if record.outcome is not None:
@@ -150,15 +164,47 @@ class ChatSessionService:
             else:
                 self.store.update_session(record.session_id, expires_at=expires_at)
         except Exception as exc:
-            logger.error(
-                "chat_persist_failed",
-                extra={
-                    "answer_id": record.answer_id,
-                    "session_id": record.session_id,
-                    "request_id": record.turn.request_id,
-                    "error_type": type(exc).__name__,
-                },
-            )
+            self._log_persist(record, exc, "chat_persist_failed", stage="session")
+
+    def _add_assistant(
+        self, record: TurnRecord, metadata: dict[str, Any], *, retry: bool
+    ) -> Exception | None:
+        """Lưu câu trả lời; trả lỗi của lần thử cuối, hoặc None nếu đã lưu được."""
+        delays = self.config.persist_retry_delays if retry else ()
+        error: Exception | None = None
+        for attempt in range(len(delays) + 1):
+            if attempt:
+                time.sleep(delays[attempt - 1])
+            try:
+                self.store.add_message(
+                    record.session_id, MessageRole.ASSISTANT, record.summary, metadata=metadata
+                )
+                return None
+            except Exception as exc:
+                error = exc
+        return error
+
+    @staticmethod
+    def _minimal_metadata(record: TurnRecord) -> dict[str, Any]:
+        return {
+            "answer_id": record.answer_id,
+            "done_status": record.done_status.value,
+            "persist_degraded": True,
+        }
+
+    @staticmethod
+    def _log_persist(record: TurnRecord, error: Exception, message: str, *, stage: str) -> None:
+        log = logger.error if message == "chat_persist_failed" else logger.warning
+        log(
+            message,
+            extra={
+                "answer_id": record.answer_id,
+                "session_id": record.session_id,
+                "request_id": record.turn.request_id,
+                "stage": stage,
+                "error_type": type(error).__name__,
+            },
+        )
 
     def build_metadata(self, record: TurnRecord) -> dict[str, Any]:
         outcome = record.outcome

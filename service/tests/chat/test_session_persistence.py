@@ -198,10 +198,16 @@ def test_broken_slots_json_falls_back_to_empty(service, store):
     assert service.previous_slots(service.get_owned("alice", session.session_id)).is_empty()
 
 
-def test_persist_failure_is_logged_not_raised(service, store, monkeypatch, caplog):
+NO_WAIT = SessionServiceConfig(persist_retry_delays=(0.0, 0.0))
+
+
+def test_persist_failure_is_logged_not_raised(store, monkeypatch, caplog):
+    service = ChatSessionService(store, config=NO_WAIT)
     session = service.open_for_ask("alice", None, QUESTION)
+    calls = []
 
     def broken(*args, **kwargs):
+        calls.append(kwargs.get("metadata"))
         raise sqlite3.OperationalError("database is locked")
 
     monkeypatch.setattr(store, "add_message", broken)
@@ -209,6 +215,56 @@ def test_persist_failure_is_logged_not_raised(service, store, monkeypatch, caplo
         service.persist_turn(record_for(session.session_id))
 
     assert any(r.getMessage() == "chat_persist_failed" for r in caplog.records)
+    # 3 lần với metadata đầy đủ, rồi 1 lần với metadata rút gọn.
+    assert len(calls) == 4 and calls[-1]["persist_degraded"] is True
+
+
+def test_busy_database_is_retried_and_the_answer_kept(store, monkeypatch):
+    """QA-046: DB bận lúc lưu không được làm mất câu trả lời đã stream."""
+    service = ChatSessionService(store, config=NO_WAIT)
+    session = service.open_for_ask("alice", None, QUESTION)
+    real_add = store.add_message
+    failures = iter([sqlite3.OperationalError("database is locked")] * 2)
+
+    def flaky(*args, **kwargs):
+        error = next(failures, None)
+        if error is not None:
+            raise error
+        return real_add(*args, **kwargs)
+
+    monkeypatch.setattr(store, "add_message", flaky)
+    service.persist_turn(record_for(session.session_id))
+
+    [message] = service.messages("alice", session.session_id)
+    assert message["content"] == "Tổng quan: 120 phản hồi."
+    assert "persist_degraded" not in message["metadata"]
+    assert [e["type"] for e in message["metadata"]["events"]] == [
+        "data_block",
+        "commentary",
+        "suggestions",
+    ]
+
+
+def test_unbuildable_metadata_still_keeps_the_answer(store, monkeypatch, caplog):
+    service = ChatSessionService(store, config=NO_WAIT)
+    session = service.open_for_ask("alice", None, QUESTION)
+
+    def broken(record):
+        raise TypeError("not JSON serializable")
+
+    monkeypatch.setattr(service, "build_metadata", broken)
+    with caplog.at_level(logging.WARNING, logger="dms-chat"):
+        service.persist_turn(record_for(session.session_id))
+
+    [message] = service.messages("alice", session.session_id)
+    assert message["content"] == "Tổng quan: 120 phản hồi."
+    assert message["metadata"] == {
+        "answer_id": "a1",
+        "done_status": "ok",
+        "persist_degraded": True,
+    }
+    assert any(r.getMessage() == "chat_persist_degraded" for r in caplog.records)
+    assert not any(r.getMessage() == "chat_persist_failed" for r in caplog.records)
 
 
 def test_oversized_metadata_truncates_table_rows(store):
