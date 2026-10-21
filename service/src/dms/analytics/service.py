@@ -7,6 +7,7 @@ import json
 import math
 from calendar import monthrange
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import date
 from typing import Any
@@ -99,6 +100,11 @@ class FeedbackAnalyticsService:
                 row
                 for row in rows
                 if self._matches(row.get("unit_name"), analytics_filter.unit_name)
+            ]
+        if analytics_filter.unit_names is not None:
+            allowed = {unit.strip().casefold() for unit in analytics_filter.unit_names}
+            rows = [
+                row for row in rows if str(row.get("unit_name") or "").strip().casefold() in allowed
             ]
         return rows
 
@@ -288,12 +294,12 @@ class FeedbackAnalyticsService:
         if analytics_filter.compare_from is None or analytics_filter.compare_to is None:
             return None
         comparison_rows = self._rows(
-            AnalyticsFilter(
+            replace(
+                analytics_filter,
                 date_from=analytics_filter.compare_from,
                 date_to=analytics_filter.compare_to,
-                province=analytics_filter.province,
-                district=analytics_filter.district,
-                unit_name=analytics_filter.unit_name,
+                compare_from=None,
+                compare_to=None,
             )
         )
         comparison_value = len(self._issue_codes(comparison_rows))
@@ -899,6 +905,8 @@ class FeedbackAnalyticsService:
         label: str | None,
         product: str | None,
         business_status: str | None,
+        issue_code: str | None = None,
+        unit_names: Sequence[str] | None = None,
     ) -> dict[str, Any]:
         page_rows, total = self.repository.fetch_issues_page(
             analytics_filter,
@@ -909,6 +917,8 @@ class FeedbackAnalyticsService:
             label=label,
             product=product,
             business_status=business_status,
+            issue_code=issue_code,
+            unit_names=unit_names,
         )
         items = [
             {

@@ -263,6 +263,7 @@ class QueryPlan:
     #   page_size: int              — số dòng/trang
     #   period: str                 — kỳ so sánh: month|quarter|year
     #   feedback_id: int            — tra 1 phản hồi cụ thể
+    #   issue_code: str             — tra phản hồi theo mã vấn đề (get_issues)
 
     # ── Pattern 2: Semantic View ──
     sql: str | None = None  # SQL trên scoped view (chỉ SELECT)
@@ -534,6 +535,7 @@ FUNCTION_REGISTRY_SPEC: dict[str, dict[str, Any]] = {
             "label",
             "product",
             "business_status",
+            "issue_code",
             "page",
             "page_size",
         ],

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Sequence
 
 from .input_reader import _canon_lower
 from .models import AnalyticsFilter
@@ -57,8 +58,16 @@ def issues_where(
     label: str | None,
     product: str | None,
     business_status: str | None,
+    issue_code: str | None = None,
+    unit_names: Sequence[str] | None = None,
 ) -> tuple[str, list[object]]:
-    """Use bound values and EXISTS so multi-label rows never inflate totals."""
+    """Use bound values and EXISTS so multi-label rows never inflate totals.
+
+    ``unit_names`` (or ``scope.unit_names``) restricts rows to a set of units (a user scoped
+    to several units); an empty sequence matches nothing.
+    """
+    if unit_names is None:
+        unit_names = scope.unit_names
     conditions = ["r.is_active = 1"]
     params: list[object] = []
     if scope.date_from is not None or scope.date_to is not None:
@@ -77,10 +86,18 @@ def issues_where(
         ("unit_name", unit_name),
         ("product", product),
         ("business_status", business_status),
+        ("issue_code", issue_code),
     ):
         if value is not None:
             conditions.append(f"analytics_fold(r.{field}) = ?")
             params.append(_fold(value))
+    if unit_names is not None:
+        if unit_names:
+            placeholders = ", ".join("?" for _ in unit_names)
+            conditions.append(f"analytics_fold(r.unit_name) IN ({placeholders})")
+            params.extend(_fold(unit) for unit in unit_names)
+        else:
+            conditions.append("1 = 0")
     if label is not None:
         if _fold(label) == "__unlabeled__":
             conditions.append(

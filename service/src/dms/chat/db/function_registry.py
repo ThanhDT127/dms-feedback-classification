@@ -41,7 +41,9 @@ class FunctionRegistry:
         # 1. Ép ràng buộc phân quyền đơn vị
         scoped_params = ScopePolicy.enforce_scope_on_params(params, scope)
 
-        # 2. Xây dựng AnalyticsFilter
+        # 2. Xây dựng AnalyticsFilter. User nhiều đơn vị không nêu đơn vị: lọc theo đúng các đơn
+        # vị được cấp, nếu không mọi hàm thống kê trả số liệu của toàn bộ đơn vị.
+        allowed_units = scoped_params.get("_allowed_unit_ids")
         analytics_filter = AnalyticsFilter(
             date_from=scoped_params.get("date_from"),
             date_to=scoped_params.get("date_to"),
@@ -50,6 +52,7 @@ class FunctionRegistry:
             province=scoped_params.get("province"),
             district=scoped_params.get("district"),
             unit_name=scoped_params.get("unit_name"),
+            unit_names=tuple(allowed_units) if allowed_units is not None else None,
         )
 
         handler = getattr(self, f"_handle_{function_name}", None)
@@ -133,6 +136,7 @@ class FunctionRegistry:
         page = int(params.get("page", 1))
         page_size = int(params.get("page_size", 50))
         effective_unit = flt.unit_name or params.get("unit_name")
+        issue_code = str(params.get("issue_code") or "").strip() or None
 
         res = self.service.issues(
             flt,
@@ -143,6 +147,7 @@ class FunctionRegistry:
             label=params.get("label"),
             product=params.get("product"),
             business_status=params.get("business_status"),
+            issue_code=issue_code,
         )
         return [res]
 

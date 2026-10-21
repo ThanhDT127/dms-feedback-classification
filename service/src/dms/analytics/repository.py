@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from dms.classification_jobs import utc_now_iso
@@ -514,6 +514,8 @@ class FeedbackAnalyticsRepository:
         label: str | None,
         product: str | None,
         business_status: str | None,
+        issue_code: str | None = None,
+        unit_names: Sequence[str] | None = None,
     ) -> tuple[list[dict], int]:
         """Read an issues page and its memberships in one consistent snapshot."""
         where, params = issues_where(
@@ -523,6 +525,8 @@ class FeedbackAnalyticsRepository:
             label=label,
             product=product,
             business_status=business_status,
+            issue_code=issue_code,
+            unit_names=unit_names,
         )
         with self._lock, self._conn() as conn:
             register_issue_functions(conn)

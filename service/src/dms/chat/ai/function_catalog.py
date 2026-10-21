@@ -30,7 +30,9 @@ _REGISTRY_EXTRAS: dict[str, frozenset[str]] = {
     "get_products": frozenset(),
     "get_geography": frozenset(),
     "get_status_backlog": frozenset(),
-    "get_issues": frozenset({"page", "page_size", "source", "label", "product", "business_status"}),
+    "get_issues": frozenset(
+        {"page", "page_size", "source", "label", "product", "business_status", "issue_code"}
+    ),
     "get_priority_issues": frozenset({"limit"}),
     "get_duplicates": frozenset({"page", "page_size"}),
     "get_unit_issue_type_matrix": frozenset(),
@@ -58,6 +60,7 @@ PARAM_LABELS_VI: dict[str, str] = {
     "page": "trang",
     "page_size": "số dòng mỗi trang",
     "limit": "số lượng",
+    "issue_code": "mã vấn đề",
 }
 
 
@@ -238,7 +241,7 @@ FUNCTION_CATALOG: dict[str, FunctionInfo] = {
             "get_issues",
             "Danh sách phản hồi chi tiết, có phân trang",
             BASE_FILTER_PARAMS
-            | {"source", "label", "product", "business_status", "page", "page_size"},
+            | {"source", "label", "product", "business_status", "page", "page_size", "issue_code"},
             "{items[{feedback_id, issue_code, issue_date, source, unit_name, business_status, "
             "content, product, sentiment, labels, source_file_name, source_row_number}], total, "
             "page, page_size, total_pages}",

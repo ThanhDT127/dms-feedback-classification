@@ -40,6 +40,8 @@ class AnalyticsFilter:
     province: str | None = None
     district: str | None = None
     unit_name: str | None = None
+    # A user scoped to several units: keep only these units; an empty tuple matches nothing.
+    unit_names: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
