@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+import threading
+import time
 import types
 
 import pytest
@@ -85,3 +87,27 @@ def test_gemini_retries_once_at_provider_boundary(settings, monkeypatch):
 
     assert response.text == "ok"
     assert len(calls) == settings.max_retry
+
+
+def test_call_with_timeout_returns_without_waiting_for_hung_call(settings):
+    settings.gemini_timeout_seconds = 0.2
+    client = GeminiClient(settings)
+    release = threading.Event()
+
+    started = time.monotonic()
+    with pytest.raises(TimeoutError, match="timed out after 0.2s"):
+        client._call_with_timeout(release.wait, 10)
+    elapsed = time.monotonic() - started
+    release.set()
+
+    assert elapsed < 2
+
+
+def test_call_with_timeout_passes_through_result_and_errors(settings):
+    client = GeminiClient(settings)
+
+    assert client._call_with_timeout(lambda a, b=0: a + b, 1, b=2) == 3
+    with pytest.raises(ValueError, match="bad"):
+        client._call_with_timeout(lambda: (_ for _ in ()).throw(ValueError("bad")))
+    with pytest.raises(TimeoutError, match="sdk deadline"):
+        client._call_with_timeout(lambda: (_ for _ in ()).throw(TimeoutError("sdk deadline")))

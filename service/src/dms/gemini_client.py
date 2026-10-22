@@ -843,15 +843,28 @@ class GeminiClient:
         """Execute *fn* with a timeout from settings.gemini_timeout_seconds.
 
         Raises TimeoutError if the SDK call doesn't return within the limit.
-        Uses a thread so the calling thread (watcher loop) is not blocked forever.
+        Uses a daemon thread so the calling thread (watcher loop) is not blocked forever:
+        a hung SDK call is abandoned rather than joined (``ThreadPoolExecutor`` as a
+        context manager would wait for it on exit and defeat the timeout).
         """
         timeout = getattr(self.settings, "gemini_timeout_seconds", 120.0)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(fn, *args, **kwargs)
+        future: concurrent.futures.Future[Any] = concurrent.futures.Future()
+
+        def run() -> None:
+            if not future.set_running_or_notify_cancel():
+                return
             try:
-                return future.result(timeout=timeout)
-            except concurrent.futures.TimeoutError:
+                future.set_result(fn(*args, **kwargs))
+            except BaseException as exc:  # noqa: BLE001 - re-raised in the caller
+                future.set_exception(exc)
+
+        threading.Thread(target=run, name="gemini-call", daemon=True).start()
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            if not future.done():
                 raise TimeoutError(f"Gemini API call timed out after {timeout}s") from None
+            raise
 
     def _generate_vertex(
         self,
