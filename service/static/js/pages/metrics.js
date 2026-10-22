@@ -211,11 +211,12 @@ window.MetricsPage = (() => {
         if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
         return String(n);
       };
-      const fmtCost = (v) => v > 0 ? '$' + v.toFixed(4) : '—';
+      const fmtCost = (v) => v > 0 ? '$' + (v < 0.0001 ? v.toFixed(6) : v.toFixed(4)) : '$0.0000';
 
       // Insert user stats section before the usage analytics content
+      document.getElementById('user-stats-card')?.remove();
       const userStatsHtml = `
-        <div class="card animate-in" style="margin-bottom:20px;">
+        <div class="card animate-in" id="user-stats-card" style="margin-bottom:20px;">
           <div class="card-header">
             <span class="card-title"><span class="icon">👤</span> Thống kê theo User</span>
           </div>
@@ -241,7 +242,7 @@ window.MetricsPage = (() => {
                     <td style="padding:10px 12px;font-size:13px;text-align:right;color:${u.failed > 0 ? 'var(--accent-red)' : 'var(--text-muted)'};">${u.failed}</td>
                     <td style="padding:10px 12px;font-size:13px;text-align:right;">${u.total_rows.toLocaleString()}</td>
                     <td style="padding:10px 12px;font-size:13px;text-align:right;">${fmtTokens(u.total_tokens || 0)}</td>
-                    <td style="padding:10px 12px;font-size:13px;text-align:right;color:var(--text-muted);">${fmtCost(u.estimated_cost || 0)}</td>
+                    <td style="padding:10px 12px;font-size:13px;text-align:right;color:var(--text-muted);">${fmtCost(Number(u.estimated_cost || 0))}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -365,7 +366,10 @@ window.MetricsPage = (() => {
     const inputTokens = data.total_input_tokens || 0;
     const outputTokens = data.total_output_tokens || 0;
     const avgPerReq = totalRequests > 0 ? Math.round(totalTokens / totalRequests) : 0;
-    const totalCost = data.total_cost || 0;
+    const totalCost = Number(data.total_cost || 0);
+    const fmtTotalCost = totalCost > 0 && totalCost < 0.0001
+      ? totalCost.toFixed(6)
+      : totalCost.toFixed(4);
 
     el.innerHTML = `
       <div class="stat-grid">
@@ -399,7 +403,7 @@ window.MetricsPage = (() => {
         <div class="stat-card purple animate-in animate-in-delay-3">
           <div class="stat-card-top">
             <div>
-              <div class="stat-card-value">$${totalCost.toFixed(4)}</div>
+              <div class="stat-card-value">$${fmtTotalCost}</div>
               <div class="stat-card-label">Chi phí ước tính</div>
             </div>
             <div class="stat-card-icon">💲</div>

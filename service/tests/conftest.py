@@ -36,6 +36,7 @@ def default_jwt_secret(monkeypatch):
         "JWT_SECRET_KEY",
         "test-secret-key-that-is-at-least-32-bytes-long",
     )
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
 
 def apply_auth_overrides(app, *, user: dict | None = None, admin: dict | None = None):
@@ -72,6 +73,7 @@ class DummyAuthProvider:
 @pytest.fixture
 def settings(tmp_path: Path, monkeypatch) -> Settings:
     s = Settings(
+        _env_file=None,
         azure_tenant_id="tenant",
         azure_client_id="client",
         azure_client_secret="secret",
@@ -87,6 +89,7 @@ def settings(tmp_path: Path, monkeypatch) -> Settings:
         jwt_secret_key="test-secret-key-that-is-at-least-32-bytes-long",
     )
     monkeypatch.setattr("dms.settings.get_settings", lambda: s)
+    monkeypatch.setattr("dms.web.deps.get_settings", lambda: s)
     return s
 
 

@@ -186,7 +186,18 @@ class GeminiChatGateway:
 
     @property
     def model(self) -> str:
+        if self.settings.gemini_backend == "gateway":
+            return self.settings.gateway_model
         return self.settings.gemini_model
+
+    def _gateway_identity(self, call_type: str) -> dict[str, Any]:
+        if self.settings.gemini_backend != "gateway":
+            return {}
+        context = request_context.current()
+        return {
+            "actor": context.username if context is not None else self.settings.gateway_system_user,
+            "operation": call_type,
+        }
 
     # ── JSON ──
 
@@ -194,7 +205,7 @@ class GeminiChatGateway:
         self, prompt: str, *, call_type: str, system_instruction: str | None = None
     ) -> LLMResult:
         started = time.monotonic()
-        extra: dict[str, Any] = {}
+        extra: dict[str, Any] = self._gateway_identity(call_type)
         if system_instruction is not None:
             extra["system_instruction"] = system_instruction
         try:
@@ -203,13 +214,19 @@ class GeminiChatGateway:
             self._record(call_type, {}, _elapsed_ms(started), success=False)
             raise
         latency_ms = _elapsed_ms(started)
-        usage = {str(k): int(v or 0) for k, v in (getattr(response, "usage", None) or {}).items()}
-        self._record(call_type, usage, latency_ms, success=True)
+        # Gateway usage can also contain nested provider details; the chat contract is numeric.
+        usage = {
+            str(k): int(v or 0)
+            for k, v in (getattr(response, "usage", None) or {}).items()
+            if isinstance(v, (int, float)) or v is None
+        }
+        actual_model = getattr(response, "model_actual", None) or self.model
+        self._record(call_type, usage, latency_ms, success=True, model=actual_model)
         return LLMResult(
             text=str(getattr(response, "text", "") or ""),
             usage=usage,
             latency_ms=latency_ms,
-            model=self.model,
+            model=actual_model,
         )
 
     # ── Stream ──
@@ -230,29 +247,39 @@ class GeminiChatGateway:
                 system_instruction=system_instruction,
                 temperature=temperature,
                 max_output_tokens=max_output_tokens,
+                **self._gateway_identity(call_type),
             )
         except Exception:
             self._record(call_type, {}, _elapsed_ms(started), success=False)
             raise
 
         def on_finish(usage: Mapping[str, int], success: bool) -> None:
-            self._record(call_type, dict(usage), _elapsed_ms(started), success=success)
+            self._record(
+                call_type, dict(usage), _elapsed_ms(started), success=success, model=inner.model
+            )
 
         return LLMStream(inner, on_finish=on_finish)
 
     # ── Usage ──
 
     def _record(
-        self, call_type: str, usage: Mapping[str, int], duration_ms: int, *, success: bool
+        self,
+        call_type: str,
+        usage: Mapping[str, int],
+        duration_ms: int,
+        *,
+        success: bool,
+        model: str | None = None,
     ) -> None:
         prompt_tokens = int(usage.get("prompt_tokens", 0))
         completion_tokens = int(usage.get("completion_tokens", 0))
         total_tokens = int(usage.get("total_tokens", prompt_tokens + completion_tokens))
-        cost = calculate_cost(self.model, prompt_tokens, completion_tokens, self._pricing)
+        model = model or self.model
+        cost = calculate_cost(model, prompt_tokens, completion_tokens, self._pricing)
         if self._usage is not None:
             try:
                 self._usage.record(
-                    model=self.model,
+                    model=model,
                     call_type=call_type,
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
@@ -274,7 +301,7 @@ class GeminiChatGateway:
                 request_id=context.request_id,
                 session_id=context.session_id,
                 call_type=call_type,
-                model=self.model,
+                model=model,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 total_tokens=total_tokens,

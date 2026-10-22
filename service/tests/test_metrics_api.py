@@ -397,3 +397,108 @@ def test_daily_metrics_includes_success_and_failed_counts(settings, api_client, 
     assert sum(data["failed_counts"]) >= 1
     # There should be at least some success counts
     assert sum(data["success_counts"]) >= 2
+
+
+def test_usage_tracker_backfills_gateway_model_cost_and_user_stats(settings, monkeypatch):
+    """Gateway model usage logs with zero cost are backfilled and reflected in user & usage stats."""
+    import json as _json
+
+    settings.ensure_runtime_dirs()
+    from dms.classification_jobs import ClassificationJobStore
+    from dms.usage_tracker import DEFAULT_MODEL_PRICING, UsageTracker, calculate_cost
+
+    pricing_map = dict(DEFAULT_MODEL_PRICING)
+    pricing_map.update(_json.loads(settings.gemini_model_pricing))
+
+    job_db = settings.work_dir / "classification_jobs.db"
+    store = ClassificationJobStore(job_db)
+    job_id = str(uuid.uuid4())
+    store.create_job(
+        job_id=job_id,
+        owner_username="alice",
+        owner_role="admin",
+        filename="gateway_test.xlsx",
+        mode="classify",
+        input_path="/uploads/gateway_test.xlsx",
+        output_path="/output/gateway_test.xlsx",
+    )
+    store.complete_job(
+        job_id,
+        total_rows=20,
+        rows_done=20,
+        output_path="/output/gateway_test.xlsx",
+        duration_seconds=2.5,
+    )
+
+    tracker = UsageTracker(job_db)
+    # Simulate a gateway attempt recorded before pricing fix (estimated_cost_usd=None)
+    tracker.record_attempt(
+        event_kind="attempt_finished",
+        operation_id="op-1",
+        attempt_id="att-1",
+        actor="alice",
+        job_id=job_id,
+        route="gateway",
+        incident_id=None,
+        model_requested="gemini-flash-lite",
+        model_actual="gemini-flash-lite",
+        outcome="success",
+        usage={"prompt_tokens": 100_000, "completion_tokens": 20_000, "total_tokens": 120_000},
+        estimated_cost_usd=None,
+        call_type="issue_classify",
+        duration_ms=250,
+    )
+
+    updated = tracker.backfill_missing_costs(pricing_map)
+    assert updated == 1
+
+    expected_cost = calculate_cost("gemini-flash-lite", 100_000, 20_000, pricing_map)
+    assert expected_cost > 0
+
+    usage_summary = tracker.query_usage("day", include_partial=True)
+    assert usage_summary["summary"]["total_tokens"] == 120_000
+    assert usage_summary["summary"]["total_cost_usd"] == pytest.approx(expected_cost, rel=1e-4)
+
+    user_stats = store.aggregate_stats_by_user()
+    alice = next((u for u in user_stats if u["username"] == "alice"), None)
+    assert alice is not None
+    assert alice["total_tokens"] == 120_000
+    assert alice["estimated_cost"] == pytest.approx(expected_cost, rel=1e-4)
+
+
+def test_reset_failed_retries_web_upload_job_id(settings, monkeypatch):
+    """POST /api/metrics/reset-failed with job:<job_id> re-queues failed web upload job."""
+    settings.ensure_runtime_dirs()
+    from dms.classification_jobs import ClassificationJobStore
+    from dms.web import deps
+
+    input_file = settings.work_dir / "failed_upload.xlsx"
+    input_file.write_bytes(b"dummy")
+
+    store = ClassificationJobStore(settings.work_dir / "classification_jobs.db")
+    job_id = str(uuid.uuid4())
+    store.create_job(
+        job_id=job_id,
+        owner_username="admin",
+        owner_role="admin",
+        filename="failed_upload.xlsx",
+        mode="file",
+        input_path=input_file,
+        output_path=settings.work_dir / "output.xlsx",
+    )
+    store.fail_job(job_id, "Gateway timeout")
+
+    monkeypatch.setattr("dms.web.api.metrics_api._work_dir", lambda: settings.work_dir)
+    monkeypatch.setattr(deps, "get_classification_job_store", lambda: store)
+    monkeypatch.setattr(deps, "get_classification_worker_manager", lambda: None)
+
+    app = create_app()
+    apply_auth_overrides(app)
+    client = TestClient(app)
+
+    resp = client.post("/api/metrics/reset-failed", json={"file_ids": [f"job:{job_id}"]})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["reset_count"] == 1
+    assert job_id in body["retried_jobs"]
+    assert store.get_job(job_id)["status"] == "queued"

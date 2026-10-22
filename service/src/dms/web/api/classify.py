@@ -368,6 +368,32 @@ async def retry_job(request: Request, job_id: str, admin: dict = ADMIN_USER_DEP)
         raise HTTPException(status_code=404, detail="Input file does not exist")
 
     retried = job_store.retry_job(job_id)
+
+    # Sync seen_files.json status if this file was tracked as failed
+    try:
+        import json as _json
+
+        from ...sharepoint_cache import get_sharepoint_list_cache
+        from ...utils import atomic_write_json
+
+        settings = deps.get_settings()
+        work_dir = settings.work_dir if settings else WORK_DIR
+        seen_path = work_dir / "seen_files.json"
+        filename = job.get("filename", "")
+        if filename and seen_path.is_file():
+            seen_data = _json.loads(seen_path.read_text(encoding="utf-8"))
+            updated = False
+            for _fid, info in seen_data.items():
+                if isinstance(info, dict) and info.get("name") == filename:
+                    info["status"] = "processing"
+                    info["failures"] = 0
+                    updated = True
+            if updated:
+                atomic_write_json(seen_path, seen_data)
+                get_sharepoint_list_cache().invalidate("input")
+    except Exception as exc:
+        logger.warning("Could not sync seen_files.json on job retry: %s", exc)
+
     _ensure_worker_started()
     return {
         "message": f"Đã đưa job phân loại vào hàng đợi retry: {job_id}",

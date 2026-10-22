@@ -140,6 +140,46 @@ def test_gateway_runner_does_not_record_client_usage_again(pipeline):
     runner.usage_tracker.record.assert_not_called()
 
 
+def test_gateway_timeout_completes_workbook_through_direct_fallback(
+    pipeline, settings, monkeypatch
+):
+    import requests
+    from test_gateway import Audit
+
+    from dms.gemini_client import GeminiClient, GeminiResponse
+
+    settings.gateway_chat_completions_url = "https://gateway.invalid/v1/chat/completions"
+    settings.gateway_api_key = "synthetic-gateway-key"
+    settings.gateway_model = "gateway-model"
+    settings.gemini_api_key = "synthetic-direct-key"
+    settings.fallback_enabled = True
+    settings.fallback_fail_threshold = 3
+    audit = Audit()
+    client = GeminiClient(settings, usage_tracker=audit)
+    requests_seen = []
+
+    def timeout(*args, **kwargs):
+        requests_seen.append(1)
+        raise requests.exceptions.ReadTimeout("synthetic timeout")
+
+    responses = iter(["1. NONE\n2. NONE", '[{"labels": {}}, {"labels": {}}]'])
+    monkeypatch.setattr(requests.Session, "post", timeout)
+    monkeypatch.setattr(
+        client,
+        "_direct_request",
+        lambda *args: GeminiResponse(next(responses), route="direct_apikey"),
+    )
+    runner, paths = pipeline(client)
+
+    result = runner.run_pipeline(*paths, actor="owner", job_id="timeout-job")
+
+    assert result["processed_rows"] == 2
+    assert paths[1].is_file()
+    assert len(requests_seen) == 1
+    starts = [e for e in audit.events if e["event_kind"] == "attempt_started"]
+    assert [e["route"] for e in starts] == ["gateway", "direct_apikey", "direct_apikey"]
+
+
 def test_legacy_helpers_accept_old_client_signatures_and_fail_soft(settings):
     class LegacyClient:
         def generate(self, prompt):

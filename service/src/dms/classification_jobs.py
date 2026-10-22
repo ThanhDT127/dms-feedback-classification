@@ -741,7 +741,7 @@ class ClassificationJobStore:
             # --- recent files ---
             recent_rows = conn.execute(
                 """
-                SELECT filename, status, completed_at, total_rows, duration_seconds
+                SELECT job_id, filename, status, completed_at, total_rows, duration_seconds, error
                 FROM classification_jobs
                 WHERE status IN (?, ?)
                 ORDER BY COALESCE(completed_at, created_at) DESC
@@ -751,11 +751,13 @@ class ClassificationJobStore:
             ).fetchall()
             recent_files = [
                 {
+                    "job_id": row["job_id"],
                     "filename": row["filename"],
                     "status": "done" if row["status"] == JOB_STATUS_COMPLETED else "failed",
                     "timestamp": row["completed_at"] or "",
                     "total_rows": int(row["total_rows"] or 0),
                     "duration_seconds": float(row["duration_seconds"] or 0),
+                    "last_error": row["error"] or "",
                 }
                 for row in recent_rows
             ]
@@ -894,8 +896,31 @@ class ClassificationJobStore:
             )
 
             if has_usage:
-                rows = conn.execute(
+                usage_cols = {r[1] for r in conn.execute("PRAGMA table_info(gemini_usage_log)")}
+                if "actual_total_tokens" in usage_cols and "actual_cost_usd" in usage_cols:
+                    usage_subquery = """
+                        SELECT
+                            g.job_id,
+                            SUM(COALESCE(g.actual_total_tokens, g.total_tokens, 0)) AS total_tokens,
+                            SUM(COALESCE(g.actual_cost_usd, g.estimated_cost_usd, 0.0)) AS total_cost
+                        FROM gemini_usage_log g
+                        WHERE g.job_id IS NOT NULL
+                          AND COALESCE(g.event_kind, 'legacy') IN ('legacy', 'attempt_finished')
+                        GROUP BY g.job_id
                     """
+                else:
+                    usage_subquery = """
+                        SELECT
+                            g.job_id,
+                            SUM(g.total_tokens) AS total_tokens,
+                            SUM(g.estimated_cost_usd) AS total_cost
+                        FROM gemini_usage_log g
+                        WHERE g.job_id IS NOT NULL
+                        GROUP BY g.job_id
+                    """
+
+                rows = conn.execute(
+                    f"""
                     SELECT
                         j.owner_username,
                         COUNT(DISTINCT j.job_id) AS total_jobs,
@@ -908,17 +933,11 @@ class ClassificationJobStore:
                         ) AS total_rows,
                         COALESCE(SUM(j.duration_seconds), 0.0)
                             AS total_duration_seconds,
-                        COALESCE(u.total_tokens, 0) AS total_tokens,
-                        COALESCE(u.total_cost, 0.0) AS total_cost
+                        COALESCE(SUM(u.total_tokens), 0) AS total_tokens,
+                        COALESCE(SUM(u.total_cost), 0.0) AS total_cost
                     FROM classification_jobs j
                     LEFT JOIN (
-                        SELECT
-                            g.job_id,
-                            SUM(g.total_tokens) AS total_tokens,
-                            SUM(g.estimated_cost_usd) AS total_cost
-                        FROM gemini_usage_log g
-                        WHERE g.job_id IS NOT NULL
-                        GROUP BY g.job_id
+                        {usage_subquery}
                     ) u ON j.job_id = u.job_id
                     GROUP BY j.owner_username
                     ORDER BY total_jobs DESC

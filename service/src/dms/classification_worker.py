@@ -137,10 +137,13 @@ class ClassificationWorkerManager:
 
             if not input_path.is_file():
                 self.job_store.fail_job(job_id, "Input file does not exist")
+                self._sync_seen_files_status(
+                    job, status="failed", error="Input file does not exist"
+                )
                 return
 
-            # Auto-upload input file to SharePoint if enabled
-            if self.settings.upload_input_to_sharepoint:
+            # Auto-upload input file to SharePoint if enabled (skip for reclassify to avoid SP timestamp bump)
+            if self.settings.upload_input_to_sharepoint and job.get("mode") != "reclassify":
                 self._upload_input_to_sharepoint(job, input_path)
 
             if cancellation_check():
@@ -151,9 +154,10 @@ class ClassificationWorkerManager:
 
             if self.analytics_repository is not None:
                 parsed_input = read_feedback_workbook(input_path)
+                source_file_key = self.analytics_repository.get_job_source_file_key(job_id)
                 self.analytics_repository.persist_input_snapshot(
                     job_id=job_id,
-                    source_file_key=f"sha256:{sha256_file(input_path)}",
+                    source_file_key=source_file_key or f"sha256:{sha256_file(input_path)}",
                     source_file_name=job["filename"],
                     records=parsed_input.records,
                     deactivate_absent=False,
@@ -164,6 +168,11 @@ class ClassificationWorkerManager:
                 if self.analytics_repository is not None:
                     self.analytics_repository.mark_job_unfinished_failed(job_id)
                 self.job_store.fail_job(job_id, "PipelineRunner is not ready. Check configuration.")
+                self._sync_seen_files_status(
+                    job,
+                    status="failed",
+                    error="PipelineRunner is not ready. Check configuration.",
+                )
                 return
 
             heartbeat_if_due(force=True)
@@ -252,6 +261,12 @@ class ClassificationWorkerManager:
                 sp_folder=sp_folder,
                 sp_web_url=sp_web_url,
             )
+            self._sync_seen_files_status(
+                job,
+                status="done",
+                total_rows=int(result.get("total_rows", 0) or 0),
+                duration_seconds=float(result.get("duration_seconds", 0) or 0.0),
+            )
         except PipelineCancelled:
             if self.analytics_repository is not None:
                 self.analytics_repository.mark_job_unfinished_failed(job_id)
@@ -276,8 +291,85 @@ class ClassificationWorkerManager:
                         retried.get("retry_count"),
                         self.settings.classification_retry_count,
                     )
+                    return
+                self._sync_seen_files_status(job, status="failed", error=str(exc))
                 return
             self.job_store.fail_job(job_id, str(exc))
+            self._sync_seen_files_status(job, status="failed", error=str(exc))
+
+    def _sync_seen_files_status(
+        self,
+        job: dict,
+        *,
+        status: str,
+        total_rows: int = 0,
+        duration_seconds: float = 0.0,
+        error: str = "",
+    ) -> None:
+        """Keep seen_files.json in sync when a job completes or terminally fails."""
+        import json
+
+        from .sharepoint_cache import get_sharepoint_list_cache
+        from .time_utils import utc_now_iso
+        from .utils import atomic_write_json
+
+        filename = job.get("filename", "")
+        if not filename:
+            return
+        seen_path = self.settings.work_dir / "seen_files.json"
+        seen_data: dict[str, Any] = {}
+        if seen_path.is_file():
+            try:
+                loaded = json.loads(seen_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    seen_data = loaded
+            except Exception as exc:
+                logger.warning("Could not read seen_files.json to sync status: %s", exc)
+                return
+        elif job.get("mode") != "reclassify":
+            return
+
+        matched_keys = [
+            fid
+            for fid, info in seen_data.items()
+            if isinstance(info, dict) and info.get("name") == filename
+        ]
+        if not matched_keys and job.get("mode") == "reclassify":
+            fallback_id = f"local:{filename}"
+            seen_data[fallback_id] = {"name": filename}
+            matched_keys = [fallback_id]
+
+        if not matched_keys:
+            return
+
+        now_iso = utc_now_iso()
+        for fid in matched_keys:
+            info = seen_data[fid]
+            prev_failures = int(info.get("failures", 0) or 0)
+            info["status"] = status
+            if status == "done":
+                if prev_failures > 0:
+                    info["past_failures"] = max(
+                        int(info.get("past_failures", 0) or 0), prev_failures
+                    )
+                info["failures"] = 0
+                info["processed_at"] = now_iso
+                if total_rows:
+                    info["total_rows"] = total_rows
+                if duration_seconds:
+                    info["duration_seconds"] = round(duration_seconds, 2)
+                info.pop("last_error", None)
+            elif status == "failed":
+                info["failures"] = max(1, prev_failures + 1)
+                info["last_attempt"] = now_iso
+                if error:
+                    info["last_error"] = str(error)[:300]
+
+        try:
+            atomic_write_json(seen_path, seen_data)
+            get_sharepoint_list_cache().invalidate()
+        except Exception as exc:
+            logger.warning("Could not write seen_files.json after job sync: %s", exc)
 
     def _upload_output(self, job: dict, output_path: Path) -> tuple[bool, str | None, str | None]:
         try:

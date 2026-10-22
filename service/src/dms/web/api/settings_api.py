@@ -41,15 +41,20 @@ async def get_settings(admin: dict = Depends(get_admin_user)):
         "gateway_api_key",
         "jwt_secret_key",
         "default_admin_password",
+        "teams_webhook_url",
+        "gcp_service_account_json",
         "AZURE_CLIENT_SECRET",
         "GEMINI_API_KEY",
         "GATEWAY_API_KEY",
         "JWT_SECRET_KEY",
         "DEFAULT_ADMIN_PASSWORD",
+        "TEAMS_WEBHOOK_URL",
+        "GCP_SERVICE_ACCOUNT_JSON",
     }
+    secret_keys_lower = {k.lower() for k in secret_keys}
     masked = {}
     for key, value in raw.items():
-        if key in secret_keys and isinstance(value, str):
+        if (key in secret_keys or key.lower() in secret_keys_lower) and isinstance(value, str):
             masked[key] = _mask_secret(value)
         elif isinstance(value, Path):
             masked[key] = str(value)
@@ -223,6 +228,8 @@ MAP = {
     "gcp_project_id": "GCP_PROJECT_ID",
     "location": "GCP_LOCATION",
     "gcp_location": "GCP_LOCATION",
+    "gcp_service_account_json": "GCP_SERVICE_ACCOUNT_JSON",
+    "GCP_SERVICE_ACCOUNT_JSON": "GCP_SERVICE_ACCOUNT_JSON",
     # pipeline tab
     "llm_batch_size": "LLM_BATCH_SIZE",
     "checkpoint_every": "CKPT_EVERY",
@@ -247,6 +254,8 @@ MAP = {
     "notification_recipients_raw": "NOTIFICATION_RECIPIENTS",
     "notify_on_success": "NOTIFY_ON_SUCCESS",
     "notify_on_error": "NOTIFY_ON_ERROR",
+    "teams_webhook_url": "TEAMS_WEBHOOK_URL",
+    "TEAMS_WEBHOOK_URL": "TEAMS_WEBHOOK_URL",
 }
 
 
@@ -276,6 +285,7 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
                     value.startswith("****")
                     or "••" in value
                     or value == "••••••••••••"
+                    or value == "******"
                     or not value.strip()
                 ):
                     # Keep existing value if it was already set

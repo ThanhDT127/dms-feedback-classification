@@ -10,6 +10,26 @@ from dms.analytics.repository import FeedbackAnalyticsRepository
 from dms.classification_jobs import ClassificationJobStore
 
 
+def test_job_source_key_is_stable_and_rejects_ambiguous_snapshots(tmp_path: Path):
+    db_path = tmp_path / "jobs.db"
+    jobs = ClassificationJobStore(db_path)
+    create_job(jobs, "retry-job")
+    repo = FeedbackAnalyticsRepository(db_path)
+    assert repo.get_job_source_file_key("retry-job") is None
+    for key in ("sharepoint-original", "sha256:duplicate"):
+        repo.persist_input_snapshot(
+            job_id="retry-job",
+            source_file_key=key,
+            source_file_name="input.xlsx",
+            records=[make_record(source_row_number=2)],
+            deactivate_absent=False,
+        )
+        if key == "sharepoint-original":
+            assert repo.get_job_source_file_key("retry-job") == key
+    with pytest.raises(ValueError, match="Ambiguous input source keys"):
+        repo.get_job_source_file_key("retry-job")
+
+
 def test_persist_input_creates_current_row_and_immutable_version(tmp_path: Path):
     db_path = tmp_path / "classification_jobs.db"
     jobs = ClassificationJobStore(db_path)
