@@ -22,12 +22,22 @@ DEFAULT_INITIAL_TAIL_BYTES = 64 * 1024
 
 
 def _find_latest_log() -> Path | None:
-    """Find the most recent log file."""
+    """Find the most recent service log file."""
     if not LOG_DIR.is_dir():
         return None
-    log_files = sorted(LOG_DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    service_log = LOG_DIR / "dms-service.jsonl"
+    if service_log.is_file():
+        return service_log
+    log_files = sorted(
+        (p for p in LOG_DIR.glob("*.jsonl") if not p.name.startswith("dms-gateway-")),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
     if log_files:
         return log_files[0]
+    gateway_logs = sorted(LOG_DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if gateway_logs:
+        return gateway_logs[0]
     log_files = sorted(LOG_DIR.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
     return log_files[0] if log_files else None
 
@@ -39,6 +49,11 @@ def _parse_line(line: str) -> dict | None:
         return None
     try:
         data = json.loads(line)
+        if data.get("module") == "dms.gateway" and data.get("msg") in {
+            "attempt_started",
+            "attempt_finished",
+        }:
+            return None
         return {
             "timestamp": data.get("ts", ""),
             "level": data.get("level", "INFO"),

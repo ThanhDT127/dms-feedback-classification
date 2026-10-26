@@ -190,11 +190,19 @@ window.SettingsPage = (() => {
   function renderModelTab() {
     const s = _settings || {};
     const backend = s.gemini_backend || s.backend || s.llm_backend || 'vertex';
-    const model = s.gemini_model || s.model || s.llm_model || '';
-
-    // Normalize backend value for radio buttons
     const isVertex = backend === 'vertex' || backend === 'vertex_ai';
     const isApiKey = backend === 'apikey' || backend === 'api_key';
+    const isGateway = backend === 'gateway';
+    const model = isGateway
+      ? (s.gateway_model || s.gemini_model || s.model || s.llm_model || '')
+      : (s.gemini_model || s.model || s.llm_model || '');
+
+    const modelIds = new Set(
+      (_models || []).map(m => (typeof m === 'string' ? m : m.id || m.name))
+    );
+    const customModelOption = model && !modelIds.has(model)
+      ? `<option value="${esc(model)}" selected>${esc(model)} (Đang cấu hình)</option>`
+      : '';
 
     return `
       <div class="card animate-in" style="max-width:700px;">
@@ -205,7 +213,7 @@ window.SettingsPage = (() => {
         <!-- Backend selection -->
         <div class="form-group">
           <label class="form-label">Backend</label>
-          <div class="radio-group" style="display:flex;gap:20px;margin-top:8px;">
+          <div class="radio-group" style="display:flex;gap:20px;margin-top:8px;flex-wrap:wrap;">
             <label class="radio-item" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
               <input type="radio" name="backend" value="vertex" ${isVertex ? 'checked' : ''} onchange="SettingsPage.onBackendChange()">
               Vertex AI
@@ -214,6 +222,10 @@ window.SettingsPage = (() => {
               <input type="radio" name="backend" value="apikey" ${isApiKey ? 'checked' : ''} onchange="SettingsPage.onBackendChange()">
               API Key
             </label>
+            <label class="radio-item" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="radio" name="backend" value="gateway" ${isGateway ? 'checked' : ''} onchange="SettingsPage.onBackendChange()">
+              AI Gateway
+            </label>
           </div>
         </div>
 
@@ -221,13 +233,15 @@ window.SettingsPage = (() => {
         <div class="form-group">
           <label class="form-label">Model</label>
           <select class="form-select" id="set-model">
+            ${customModelOption}
             ${_models.length > 0
               ? _models.map(m => {
                   const mId = typeof m === 'string' ? m : m.id || m.name;
                   const mName = typeof m === 'string' ? m : m.name || m.id;
-                  return `<option value="${esc(mId)}" ${mId === model ? 'selected' : ''}>${esc(mName)}</option>`;
+                  const mDesc = typeof m === 'object' && m.description ? ` — ${m.description}` : '';
+                  return `<option value="${esc(mId)}" ${mId === model ? 'selected' : ''}>${esc(mName + mDesc)}</option>`;
                 }).join('')
-              : `<option value="${esc(model)}">${esc(model || 'Không có model')}</option>`
+              : (!customModelOption ? `<option value="${esc(model)}">${esc(model || 'Không có model')}</option>` : '')
             }
           </select>
         </div>
@@ -238,6 +252,19 @@ window.SettingsPage = (() => {
             <label class="form-label">API Key</label>
             <input type="password" class="form-input" id="set-apikey" value="" placeholder="${s.gemini_api_key || s.api_key ? '•••••••••••• (Đã cấu hình)' : 'Chưa cấu hình API Key'}">
             <span class="form-hint" style="font-size:11px;color:var(--text-muted);">Key đã được cấu hình ẩn; chỉ có thể nhập mới chứ không thể xem lại</span>
+          </div>
+        </div>
+
+        <!-- Gateway fields -->
+        <div id="gateway-fields" ${!isGateway ? 'class="hidden"' : ''}>
+          <div class="form-group">
+            <label class="form-label">Gateway URL</label>
+            <input type="text" class="form-input" id="set-gateway-url" value="${esc(s.gateway_chat_completions_url || '')}" placeholder="http://apigateway.rangdong.com.vn:50888/v1/chat/completions">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Gateway API Key</label>
+            <input type="password" class="form-input" id="set-gateway-apikey" value="" placeholder="${s.gateway_api_key ? '•••••••••••• (Đã cấu hình)' : 'Chưa cấu hình Gateway API Key'}">
+            <span class="form-hint" style="font-size:11px;color:var(--text-muted);">Để trống nếu muốn giữ nguyên Gateway API Key hiện tại</span>
           </div>
         </div>
 
@@ -262,6 +289,10 @@ window.SettingsPage = (() => {
     const apikeyFields = document.getElementById('apikey-fields');
     if (apikeyFields) {
       apikeyFields.classList.toggle('hidden', backend !== 'apikey');
+    }
+    const gatewayFields = document.getElementById('gateway-fields');
+    if (gatewayFields) {
+      gatewayFields.classList.toggle('hidden', backend !== 'gateway');
     }
   }
 
@@ -306,10 +337,22 @@ window.SettingsPage = (() => {
 
   function gatherModelSettings() {
     const backend = document.querySelector('input[name="backend"]:checked')?.value || 'vertex';
+    const selectedModel = document.getElementById('set-model')?.value;
     const data = {
       backend,
-      model: document.getElementById('set-model')?.value,
+      model: selectedModel,
     };
+    if (backend === 'gateway') {
+      data.gateway_model = selectedModel;
+      const gwUrlEl = document.getElementById('set-gateway-url');
+      if (gwUrlEl && gwUrlEl.value.trim()) {
+        data.gateway_chat_completions_url = gwUrlEl.value.trim();
+      }
+      const gwKeyEl = document.getElementById('set-gateway-apikey');
+      if (gwKeyEl && gwKeyEl.value) {
+        data.gateway_api_key = gwKeyEl.value;
+      }
+    }
     const apiKeyEl = document.getElementById('set-apikey');
     if (apiKeyEl) {
       data.api_key = apiKeyEl.value;

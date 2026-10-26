@@ -42,3 +42,22 @@ def test_connection_reports_direct_route_not_gateway_recovery(monkeypatch):
     result = asyncio.run(settings_api.test_connection(admin={"role": "admin"}))
     assert result["route"] == "direct_vertex"
     assert result["gateway_verified"] is False
+
+
+def test_available_models_include_gemini_3_5_and_3_8_and_pricing():
+    from dms.usage_tracker import DEFAULT_MODEL_PRICING, calculate_cost
+
+    models = asyncio.run(settings_api.get_available_models(admin={"role": "admin"}))
+    model_ids = {m["id"] for m in models}
+    for expected in (
+        "gemini-3.8-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.8-pro",
+        "gemini-3.5-flash-lite",
+        "gemini-3.5-flash",
+        "gemini-3.5-pro",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+    ):
+        assert expected in model_ids
+        assert calculate_cost(expected, 1000, 500, DEFAULT_MODEL_PRICING) > 0

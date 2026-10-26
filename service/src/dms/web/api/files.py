@@ -195,6 +195,7 @@ async def upload_file(
 
     ingested_rows = 0
     ingest_error = None
+    already_classified = False
     try:
         if analytics_repository is None:
             raise RuntimeError("Kho dữ liệu analytics chưa sẵn sàng")
@@ -202,9 +203,36 @@ async def upload_file(
             ingest_managed_workbook, analytics_repository, dest
         )
         ingested_rows = ingest_result.persisted_rows
+        already_classified = getattr(ingest_result, "classified_rows", 0) > 0
     except Exception:
         ingest_error = "Không thể đưa file vào phân tích"
         logger.exception("Không thể đưa file %s vào analytics", dest.name)
+
+    job_id = None
+    classification_queued = False
+    if not already_classified:
+        try:
+            from .. import deps as _deps
+
+            job_store = _deps.get_classification_job_store()
+            if (
+                job_store is not None
+                and Path(job_store.db_path).parent.resolve() == _work_dir().resolve()
+            ):
+                reclassify_res = await _reclassify_input_items(
+                    [SharePointDeleteItem(name=dest.name)],
+                    admin,
+                )
+                queued = reclassify_res.get("queued") or []
+                if queued:
+                    job_id = queued[0].get("job_id")
+                    classification_queued = True
+        except Exception as exc:
+            logger.warning(
+                "Không thể tự động đưa file %s vào hàng đợi phân loại: %s",
+                dest.name,
+                exc,
+            )
 
     get_sharepoint_list_cache().invalidate("input")
 
@@ -214,6 +242,8 @@ async def upload_file(
         "message": f"Đã upload thành công: {dest.name}",
         "ingested_rows": ingested_rows,
         "ingest_error": ingest_error,
+        "job_id": job_id,
+        "classification_queued": classification_queued,
     }
 
 

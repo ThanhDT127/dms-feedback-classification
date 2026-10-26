@@ -148,6 +148,36 @@ async def get_available_models(admin: dict = Depends(get_admin_user)):
     """Trả về danh sách các model Gemini khả dụng."""
     return [
         {
+            "id": "gemini-3.8-flash-lite",
+            "name": "Gemini 3.8 Flash Lite",
+            "description": "Siêu nhanh, tối ưu chi phí thế hệ 3.8",
+        },
+        {
+            "id": "gemini-3.8-flash",
+            "name": "Gemini 3.8 Flash",
+            "description": "Nhanh, thông minh thế hệ mới 3.8",
+        },
+        {
+            "id": "gemini-3.8-pro",
+            "name": "Gemini 3.8 Pro",
+            "description": "Suy luận chuyên sâu, độ chính xác cao nhất thế hệ 3.8",
+        },
+        {
+            "id": "gemini-3.5-flash-lite",
+            "name": "Gemini 3.5 Flash Lite",
+            "description": "Nhanh, tiết kiệm chi phí thế hệ 3.5",
+        },
+        {
+            "id": "gemini-3.5-flash",
+            "name": "Gemini 3.5 Flash",
+            "description": "Cân bằng tốc độ và suy luận thế hệ 3.5",
+        },
+        {
+            "id": "gemini-3.5-pro",
+            "name": "Gemini 3.5 Pro",
+            "description": "Suy luận chuyên sâu thế hệ 3.5",
+        },
+        {
             "id": "gemini-2.5-flash-lite",
             "name": "Gemini 2.5 Flash Lite",
             "description": "Nhanh, tiết kiệm chi phí",
@@ -160,12 +190,22 @@ async def get_available_models(admin: dict = Depends(get_admin_user)):
         {
             "id": "gemini-2.5-pro",
             "name": "Gemini 2.5 Pro",
-            "description": "Chính xác cao nhất",
+            "description": "Chính xác cao",
         },
         {
             "id": "gemini-2.0-flash",
             "name": "Gemini 2.0 Flash",
-            "description": "Phiên bản cũ",
+            "description": "Phiên bản 2.0",
+        },
+        {
+            "id": "gemini-flash-lite",
+            "name": "Gateway Alias: gemini-flash-lite",
+            "description": "Alias model nhẹ trên AI Gateway",
+        },
+        {
+            "id": "gemini-flash",
+            "name": "Gateway Alias: gemini-flash",
+            "description": "Alias model tiêu chuẩn trên AI Gateway",
         },
     ]
 
@@ -223,6 +263,11 @@ MAP = {
     "gemini_model": "GEMINI_MODEL",
     "api_key": "GEMINI_API_KEY",
     "gemini_api_key": "GEMINI_API_KEY",
+    "gateway_chat_completions_url": "GATEWAY_CHAT_COMPLETIONS_URL",
+    "gateway_api_key": "GATEWAY_API_KEY",
+    "gateway_model": "GATEWAY_MODEL",
+    "gateway_allow_insecure_http": "GATEWAY_ALLOW_INSECURE_HTTP",
+    "fallback_enabled": "FALLBACK_ENABLED",
     "gemini_model_pricing": "GEMINI_MODEL_PRICING",
     "project_id": "GCP_PROJECT_ID",
     "gcp_project_id": "GCP_PROJECT_ID",

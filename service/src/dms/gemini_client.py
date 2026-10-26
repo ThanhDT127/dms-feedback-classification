@@ -674,11 +674,13 @@ class GeminiClient:
                 )
             else:
                 error = _transport_error(exc)
+            duration_ms = int((time.monotonic() - start) * 1000)
+            outcome = "unknown" if error.outcome_unknown else "failed"
             self._audit(
                 config,
                 event_kind="attempt_finished",
                 **event,
-                outcome="unknown" if error.outcome_unknown else "failed",
+                outcome=outcome,
                 error_category=error.category,
                 usage=error.usage,
                 estimated_cost_usd=self._estimate_attempt_cost(
@@ -686,7 +688,16 @@ class GeminiClient:
                 ),
                 response_id=error.response_id,
                 model_actual=error.model_actual,
-                duration_ms=int((time.monotonic() - start) * 1000),
+                duration_ms=duration_ms,
+            )
+            logger.warning(
+                "AI request failed: route=%s model=%s category=%s outcome=%s job_id=%s (%dms)",
+                event.get("route"),
+                error.model_actual or fallback_model or "-",
+                error.category,
+                outcome,
+                event.get("job_id") or "-",
+                duration_ms,
             )
             raise error from None
         self._audit(

@@ -1032,6 +1032,7 @@ window.FilesPage = (() => {
     let successCount = 0;
     let failCount = 0;
     let ingestFailCount = 0;
+    let queuedCount = 0;
 
     for (let i = 0; i < files.length; i++) {
       const formData = new FormData();
@@ -1044,6 +1045,9 @@ window.FilesPage = (() => {
           if (pctEl) pctEl.textContent = pct + '%';
         });
         const item = document.getElementById(`upload-item-${i}`);
+        if (result.classification_queued) {
+          queuedCount++;
+        }
         if (result.ingest_error) {
           ingestFailCount++;
           if (item) { item.classList.add('error'); item.querySelector('.progress-pct').textContent = '⚠️'; }
@@ -1066,6 +1070,8 @@ window.FilesPage = (() => {
         Toast.error(`Tải ${successCount}/${files.length} file thành công, ${failCount} thất bại`);
       } else if (ingestFailCount > 0) {
         Toast.error(`${successCount} file đã tải lên nhưng chưa đưa được vào phân tích: ${ingestFailCount} file`);
+      } else if (queuedCount > 0) {
+        Toast.success(`Đã tải ${successCount} file thành công và đưa ${queuedCount} file vào hàng đợi phân loại AI`);
       } else {
         Toast.success(`Đã tải ${successCount} file thành công`);
       }

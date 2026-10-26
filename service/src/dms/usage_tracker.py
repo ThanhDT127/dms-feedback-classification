@@ -89,18 +89,26 @@ _PARTIAL_ACCOUNTING_TOTALS_SQL = ", ".join(
 )
 
 DEFAULT_MODEL_PRICING: dict[str, dict[str, float]] = {
-    "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
-    "gemini-flash": {"input": 0.30, "output": 2.50},
-    "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
-    "gemini-2.5-flash-lite": {"input": 0.025, "output": 0.30},
-    "gemini-flash-lite": {"input": 0.025, "output": 0.30},
+    "gemini-3.8-flash-lite": {"input": 0.20, "output": 1.50},
+    "gemini-3.8-flash": {"input": 0.75, "output": 3.75},
+    "gemini-3.8-pro": {"input": 2.00, "output": 12.00},
+    "gemini-3.5-flash-lite": {"input": 0.30, "output": 2.50},
     "gemini-3.5-flash": {"input": 1.50, "output": 9.00},
+    "gemini-3.5-pro": {"input": 2.00, "output": 12.00},
     "gemini-3.1-flash-lite": {"input": 0.025, "output": 0.10},
+    "gemini-2.5-flash-lite": {"input": 0.025, "output": 0.30},
+    "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+    "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
+    "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
+    "gemini-flash-lite": {"input": 0.025, "output": 0.30},
+    "gemini-flash": {"input": 0.30, "output": 2.50},
+    "gemini-pro": {"input": 1.25, "output": 10.00},
 }
 
 _MODEL_ALIAS_MAP: dict[str, str] = {
     "gemini-flash-lite": "gemini-2.5-flash-lite",
     "gemini-flash": "gemini-2.5-flash",
+    "gemini-pro": "gemini-2.5-pro",
 }
 
 

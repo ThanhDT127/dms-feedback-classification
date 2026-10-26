@@ -40,6 +40,18 @@ def ensure_gateway_logging(log_dir: str | Path) -> None:
         logger.setLevel(logging.INFO)
 
 
+class _ServiceLogFilter(logging.Filter):
+    """Filter out high-frequency gateway attempt audit events from main service log/console."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.name == "dms.gateway" and record.getMessage() in {
+            "attempt_started",
+            "attempt_finished",
+        }:
+            return False
+        return True
+
+
 class JsonFormatter(logging.Formatter):
     """Format log records as JSON lines."""
 
@@ -60,6 +72,14 @@ class JsonFormatter(logging.Formatter):
             "poll_cycle",
             "gemini_retries",
             "status",
+            "outcome",
+            "error_category",
+            "route",
+            "model_requested",
+            "model_actual",
+            "duration_ms",
+            "job_id",
+            "incident_id",
         ):
             val = getattr(record, key, None)
             if val is not None:
@@ -90,8 +110,11 @@ def setup_logging(
     root.setLevel(logging.DEBUG)
     root.handlers.clear()
 
+    service_filter = _ServiceLogFilter()
+
     console_handler = logging.StreamHandler()
     console_handler.setLevel(console_level)
+    console_handler.addFilter(service_filter)
     console_handler.setFormatter(
         logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     )
@@ -105,6 +128,7 @@ def setup_logging(
             encoding="utf-8",
         )
         file_handler.setLevel(file_level)
+        file_handler.addFilter(service_filter)
         file_handler.setFormatter(JsonFormatter())
         root.addHandler(file_handler)
     except PermissionError:

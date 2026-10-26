@@ -395,14 +395,25 @@ async def get_metrics_by_user(admin: dict = Depends(get_admin_user)):
 
 
 def _find_latest_log() -> Path | None:
-    """Find the most recent log file in the logs directory."""
-    if not _log_dir().is_dir():
+    """Find the most recent service log file in the logs directory."""
+    log_dir = _log_dir()
+    if not log_dir.is_dir():
         return None
-    log_files = sorted(_log_dir().glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    service_log = log_dir / "dms-service.jsonl"
+    if service_log.is_file():
+        return service_log
+    log_files = sorted(
+        (p for p in log_dir.glob("*.jsonl") if not p.name.startswith("dms-gateway-")),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
     if log_files:
         return log_files[0]
+    gateway_logs = sorted(log_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if gateway_logs:
+        return gateway_logs[0]
     # Fallback: try .log files
-    log_files = sorted(_log_dir().glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+    log_files = sorted(log_dir.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
     return log_files[0] if log_files else None
 
 
@@ -415,6 +426,11 @@ def _parse_log_line(line: str) -> dict | None:
     # Try JSON-lines format first
     try:
         data = json.loads(line)
+        if data.get("module") == "dms.gateway" and data.get("msg") in {
+            "attempt_started",
+            "attempt_finished",
+        }:
+            return None
         return {
             "timestamp": data.get("ts", ""),
             "level": data.get("level", "INFO"),

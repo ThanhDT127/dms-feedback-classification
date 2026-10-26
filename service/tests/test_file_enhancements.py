@@ -283,3 +283,45 @@ class TestFileEnhancements:
         assert seen_done["sp-item-1"]["status"] == "done"
         assert seen_done["sp-item-1"]["failures"] == 0
         assert seen_done["sp-item-1"]["past_failures"] == 3
+
+    def test_upload_auto_queues_classification_for_unclassified_workbook(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """Uploading a raw Excel file in File Manager automatically queues an AI classification job."""
+        import json
+
+        import dms.web.api.files as files_module
+        from dms.classification_jobs import ClassificationJobStore
+        from dms.web import deps
+        from dms.web.app import create_app
+
+        monkeypatch.setattr(files_module, "WORK_DIR", tmp_path)
+        repository = FeedbackAnalyticsRepository(tmp_path / "classification_jobs.db")
+        store = ClassificationJobStore(tmp_path / "classification_jobs.db")
+        monkeypatch.setattr(deps, "get_classification_job_store", lambda: store)
+        monkeypatch.setattr(deps, "get_classification_worker_manager", lambda: None)
+
+        app = create_app()
+        apply_auth_overrides(app)
+        app.dependency_overrides[files_module.get_feedback_analytics_repository] = lambda: (
+            repository
+        )
+        client = TestClient(app, raise_server_exceptions=True)
+
+        content = io.BytesIO()
+        pd.DataFrame({"Nội dung phản hồi": ["Đèn bị nhấp nháy sau 2 tuần"]}).to_excel(
+            content, index=False
+        )
+
+        resp = client.post(
+            "/api/files/upload",
+            files={"file": ("auto_classify.xlsx", content.getvalue(), "application/octet-stream")},
+        )
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["classification_queued"] is True
+        assert payload["job_id"]
+
+        seen_data = json.loads((tmp_path / "seen_files.json").read_text(encoding="utf-8"))
+        assert seen_data["local:auto_classify.xlsx"]["status"] == "processing"
+
