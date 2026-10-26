@@ -71,7 +71,12 @@ class SqlGenerator:
         ).text
 
     def render_user_prompt(
-        self, request: Mapping[str, Any], filters: Mapping[str, Any], *, question: str
+        self,
+        request: Mapping[str, Any],
+        filters: Mapping[str, Any],
+        *,
+        question: str,
+        valid_values: Mapping[str, Sequence[str]] | None = None,
     ) -> str:
         allowed = [
             f"- {key} = {value}"
@@ -87,6 +92,25 @@ class SqlGenerator:
             "GIÁ TRỊ ĐƯỢC PHÉP",
             *(allowed or ["- (không có bộ lọc)"]),
         ]
+        from ..contract import CLASSIFICATION_LABELS, SENTIMENT_LABELS
+
+        categories: dict[str, Sequence[str]] = {
+            "sentiments": list(SENTIMENT_LABELS),
+            "labels": list(CLASSIFICATION_LABELS),
+        }
+        if valid_values:
+            for k, vals in valid_values.items():
+                if vals:
+                    categories[k] = list(vals)
+        cat_lines: list[str] = []
+        for cat_name in ("sources", "statuses", "sentiments", "labels"):
+            vals = categories.get(cat_name)
+            if vals:
+                cat_lines.append(f"- {cat_name}: {', '.join(str(v) for v in vals)}")
+        if cat_lines:
+            lines.append("GIÁ TRỊ DANH MỤC HỢP LỆ")
+            lines.extend(cat_lines)
+
         if examples:
             lines.append("VÍ DỤ")
             for example in examples:
@@ -96,9 +120,16 @@ class SqlGenerator:
         return "\n".join(lines)
 
     def generate(
-        self, request: Mapping[str, Any], filters: Mapping[str, Any], *, question: str
+        self,
+        request: Mapping[str, Any],
+        filters: Mapping[str, Any],
+        *,
+        question: str,
+        valid_values: Mapping[str, Sequence[str]] | None = None,
     ) -> SqlDraft:
-        prompt = self.render_user_prompt(request, filters, question=question)
+        prompt = self.render_user_prompt(
+            request, filters, question=question, valid_values=valid_values
+        )
         result = self.llm.generate_json(
             prompt, call_type=CALL_TYPE_SQL, system_instruction=self.system_instruction()
         )

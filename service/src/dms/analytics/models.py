@@ -40,6 +40,7 @@ class AnalyticsFilter:
     province: str | None = None
     district: str | None = None
     unit_name: str | None = None
+    unit_names: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)

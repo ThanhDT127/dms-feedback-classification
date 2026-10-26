@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 from collections.abc import Iterable
@@ -17,6 +18,32 @@ from .sql_queries import issues_where, register_issue_functions
 _PENDING = "pending"
 _COMPLETED = "completed"
 _FAILED = "failed"
+
+
+_UUID_PREFIX_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}_(?:output_)?(.+)$"
+)
+
+
+def _expand_candidate_filenames(filenames: Iterable[str]) -> set[str]:
+    """Expand raw input/output/UUID-prefixed filenames into canonical source_file_name candidates."""
+    candidates: set[str] = set()
+    for raw in filenames:
+        name = Path(str(raw or "").strip()).name
+        if not name:
+            continue
+        candidates.add(name)
+        match = _UUID_PREFIX_RE.match(name)
+        if match:
+            stripped = match.group(1).strip()
+            if stripped:
+                candidates.add(stripped)
+        for item in list(candidates):
+            if item.lower().endswith("_output.xlsx") and len(item) > len("_output.xlsx"):
+                stem = item[: -len("_output.xlsx")].strip()
+                if stem:
+                    candidates.add(f"{stem}.xlsx")
+    return candidates
 
 
 class FeedbackAnalyticsRepository:
@@ -72,7 +99,43 @@ class FeedbackAnalyticsRepository:
                     (2, utc_now_iso()),
                 )
             init_cache_revision(conn)
+            self._reconcile_startup_state(conn)
             conn.commit()
+            self._check_and_sync_fts(conn)
+
+    def sync_fts(self) -> int:
+        """Đồng bộ toàn bộ active feedback_records sang FTS5 dual-index."""
+        from dms.chat.db.migrations import apply_chat_migrations, sync_fts_index
+
+        with self._lock, self._conn() as conn:
+            apply_chat_migrations(conn)
+            return sync_fts_index(conn)
+
+    def _check_and_sync_fts(self, conn: sqlite3.Connection | None = None) -> None:
+        """Đồng bộ FTS5 nếu có sự lệch số lượng bản ghi hoặc chưa có FTS."""
+        from dms.chat.db.migrations import apply_chat_migrations, sync_fts_index
+
+        def _do(c: sqlite3.Connection) -> None:
+            has_records = c.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='feedback_records'"
+            ).fetchone()
+            if not has_records:
+                return
+            apply_chat_migrations(c)
+            active_cnt = c.execute(
+                "SELECT COUNT(*) FROM feedback_records WHERE is_active = 1"
+            ).fetchone()[0]
+            fts_cnt = c.execute(
+                "SELECT COUNT(*) FROM feedback_fts_raw"
+            ).fetchone()[0]
+            if active_cnt != fts_cnt:
+                sync_fts_index(c)
+
+        if conn is not None:
+            _do(conn)
+        else:
+            with self._lock, self._conn() as c:
+                _do(c)
 
     @staticmethod
     def _apply_migration_1(conn: sqlite3.Connection) -> None:
@@ -296,7 +359,9 @@ class FeedbackAnalyticsRepository:
 
                 version = conn.execute(
                     """
-                    SELECT feedback_record_version_id, classification_state
+                    SELECT feedback_record_version_id, classification_state,
+                           product, product_line, model, sentiment, brand, bm25_score,
+                           labels_json, classified_at
                     FROM feedback_record_versions
                     WHERE feedback_id = ? AND job_id = ?
                     """,
@@ -344,6 +409,55 @@ class FeedbackAnalyticsRepository:
                             version["feedback_record_version_id"],
                         ),
                     )
+                elif existing is not None and not keep_completed_current:
+                    conn.execute(
+                        """
+                        UPDATE feedback_records
+                        SET last_job_id = ?, product = ?, product_line = ?, model = ?,
+                            sentiment = ?, brand = ?, bm25_score = ?,
+                            classification_state = ?, is_active = 1,
+                            classified_at = ?, updated_at = ?
+                        WHERE feedback_id = ?
+                        """,
+                        (
+                            job_id,
+                            version["product"],
+                            version["product_line"],
+                            version["model"],
+                            version["sentiment"],
+                            version["brand"],
+                            version["bm25_score"],
+                            _COMPLETED,
+                            version["classified_at"] or now,
+                            now,
+                            feedback_id,
+                        ),
+                    )
+                    conn.execute(
+                        "DELETE FROM feedback_labels WHERE feedback_id = ?",
+                        (feedback_id,),
+                    )
+                    try:
+                        saved_labels = json.loads(version["labels_json"] or "[]")
+                    except Exception:
+                        saved_labels = []
+                    if isinstance(saved_labels, list) and saved_labels:
+                        conn.executemany(
+                            """
+                            INSERT OR IGNORE INTO feedback_labels (feedback_id, label, major_group, created_at)
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            [
+                                (
+                                    feedback_id,
+                                    str(item.get("label")),
+                                    item.get("major_group"),
+                                    now,
+                                )
+                                for item in saved_labels
+                                if isinstance(item, dict) and item.get("label")
+                            ],
+                        )
 
             if deactivate_absent:
                 if seen_rows:
@@ -366,6 +480,7 @@ class FeedbackAnalyticsRepository:
                         (now, source_file_key),
                     )
             conn.commit()
+            self._check_and_sync_fts(conn)
         self._cached_analytics_rows = None
         self._cache_source_version = None
 
@@ -477,6 +592,7 @@ class FeedbackAnalyticsRepository:
                         ],
                     )
             conn.commit()
+            self._check_and_sync_fts(conn)
         self._cached_analytics_rows = None
         self._cache_source_version = None
 
@@ -504,6 +620,451 @@ class FeedbackAnalyticsRepository:
             conn.commit()
         self._cached_analytics_rows = None
         self._cache_source_version = None
+
+    def has_active_records_for_source_key(self, source_file_key: str) -> bool:
+        """Return True if at least one active feedback_records row exists for source_file_key."""
+        with self._lock, self._conn() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM feedback_records WHERE source_file_key = ? AND is_active = 1 LIMIT 1",
+                (source_file_key,),
+            ).fetchone()
+        return row is not None
+
+    def _rollback_cancelled_job_locked(
+        self,
+        conn: sqlite3.Connection,
+        job_id: str,
+        now: str,
+    ) -> int:
+        """Roll back or deactivate current records belonging to a cancelled job inside an open transaction."""
+        conn.execute(
+            """
+            UPDATE feedback_record_versions
+            SET classification_state = ?, updated_at = ?
+            WHERE job_id = ? AND classification_state = ?
+            """,
+            (_FAILED, now, job_id, _PENDING),
+        )
+
+        job_row = conn.execute(
+            "SELECT filename FROM classification_jobs WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()
+        filename = str(job_row["filename"]).strip() if job_row and job_row["filename"] else ""
+
+        impacted_rows = conn.execute(
+            """
+            SELECT DISTINCT r.feedback_id
+            FROM feedback_records r
+            LEFT JOIN feedback_record_versions v ON v.feedback_id = r.feedback_id AND v.job_id = ?
+            WHERE r.last_job_id = ? OR v.feedback_id IS NOT NULL
+            """,
+            (job_id, job_id),
+        ).fetchall()
+        impacted_ids = {int(row["feedback_id"]) for row in impacted_rows}
+
+        if filename:
+            has_completed_classify_job = conn.execute(
+                """
+                SELECT 1 FROM classification_jobs
+                WHERE filename = ?
+                  AND job_id != ?
+                  AND status = 'completed'
+                  AND COALESCE(cancellation_requested, 0) = 0
+                  AND mode != 'analytics_ingest'
+                LIMIT 1
+                """,
+                (filename, job_id),
+            ).fetchone()
+            has_other_active_job = conn.execute(
+                """
+                SELECT 1 FROM classification_jobs
+                WHERE filename = ?
+                  AND job_id != ?
+                  AND status IN ('queued', 'running')
+                  AND COALESCE(cancellation_requested, 0) = 0
+                  AND mode != 'analytics_ingest'
+                LIMIT 1
+                """,
+                (filename, job_id),
+            ).fetchone()
+            if not has_completed_classify_job and not has_other_active_job:
+                extra_rows = conn.execute(
+                    "SELECT feedback_id FROM feedback_records WHERE source_file_name = ?",
+                    (filename,),
+                ).fetchall()
+                impacted_ids.update(int(r["feedback_id"]) for r in extra_rows)
+
+        changed = 0
+        for feedback_id in sorted(impacted_ids):
+            prior = conn.execute(
+                """
+                SELECT v.*
+                FROM feedback_record_versions v
+                JOIN classification_jobs j ON j.job_id = v.job_id
+                WHERE v.feedback_id = ?
+                  AND v.job_id != ?
+                  AND v.classification_state = ?
+                  AND j.status = 'completed'
+                  AND COALESCE(j.cancellation_requested, 0) = 0
+                  AND j.mode != 'analytics_ingest'
+                ORDER BY v.feedback_record_version_id DESC
+                LIMIT 1
+                """,
+                (feedback_id, job_id, _COMPLETED),
+            ).fetchone()
+            if prior is not None:
+                conn.execute(
+                    """
+                    UPDATE feedback_records
+                    SET last_job_id = ?, product = ?, product_line = ?, model = ?,
+                        sentiment = ?, brand = ?, bm25_score = ?,
+                        classification_state = ?, is_active = 1,
+                        classified_at = ?, updated_at = ?
+                    WHERE feedback_id = ?
+                    """,
+                    (
+                        prior["job_id"],
+                        prior["product"],
+                        prior["product_line"],
+                        prior["model"],
+                        prior["sentiment"],
+                        prior["brand"],
+                        prior["bm25_score"],
+                        _COMPLETED,
+                        prior["classified_at"],
+                        now,
+                        feedback_id,
+                    ),
+                )
+                conn.execute(
+                    "DELETE FROM feedback_labels WHERE feedback_id = ?",
+                    (feedback_id,),
+                )
+                try:
+                    prior_labels = json.loads(prior["labels_json"] or "[]")
+                except Exception:
+                    prior_labels = []
+                if isinstance(prior_labels, list) and prior_labels:
+                    conn.executemany(
+                        """
+                        INSERT OR IGNORE INTO feedback_labels (feedback_id, label, major_group, created_at)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        [
+                            (
+                                feedback_id,
+                                str(item.get("label")),
+                                item.get("major_group"),
+                                now,
+                            )
+                            for item in prior_labels
+                            if isinstance(item, dict) and item.get("label")
+                        ],
+                    )
+            else:
+                conn.execute(
+                    """
+                    UPDATE feedback_records
+                    SET product = NULL, product_line = NULL, model = NULL,
+                        sentiment = NULL, brand = NULL, bm25_score = NULL,
+                        classification_state = ?, is_active = 0,
+                        classified_at = NULL, updated_at = ?
+                    WHERE feedback_id = ?
+                    """,
+                    (_FAILED, now, feedback_id),
+                )
+                conn.execute(
+                    "DELETE FROM feedback_labels WHERE feedback_id = ?",
+                    (feedback_id,),
+                )
+            changed += 1
+        return changed
+
+    def rollback_cancelled_job(self, job_id: str) -> int:
+        """Deactivate or restore feedback_records affected by a cancelled classification job."""
+        now = utc_now_iso()
+        with self._lock, self._conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            changed = self._rollback_cancelled_job_locked(conn, job_id, now)
+            conn.commit()
+            self._check_and_sync_fts(conn)
+        self._cached_analytics_rows = None
+        self._cache_source_version = None
+        return changed
+
+    def _purge_file_records_locked(
+        self,
+        conn: sqlite3.Connection,
+        filenames: Iterable[str],
+    ) -> int:
+        """Delete analytics records, labels, versions, and ingest jobs for deleted files."""
+        candidates = _expand_candidate_filenames(filenames)
+        if not candidates:
+            return 0
+
+        now = utc_now_iso()
+        placeholders = ", ".join("?" for _ in candidates)
+        candidate_list = sorted(candidates)
+
+        matched_jobs = conn.execute(
+            f"""
+            SELECT job_id, filename, mode, status, input_path, output_path
+            FROM classification_jobs
+            WHERE filename IN ({placeholders})
+            """,
+            candidate_list,
+        ).fetchall()
+
+        all_jobs = conn.execute(
+            "SELECT job_id, filename, mode, status, input_path, output_path FROM classification_jobs"
+        ).fetchall()
+        matched_job_ids: set[str] = {str(r["job_id"]) for r in matched_jobs}
+        ingest_job_ids: set[str] = {
+            str(r["job_id"]) for r in matched_jobs if r["mode"] == "analytics_ingest"
+        }
+
+        for j in all_jobs:
+            in_name = Path(str(j["input_path"] or "")).name
+            out_name = Path(str(j["output_path"] or "")).name
+            j_expanded = _expand_candidate_filenames([j["filename"] or "", in_name, out_name])
+            if j_expanded & candidates:
+                matched_job_ids.add(str(j["job_id"]))
+                if j["filename"]:
+                    candidates.add(str(j["filename"]))
+                if j["mode"] == "analytics_ingest":
+                    ingest_job_ids.add(str(j["job_id"]))
+
+        placeholders = ", ".join("?" for _ in candidates)
+        candidate_list = sorted(candidates)
+
+        feedback_ids: set[int] = set()
+        rows = conn.execute(
+            f"SELECT feedback_id FROM feedback_records WHERE source_file_name IN ({placeholders})",
+            candidate_list,
+        ).fetchall()
+        feedback_ids.update(int(r["feedback_id"]) for r in rows)
+
+        v_rows = conn.execute(
+            f"SELECT DISTINCT feedback_id, job_id FROM feedback_record_versions WHERE source_file_name IN ({placeholders})",
+            candidate_list,
+        ).fetchall()
+        for r in v_rows:
+            feedback_ids.add(int(r["feedback_id"]))
+            matched_job_ids.add(str(r["job_id"]))
+
+        if matched_job_ids:
+            j_placeholders = ", ".join("?" for _ in matched_job_ids)
+            j_list = sorted(matched_job_ids)
+            r_by_job = conn.execute(
+                f"SELECT feedback_id FROM feedback_records WHERE last_job_id IN ({j_placeholders})",
+                j_list,
+            ).fetchall()
+            feedback_ids.update(int(r["feedback_id"]) for r in r_by_job)
+            v_by_job = conn.execute(
+                f"SELECT DISTINCT feedback_id FROM feedback_record_versions WHERE job_id IN ({j_placeholders})",
+                j_list,
+            ).fetchall()
+            feedback_ids.update(int(r["feedback_id"]) for r in v_by_job)
+
+            conn.execute(
+                f"""
+                UPDATE classification_jobs
+                SET status = 'cancelled',
+                    cancellation_requested = 0,
+                    completed_at = COALESCE(completed_at, ?),
+                    updated_at = ?
+                WHERE job_id IN ({j_placeholders}) AND status IN ('queued', 'running')
+                """,
+                (now, now, *j_list),
+            )
+
+        deleted_count = 0
+        if feedback_ids:
+            f_placeholders = ", ".join("?" for _ in feedback_ids)
+            f_list = sorted(feedback_ids)
+            conn.execute(
+                f"DELETE FROM feedback_labels WHERE feedback_id IN ({f_placeholders})",
+                f_list,
+            )
+            conn.execute(
+                f"DELETE FROM feedback_record_versions WHERE feedback_id IN ({f_placeholders})",
+                f_list,
+            )
+            cur = conn.execute(
+                f"DELETE FROM feedback_records WHERE feedback_id IN ({f_placeholders})",
+                f_list,
+            )
+            deleted_count = int(cur.rowcount or len(f_list))
+
+        if ingest_job_ids:
+            i_placeholders = ", ".join("?" for _ in ingest_job_ids)
+            i_list = sorted(ingest_job_ids)
+            conn.execute(
+                f"DELETE FROM feedback_record_versions WHERE job_id IN ({i_placeholders})",
+                i_list,
+            )
+            conn.execute(
+                f"DELETE FROM classification_job_results WHERE job_id IN ({i_placeholders})",
+                i_list,
+            )
+            conn.execute(
+                f"DELETE FROM classification_jobs WHERE job_id IN ({i_placeholders}) AND NOT EXISTS (SELECT 1 FROM feedback_records r WHERE r.last_job_id = classification_jobs.job_id)",
+                i_list,
+            )
+
+        return deleted_count
+
+    def purge_file_records(self, filenames: Iterable[str]) -> int:
+        """Purge all analytics records, versions, and labels associated with deleted files."""
+        with self._lock, self._conn() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            deleted = self._purge_file_records_locked(conn, filenames)
+            conn.commit()
+            self._check_and_sync_fts(conn)
+        self._cached_analytics_rows = None
+        self._cache_source_version = None
+        return deleted
+
+    def reconcile_remote_input_files(
+        self,
+        remote_filenames: Iterable[str],
+        *,
+        seen_filenames: Iterable[str] = (),
+    ) -> int:
+        """Purge active records for files that were previously tracked on SharePoint/web and deleted from SharePoint Input."""
+        remote_set = {Path(str(n or "").strip()).name for n in remote_filenames if str(n or "").strip()}
+        seen_set = {Path(str(n or "").strip()).name for n in seen_filenames if str(n or "").strip()}
+        with self._lock, self._conn() as conn:
+            has_tables = conn.execute(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('feedback_records', 'classification_jobs')"
+            ).fetchone()[0]
+            if int(has_tables) < 2:
+                return 0
+            active_files = [
+                str(r["source_file_name"])
+                for r in conn.execute(
+                    "SELECT DISTINCT source_file_name FROM feedback_records WHERE is_active = 1"
+                ).fetchall()
+                if r["source_file_name"]
+            ]
+            to_purge: list[str] = []
+            for fname in active_files:
+                if fname in remote_set:
+                    continue
+                active_job = conn.execute(
+                    """
+                    SELECT 1 FROM classification_jobs
+                    WHERE filename = ? AND status IN ('queued', 'running') AND COALESCE(cancellation_requested, 0) = 0
+                    LIMIT 1
+                    """,
+                    (fname,),
+                ).fetchone()
+                if active_job is not None:
+                    continue
+                was_tracked = fname in seen_set or (
+                    conn.execute(
+                        """
+                        SELECT 1 FROM classification_jobs
+                        WHERE filename = ? AND mode IN ('watcher', 'single', 'reclassify')
+                        LIMIT 1
+                        """,
+                        (fname,),
+                    ).fetchone()
+                    is not None
+                )
+                if was_tracked:
+                    to_purge.append(fname)
+
+            if not to_purge:
+                return 0
+            conn.execute("BEGIN IMMEDIATE")
+            deleted = self._purge_file_records_locked(conn, to_purge)
+            conn.commit()
+            self._check_and_sync_fts(conn)
+        if deleted:
+            self._cached_analytics_rows = None
+            self._cache_source_version = None
+        return deleted
+
+    def _reconcile_startup_state(self, conn: sqlite3.Connection) -> None:
+        """Self-heal cancelled jobs and deleted work/input files on repository startup."""
+        has_jobs = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='classification_jobs'"
+        ).fetchone()
+        has_records = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='feedback_records'"
+        ).fetchone()
+        if not has_jobs or not has_records:
+            return
+
+        now = utc_now_iso()
+        cancelled_jobs = conn.execute(
+            """
+            SELECT job_id, status, cancellation_requested
+            FROM classification_jobs
+            WHERE status = 'cancelled' OR COALESCE(cancellation_requested, 0) = 1
+            """
+        ).fetchall()
+        for row in cancelled_jobs:
+            jid = str(row["job_id"])
+            if row["status"] != "cancelled" or int(row["cancellation_requested"] or 0) == 1:
+                conn.execute(
+                    """
+                    UPDATE classification_jobs
+                    SET status = 'cancelled',
+                        cancellation_requested = 0,
+                        completed_at = COALESCE(completed_at, ?),
+                        updated_at = ?
+                    WHERE job_id = ?
+                    """,
+                    (now, now, jid),
+                )
+            self._rollback_cancelled_job_locked(conn, jid, now)
+
+        input_dir = self.db_path.parent / "input"
+        seen_path = self.db_path.parent / "seen_files.json"
+        if input_dir.is_dir() and seen_path.is_file():
+            try:
+                local_input_names = {p.name for p in input_dir.iterdir() if p.is_file()}
+            except Exception:
+                local_input_names = set()
+            active_files = [
+                str(r["source_file_name"])
+                for r in conn.execute(
+                    "SELECT DISTINCT source_file_name FROM feedback_records WHERE is_active = 1"
+                ).fetchall()
+                if r["source_file_name"]
+            ]
+            missing_web_files: list[str] = []
+            for fname in active_files:
+                web_job = conn.execute(
+                    """
+                    SELECT 1 FROM classification_jobs
+                    WHERE filename = ? AND mode IN ('single', 'analytics_ingest')
+                    LIMIT 1
+                    """,
+                    (fname,),
+                ).fetchone()
+                if web_job is None:
+                    continue
+                active_job = conn.execute(
+                    """
+                    SELECT 1 FROM classification_jobs
+                    WHERE filename = ? AND status IN ('queued', 'running')
+                    LIMIT 1
+                    """,
+                    (fname,),
+                ).fetchone()
+                if active_job is not None:
+                    continue
+                has_local = fname in local_input_names or any(
+                    n.endswith(f"_{fname}") for n in local_input_names
+                )
+                if not has_local:
+                    missing_web_files.append(fname)
+            if missing_web_files:
+                self._purge_file_records_locked(conn, missing_web_files)
 
     def fetch_current_records(self, *, row: int | None = None) -> list[dict]:
         where = "WHERE source_row_number = ?" if row is not None else ""
@@ -686,3 +1247,15 @@ class FeedbackAnalyticsRepository:
                 """
             ).fetchall()
             return {row["label"]: int(row["cnt"]) for row in rows if row["label"]}
+
+    def get_cache_revision(self) -> int:
+        """Đọc revision hiện tại từ analytics_cache_revision."""
+        try:
+            with self._conn() as conn:
+                row = conn.execute(
+                    "SELECT revision FROM analytics_cache_revision WHERE singleton = 1"
+                ).fetchone()
+                return int(row[0]) if row else 0
+        except Exception:
+            return 0
+

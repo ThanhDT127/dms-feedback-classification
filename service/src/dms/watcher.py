@@ -17,7 +17,7 @@ from .analytics import (
 from .classification_jobs import ClassificationJobStore
 from .cleanup import RuntimeCleanup
 from .config_assets import ConfigAssetSyncService
-from .exceptions import GatewayError
+from .exceptions import GatewayError, PipelineCancelled
 from .metrics import MetricsCollector
 from .notification import NotificationService
 from .pipeline.issue_classifier import get_label_config_snapshot
@@ -289,8 +289,19 @@ class Watcher:
                 )
                 self.job_store.mark_running(watcher_job_id)
 
+            def cancellation_check() -> bool:
+                if self._shutdown_event.is_set():
+                    return True
+                if self.job_store is not None and watcher_job_id is not None:
+                    self.job_store.heartbeat(watcher_job_id)
+                    return self.job_store.is_cancellation_requested(watcher_job_id)
+                return False
+
             logger.info("Downloading: %s", file_name)
             self.sharepoint_client.download_file(file_id, local_input)
+
+            if cancellation_check():
+                raise PipelineCancelled("Job watcher đã được yêu cầu hủy trước khi xử lý.")
 
             if self.analytics_repository is not None and watcher_job_id is not None:
                 parsed_input = read_feedback_workbook(local_input)
@@ -302,6 +313,9 @@ class Watcher:
                     deactivate_absent=True,
                 )
 
+            if cancellation_check():
+                raise PipelineCancelled("Job watcher đã được yêu cầu hủy trước khi chạy pipeline.")
+
             local_output.unlink(missing_ok=True)
             local_ckpt.unlink(missing_ok=True)
 
@@ -312,6 +326,8 @@ class Watcher:
                 step: int | None = None,
                 step_status: str | None = None,
             ) -> None:
+                if cancellation_check():
+                    return
                 if self.job_store is not None and watcher_job_id is not None:
                     self.job_store.update_progress(
                         watcher_job_id,
@@ -320,7 +336,7 @@ class Watcher:
                         step=step,
                         step_status=step_status,
                     )
-                if not new_results:
+                if not new_results or cancellation_check():
                     return
                 if self.analytics_repository is not None and watcher_job_id is not None:
                     batch_results = [
@@ -351,9 +367,13 @@ class Watcher:
                 local_output,
                 local_ckpt,
                 progress_callback=progress_callback,
+                cancellation_check=cancellation_check,
                 job_id=watcher_job_id or file_name,
                 actor="system_watcher" if self.settings.gemini_backend == "gateway" else None,
             )
+
+            if cancellation_check():
+                raise PipelineCancelled("Job watcher đã được yêu cầu hủy trước khi hoàn tất.")
 
             logger.info("Uploading results for: %s", file_name)
             self.sharepoint_client.upload_output(local_output)
@@ -410,6 +430,26 @@ class Watcher:
             )
             logger.info("Completed: %s (%d rows in %.1fs)", file_name, rows, duration)
             return True
+        except PipelineCancelled as cancel_exc:
+            logger.info("Cancelled processing %s: %s", file_name, cancel_exc)
+            if self.analytics_repository is not None and watcher_job_id is not None:
+                self.analytics_repository.rollback_cancelled_job(watcher_job_id)
+            if self.job_store is not None and watcher_job_id is not None:
+                self.job_store.mark_cancelled(
+                    watcher_job_id, "Job đã được hủy ở ranh giới batch an toàn."
+                )
+            old_entry = seen.get(file_id, {})
+            seen[file_id] = {
+                "name": file_name,
+                "status": "cancelled",
+                "failures": int(old_entry.get("failures", 0) or 0),
+                "cancelled_at": utc_now_iso(),
+                "lastModifiedDateTime": file_info.get("lastModifiedDateTime", ""),
+            }
+            self._save_seen(seen)
+            local_output.unlink(missing_ok=True)
+            local_ckpt.unlink(missing_ok=True)
+            return False
         except Exception as exc:
             error_type = type(exc).__name__
             error_msg = f"{error_type}: {exc}"
@@ -592,20 +632,80 @@ class Watcher:
             logger.error("Cannot list SharePoint files: %s", exc)
             return 0
 
+        if self.analytics_repository is not None:
+            try:
+                self.analytics_repository.reconcile_remote_input_files(
+                    [item.get("name", "") for item in remote_files if item.get("name")],
+                    seen_filenames=[
+                        info.get("name", "")
+                        for info in seen.values()
+                        if isinstance(info, dict) and info.get("name")
+                    ],
+                )
+            except Exception as reconcile_exc:
+                logger.warning("Could not reconcile remote input files: %s", reconcile_exc)
+
+        active_job_filenames: set[str] = set()
+        cancelled_job_filenames: set[str] = set()
+        if self.job_store is not None:
+            try:
+                recent_jobs = self.job_store.list_jobs(include_all=True, limit=200)
+                completed_job_filenames = {
+                    str(j.get("filename"))
+                    for j in recent_jobs
+                    if j.get("filename")
+                    and j.get("status") == "completed"
+                    and not j.get("cancellation_requested")
+                    and j.get("mode") != "analytics_ingest"
+                }
+                for j in recent_jobs:
+                    fname = str(j.get("filename") or "")
+                    if not fname or j.get("mode") == "analytics_ingest":
+                        continue
+                    if j.get("status") in ("queued", "running") and not j.get("cancellation_requested"):
+                        active_job_filenames.add(fname)
+                    elif (
+                        j.get("status") == "cancelled" or j.get("cancellation_requested")
+                    ) and fname not in completed_job_filenames:
+                        cancelled_job_filenames.add(fname)
+            except Exception as job_check_exc:
+                logger.warning("Could not inspect job_store in poll_once: %s", job_check_exc)
+
         new_files = []
         for item in remote_files:
             file_id = item["id"]
+            file_name = item.get("name", "")
+            if file_name and file_name in active_job_filenames:
+                continue
             if file_id not in seen:
+                if file_name and file_name in cancelled_job_filenames:
+                    seen[file_id] = {
+                        "name": file_name,
+                        "status": "cancelled",
+                        "failures": 0,
+                        "cancelled_at": utc_now_iso(),
+                        "lastModifiedDateTime": item.get("lastModifiedDateTime", ""),
+                    }
+                    self._save_seen(seen)
+                    continue
                 new_files.append(item)
             elif seen[file_id].get("status") == "retry":
                 new_files.append(item)
-            elif seen[file_id].get("status") == "failed":
-                # Auto-reset if file was modified on SharePoint after it failed
+            elif seen[file_id].get("status") in ("failed", "cancelled"):
+                # Auto-reset if file was modified on SharePoint after it failed/cancelled
                 stored_modified = seen[file_id].get("lastModifiedDateTime", "")
                 remote_modified = item.get("lastModifiedDateTime", "")
-                if remote_modified > stored_modified:
+                if remote_modified and (
+                    (seen[file_id].get("status") == "failed" and remote_modified > stored_modified)
+                    or (
+                        seen[file_id].get("status") == "cancelled"
+                        and stored_modified
+                        and remote_modified > stored_modified
+                    )
+                ):
                     logger.info(
-                        "Auto-resetting failed file %s (modified on SharePoint: %s > %s)",
+                        "Auto-resetting %s file %s (modified on SharePoint: %s > %s)",
+                        seen[file_id].get("status"),
                         item.get("name", file_id),
                         remote_modified,
                         stored_modified,

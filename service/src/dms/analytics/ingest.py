@@ -33,7 +33,11 @@ def ingest_managed_workbook(
     jobs = ClassificationJobStore(repository.db_path)
 
     existing_job = jobs.get_job(job_id, include_results=False)
-    if existing_job is not None and existing_job["status"] == "completed":
+    if (
+        existing_job is not None
+        and existing_job["status"] == "completed"
+        and repository.has_active_records_for_source_key(source_file_key)
+    ):
         return ManagedWorkbookIngestResult(
             job_id=job_id,
             source_file_key=source_file_key,
@@ -60,6 +64,7 @@ def ingest_managed_workbook(
             records=parsed.records,
             deactivate_absent=False,
         )
+        repository.sync_fts()
         jobs.complete_job(
             job_id,
             total_rows=len(parsed.records),

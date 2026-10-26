@@ -330,3 +330,249 @@ def test_mark_job_unfinished_failed_leaves_completed_rows_unchanged(tmp_path: Pa
     assert repo.fetch_versions(job_id="job-1", row=3)[0]["classification_state"] == "failed"
     assert repo.fetch_current_records(row=2)[0]["classification_state"] == "completed"
     assert repo.fetch_current_records(row=3)[0]["classification_state"] == "failed"
+
+
+def test_rollback_cancelled_job_deactivates_same_file_records_and_preserves_other_files(
+    tmp_path: Path,
+):
+    from dms.analytics import AnalyticsFilter, FeedbackAnalyticsService
+
+    db_path = tmp_path / "classification_jobs.db"
+    jobs = ClassificationJobStore(db_path)
+    repo = FeedbackAnalyticsRepository(db_path)
+
+    # 1. Valid completed dataset (e.g. 260401 - TTPA T1-T3.2026.xlsx)
+    jobs.create_job(
+        job_id="job-valid",
+        owner_username="admin",
+        owner_role="admin",
+        filename="260401 - TTPA T1-T3.2026.xlsx",
+        mode="single",
+        input_path="valid.xlsx",
+        output_path="valid_out.xlsx",
+    )
+    repo.persist_input_snapshot(
+        job_id="job-valid",
+        source_file_key="sha256:valid",
+        source_file_name="260401 - TTPA T1-T3.2026.xlsx",
+        records=[
+            make_record(source_row_number=2, issue_code="V-1"),
+            make_record(source_row_number=3, issue_code="V-2"),
+        ],
+        deactivate_absent=False,
+    )
+    jobs.complete_job(
+        "job-valid",
+        total_rows=2,
+        rows_done=2,
+        output_path=tmp_path / "valid_out.xlsx",
+        duration_seconds=1.0,
+    )
+
+    # 2. Admin uploads TTPA 2024.xlsx (source_file_key = sha256:ttpa2024) and cancels it
+    jobs.create_job(
+        job_id="job-admin-cancel",
+        owner_username="admin",
+        owner_role="admin",
+        filename="TTPA 2024.xlsx",
+        mode="single",
+        input_path="ttpa2024.xlsx",
+        output_path="ttpa2024_out.xlsx",
+    )
+    repo.persist_input_snapshot(
+        job_id="job-admin-cancel",
+        source_file_key="sha256:ttpa2024",
+        source_file_name="TTPA 2024.xlsx",
+        records=[
+            make_record(source_row_number=2, issue_code="A-1"),
+            make_record(source_row_number=3, issue_code="A-2"),
+            make_record(source_row_number=4, issue_code="A-3"),
+        ],
+        deactivate_absent=False,
+    )
+    jobs.mark_cancelled("job-admin-cancel")
+
+    # 3. Watcher also picked up TTPA 2024.xlsx (source_file_key = sp-id-ttpa2024) and admin cancels it
+    jobs.create_job(
+        job_id="job-watcher-cancel",
+        owner_username="system_watcher",
+        owner_role="system",
+        filename="TTPA 2024.xlsx",
+        mode="watcher",
+        input_path="ttpa2024.xlsx",
+        output_path="ttpa2024_out.xlsx",
+    )
+    repo.persist_input_snapshot(
+        job_id="job-watcher-cancel",
+        source_file_key="sp-id-ttpa2024",
+        source_file_name="TTPA 2024.xlsx",
+        records=[
+            make_record(source_row_number=2, issue_code="W-1"),
+            make_record(source_row_number=3, issue_code="W-2"),
+            make_record(source_row_number=4, issue_code="W-3"),
+        ],
+        deactivate_absent=True,
+    )
+    jobs.mark_cancelled("job-watcher-cancel")
+
+    service = FeedbackAnalyticsService(repo)
+    assert service.overview(AnalyticsFilter())["total_issues"]["value"] == 8
+
+    repo.rollback_cancelled_job("job-watcher-cancel")
+    assert service.overview(AnalyticsFilter())["total_issues"]["value"] == 2
+
+
+def test_purge_file_records_removes_records_by_input_or_output_filename(tmp_path: Path):
+    from dms.analytics import AnalyticsFilter, FeedbackAnalyticsService
+
+    db_path = tmp_path / "classification_jobs.db"
+    jobs = ClassificationJobStore(db_path)
+    repo = FeedbackAnalyticsRepository(db_path)
+
+    jobs.create_job(
+        job_id="job-keep",
+        owner_username="admin",
+        owner_role="admin",
+        filename="keep.xlsx",
+        mode="single",
+        input_path="keep.xlsx",
+        output_path="keep_out.xlsx",
+    )
+    repo.persist_input_snapshot(
+        job_id="job-keep",
+        source_file_key="sha256:keep",
+        source_file_name="keep.xlsx",
+        records=[make_record(source_row_number=2, issue_code="K-1")],
+        deactivate_absent=False,
+    )
+    jobs.create_job(
+        job_id="job-check",
+        owner_username="admin",
+        owner_role="admin",
+        filename="check.xlsx",
+        mode="single",
+        input_path="check.xlsx",
+        output_path="check_out.xlsx",
+    )
+    repo.persist_input_snapshot(
+        job_id="job-check",
+        source_file_key="sha256:check",
+        source_file_name="check.xlsx",
+        records=[
+            make_record(source_row_number=2, issue_code="C-1"),
+            make_record(source_row_number=3, issue_code="C-2"),
+        ],
+        deactivate_absent=False,
+    )
+    repo.apply_batch_results(
+        job_id="job-check",
+        results=[make_result(source_row_number=2, labels=["Báo lỗi"])],
+        minor_to_major={"Báo lỗi": "Sản phẩm"},
+    )
+
+    service = FeedbackAnalyticsService(repo)
+    assert service.overview(AnalyticsFilter())["total_issues"]["value"] == 3
+
+    purged = repo.purge_file_records(["check_output.xlsx"])
+    assert purged == 2
+    assert service.overview(AnalyticsFilter())["total_issues"]["value"] == 1
+    assert repo.fetch_current_labels(row=2) == []
+
+
+def test_startup_reconciliation_cleans_cancelled_jobs_and_deleted_local_inputs(tmp_path: Path):
+    import sqlite3
+
+    from dms.analytics import AnalyticsFilter, FeedbackAnalyticsService
+
+    work_dir = tmp_path / "work"
+    input_dir = work_dir / "input"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    db_path = work_dir / "classification_jobs.db"
+
+    keep_file = input_dir / "keep.xlsx"
+    keep_file.write_bytes(b"keep")
+    deleted_file = input_dir / "check.xlsx"
+    deleted_file.write_bytes(b"check")
+
+    jobs = ClassificationJobStore(db_path)
+    repo = FeedbackAnalyticsRepository(db_path)
+
+    # 1. Active valid job with existing input file
+    jobs.create_job(
+        job_id="job-keep",
+        owner_username="admin",
+        owner_role="admin",
+        filename="keep.xlsx",
+        mode="single",
+        input_path=keep_file,
+        output_path=work_dir / "output" / "keep_out.xlsx",
+    )
+    jobs.complete_job(
+        "job-keep",
+        total_rows=1,
+        rows_done=1,
+        output_path=work_dir / "output" / "keep_out.xlsx",
+        duration_seconds=0.1,
+    )
+    repo.persist_input_snapshot(
+        job_id="job-keep",
+        source_file_key="sha256:keep",
+        source_file_name="keep.xlsx",
+        records=[make_record(source_row_number=2)],
+        deactivate_absent=False,
+    )
+
+    # 2. Completed job whose local input file was deleted from disk before cleanup fix
+    jobs.create_job(
+        job_id="job-deleted",
+        owner_username="admin",
+        owner_role="admin",
+        filename="check.xlsx",
+        mode="single",
+        input_path=deleted_file,
+        output_path=work_dir / "output" / "check_out.xlsx",
+    )
+    jobs.complete_job(
+        "job-deleted",
+        total_rows=2,
+        rows_done=2,
+        output_path=work_dir / "output" / "check_out.xlsx",
+        duration_seconds=0.1,
+    )
+    repo.persist_input_snapshot(
+        job_id="job-deleted",
+        source_file_key="sha256:check",
+        source_file_name="check.xlsx",
+        records=[make_record(source_row_number=2), make_record(source_row_number=3)],
+        deactivate_absent=False,
+    )
+    deleted_file.unlink()
+
+    # 3. Cancelled job whose records were left active before rollback fix
+    jobs.create_job(
+        job_id="job-cancelled",
+        owner_username="system_watcher",
+        owner_role="system",
+        filename="TTPA 2024.xlsx",
+        mode="watcher",
+        input_path=input_dir / "TTPA 2024.xlsx",
+        output_path=work_dir / "output" / "TTPA 2024_output.xlsx",
+    )
+    jobs.mark_running("job-cancelled")
+    repo.persist_input_snapshot(
+        job_id="job-cancelled",
+        source_file_key="sp-ttpa-2024",
+        source_file_name="TTPA 2024.xlsx",
+        records=[make_record(source_row_number=2), make_record(source_row_number=3)],
+        deactivate_absent=True,
+    )
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE classification_jobs SET cancellation_requested = 1 WHERE job_id = 'job-cancelled'"
+        )
+        conn.commit()
+
+    # Re-instantiate repository to trigger _init_db() -> _reconcile_startup_state()
+    reconciled_repo = FeedbackAnalyticsRepository(db_path)
+    service = FeedbackAnalyticsService(reconciled_repo)
+    assert service.overview(AnalyticsFilter())["total_issues"]["value"] == 1

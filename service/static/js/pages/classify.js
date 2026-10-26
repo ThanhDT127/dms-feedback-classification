@@ -319,10 +319,17 @@ window.ClassifyPage = (() => {
     try {
       const job = await API.get(`/classify/jobs/${encodeURIComponent(jobId)}`, { silent: true });
       _currentJob = { ...(_currentJob || {}), ...job };
-      if (isTerminalStatus(job.status)) {
+      if (job.cancellation_requested && job.status === 'running') {
+        _currentJob.status = 'cancelled';
+      }
+      if (isTerminalStatus(_currentJob.status)) {
         if (_wsClient) {
           _wsClient.close();
           _wsClient = null;
+        }
+        if (_currentJob.status === 'cancelled') {
+          sessionStorage.removeItem('classify_active_job_id');
+          sessionStorage.setItem('classify_reset', '1');
         }
         restoreActiveJobUI(_currentJob);
       }
@@ -1021,6 +1028,19 @@ window.ClassifyPage = (() => {
           restoreActiveJobUI(_currentJob);
         }
       },
+      onCancelled: (data) => {
+        console.log('[WS] Cancelled:', data);
+        if (_currentJob) {
+          _currentJob = { ..._currentJob, ...data, status: 'cancelled', terminal: true };
+          restoreActiveJobUI(_currentJob);
+        }
+        sessionStorage.removeItem('classify_active_job_id');
+        sessionStorage.setItem('classify_reset', '1');
+        if (_wsClient) {
+          _wsClient.close();
+          _wsClient = null;
+        }
+      },
       onError: (data) => {
         console.error('[WS] Error:', data);
         const errMsg = data.error || data.message;
@@ -1073,13 +1093,14 @@ window.ClassifyPage = (() => {
 
       const activeJob = jobs
         .filter(j => {
-          if (j.mode === 'batch') return false;
+          if (j.mode === 'batch' || j.mode === 'watcher' || j.mode === 'analytics_ingest') return false;
+          if (j.cancellation_requested || j.status === 'cancelled') return false;
           if (wasReset) {
             return j.status === 'queued' || j.status === 'running';
           }
           // Always restore active or queued jobs
           if (j.status === 'queued' || j.status === 'running') return true;
-          // Restore completed/error/cancelled ONLY if they match the active job started in this session
+          // Restore completed/error ONLY if they match the active job started in this session
           if (activeJobId && (j.job_id === activeJobId || j.id === activeJobId)) return true;
           return false;
         })
@@ -1292,6 +1313,8 @@ window.ClassifyPage = (() => {
       try {
         await API.cancelJob(jobId);
         _currentJob = { ..._currentJob, status: 'cancelled', terminal: true };
+        sessionStorage.removeItem('classify_active_job_id');
+        sessionStorage.setItem('classify_reset', '1');
         restoreActiveJobUI(_currentJob);
       } catch (e) {
         Toast.error('Không thể hủy job: ' + e.message);
@@ -1960,7 +1983,7 @@ window.ClassifyPage = (() => {
       const jobId = job.job_id || job.id;
       const error = job.error_summary || job.error || '';
       const actions = [];
-      if (job.can_cancel || ['queued', 'running'].includes(job.status)) {
+      if ((job.can_cancel || ['queued', 'running'].includes(job.status)) && !job.cancellation_requested) {
         actions.push(`<button class="btn btn-danger btn-sm" onclick="ClassifyPage.cancelAdminJob('${jobId}')">Hủy</button>`);
       }
       if (job.can_retry || ['error', 'cancelled'].includes(job.status)) {
@@ -1986,6 +2009,17 @@ window.ClassifyPage = (() => {
   async function cancelAdminJob(jobId) {
     try {
       await API.cancelJob(jobId);
+      if (sessionStorage.getItem('classify_active_job_id') === jobId) {
+        sessionStorage.removeItem('classify_active_job_id');
+        sessionStorage.setItem('classify_reset', '1');
+      }
+      if (_currentJob && (_currentJob.job_id === jobId || _currentJob.id === jobId)) {
+        if (_wsClient) {
+          _wsClient.close();
+          _wsClient = null;
+        }
+        _currentJob = null;
+      }
       Toast.success('Đã hủy job');
       await loadAdminJobs();
     } catch (e) {

@@ -49,11 +49,21 @@ class TextMatch:
     mention: str
 
 
+SUBSET_MATCH_SCORE = 0.89
+
+
 def _is_contiguous_part(window: Sequence[str], value_tokens: Sequence[str]) -> bool:
     if not phrase_starts(value_tokens, window):
         return False
-    is_suffix = list(value_tokens[-len(window) :]) == list(window)
-    return is_suffix or any(token.isdigit() for token in window)
+    window_text = "".join(window)
+    return len(window) >= 2 or len(window_text) >= 4 or any(token.isdigit() for token in window)
+
+
+def _is_token_subset(window: Sequence[str], value_tokens: Sequence[str]) -> bool:
+    """Tập token của window là tập con của value_tokens (tối thiểu 2 token)."""
+    if len(window) < 2:
+        return False
+    return set(window).issubset(set(value_tokens))
 
 
 def _window_score(window: Sequence[str], value_tokens: Sequence[str]) -> float:
@@ -65,8 +75,11 @@ def _window_score(window: Sequence[str], value_tokens: Sequence[str]) -> float:
         score = 0.0
     else:
         score = fuzz.ratio(window_text, value_text) / 100.0
-    if 2 <= len(window) < len(value_tokens) and _is_contiguous_part(window, value_tokens):
-        score = max(score, PARTIAL_MATCH_SCORE)
+    if 2 <= len(window) < len(value_tokens):
+        if _is_contiguous_part(window, value_tokens):
+            score = max(score, PARTIAL_MATCH_SCORE)
+        elif _is_token_subset(window, value_tokens):
+            score = max(score, SUBSET_MATCH_SCORE)
     return score
 
 
@@ -101,7 +114,7 @@ def find_candidates(
                 if current is None or score > current.score:
                     best[value] = TextMatch(value=value, score=score, mention=" ".join(window))
 
-    ranked = sorted(best.values(), key=lambda m: (-m.score, m.value))
+    ranked = sorted(best.values(), key=lambda m: (-m.score, -len(m.mention), m.value))
     return ranked[:limit]
 
 
@@ -119,6 +132,8 @@ def mention_score(mention: str, value: str) -> float:
         return 1.0
     if phrase_starts(value_tokens, mention_tokens_):
         return PARTIAL_MATCH_SCORE
+    if _is_token_subset(mention_tokens_, value_tokens):
+        return SUBSET_MATCH_SCORE
     mention_text = " ".join(mention_tokens_)
     value_text = " ".join(value_tokens)
     if len(mention_text) < MIN_FUZZY_CHARS or len(value_text) < MIN_FUZZY_CHARS:
@@ -138,5 +153,5 @@ def rank_values(
         for value in values
         if (score := mention_score(mention, value)) >= threshold
     ]
-    matches.sort(key=lambda m: (-m.score, m.value))
+    matches.sort(key=lambda m: (-m.score, -len(m.mention), m.value))
     return matches[:limit]

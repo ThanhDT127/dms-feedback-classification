@@ -234,6 +234,7 @@ def build_chat_services(
             term_stats = CachedTermStats(
                 lambda: load_document_frequencies(analytics),
                 ttl_seconds=float(settings.chat_metadata_ttl_seconds),
+                revision_getter=analytics.get_cache_revision,
             )
 
     buffer = buffer or build_answer_buffer(settings)

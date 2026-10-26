@@ -81,41 +81,157 @@
         "khong sang",
         "chap chon"
       ],
-      "Bảo hành": [
-        "bao hanh"
-      ],
-      "Hàng giả": [
-        "hang gia",
-        "hang nhai"
-      ],
-      "CTKM, giá, cơ chế": [
-        "khuyen mai",
-        "ctkm",
-        "gia ca",
-        "co che"
-      ],
-      "Website": [
-        "website",
-        "trang web"
-      ],
-      "Đề xuất SPM": [
-        "san pham moi",
-        "de xuat spm"
+      "Báo CL tốt": [
+        "bao cl tot",
+        "chat luong tot",
+        "cl tot",
+        "khen chat luong",
+        "hang tot"
       ],
       "Y/c cải tiến": [
-        "cai tien"
+        "y/c cai tien",
+        "yeu cau cai tien",
+        "cai tien",
+        "gop y cai tien"
       ],
-      "Trả thưởng": [
-        "tra thuong"
+      "Đề xuất SPM": [
+        "de xuat spm",
+        "san pham moi",
+        "de xuat san pham moi",
+        "spm"
       ],
       "Bảng giá, Catalogue": [
+        "bang gia catalogue",
         "bang gia",
         "catalogue",
         "catalog"
       ],
       "Bảng biển": [
         "bang bien",
-        "bien quang cao"
+        "bien quang cao",
+        "bien hieu"
+      ],
+      "Kệ bóng, thử đèn,…": [
+        "ke bong thu den",
+        "ke bong",
+        "thu den",
+        "ke trung bay"
+      ],
+      "Khác": [
+        "nhom khac",
+        "van de khac",
+        "loai khac"
+      ],
+      "Tốt/ ko tốt": [
+        "tot ko tot",
+        "tot khong tot",
+        "danh gia tot xau",
+        "co che gia tot"
+      ],
+      "Trả thưởng": [
+        "tra thuong",
+        "tien thuong",
+        "chiet khau thuong"
+      ],
+      "Đề xuất": [
+        "de xuat",
+        "kien nghi",
+        "de nghi"
+      ],
+      "Bảo hành": [
+        "bao hanh",
+        "sua chua",
+        "doi tra bao hanh"
+      ],
+      "HTPP": [
+        "htpp",
+        "he thong phan phoi",
+        "dai ly",
+        "nha phan phoi",
+        "kenh phan phoi"
+      ],
+      "Hàng hoá": [
+        "hang hoa",
+        "thieu hang",
+        "cham giao hang",
+        "ton kho",
+        "giao thieu"
+      ],
+      "Hàng giả": [
+        "hang gia",
+        "hang nhai",
+        "hang kem chat luong"
+      ],
+      "Website": [
+        "website",
+        "trang web",
+        "web"
+      ],
+      "Hãng": [
+        "hang doi thu",
+        "doi thu canh tranh",
+        "nhan hang khac",
+        "thong tin ve hang",
+        "thong tin hang",
+        "ve hang",
+        "van de hang"
+      ],
+      "Hoạt động": [
+        "hoat dong",
+        "hoat dong doi thu",
+        "chuong trinh doi thu"
+      ],
+      "CTKM, giá, cơ chế": [
+        "ctkm gia co che",
+        "khuyen mai",
+        "ctkm",
+        "gia ca",
+        "co che",
+        "gia doi thu"
+      ],
+      "TT SP": [
+        "tt sp",
+        "thong tin san pham",
+        "thong so ky thuat",
+        "thong tin sp"
+      ],
+      "Tin trung lập": [
+        "tin trung lap",
+        "tin rac",
+        "khong phai phan hoi"
+      ]
+    },
+    "major_group": {
+      "Sản phẩm": [
+        "san pham",
+        "nhom san pham"
+      ],
+      "Yêu cầu công cụ BH": [
+        "yeu cau cong cu bh",
+        "cong cu ban hang",
+        "cong cu bh"
+      ],
+      "Giá, cơ chế RD": [
+        "gia co che rd",
+        "co che rd",
+        "gia rd"
+      ],
+      "Dịch vụ": [
+        "dich vu",
+        "nhom dich vu"
+      ],
+      "Hàng giả": [
+        "nhom hang gia"
+      ],
+      "Website": [
+        "nhom website"
+      ],
+      "Đối thủ cạnh tranh": [
+        "doi thu canh tranh",
+        "nhom doi thu"
+      ],
+      "Tin trung lập": [
+        "nhom tin trung lap"
       ]
     }
   },

@@ -376,3 +376,70 @@ def test_last_quotes_come_from_latest_answer_with_quote_block(service, store):
     quotes = HistoryAdapter(store).last_quotes(session.session_id)
     assert [q["feedback_id"] for q in quotes] == [101, 102]
     assert HistoryAdapter(store).last_quotes("missing") == []
+
+
+def test_history_adapter_last_plans_preserves_all_patterns(store):
+    session = store.create_session("alice", "Phiên test plans")
+
+    # Pattern 2: semantic_view
+    store.add_message(
+        session.session_id,
+        "assistant",
+        "Kết quả SQL",
+        metadata={
+            "plans": [
+                {
+                    "pattern": "semantic_view",
+                    "sql": "SELECT unit_name, count(*) FROM v_issues_current_scoped GROUP BY unit_name",
+                    "params": {},
+                }
+            ]
+        },
+    )
+    plans = HistoryAdapter(store).last_plans(session.session_id)
+    assert len(plans) == 1
+    assert plans[0]["pattern"] == "semantic_view"
+    assert "SELECT" in plans[0]["sql"]
+
+    # Pattern 3: fts5_search
+    store.add_message(
+        session.session_id,
+        "assistant",
+        "Kết quả FTS",
+        metadata={
+            "plans": [
+                {
+                    "pattern": "fts5_search",
+                    "fts_query": "đèn led",
+                    "params": {},
+                    "fts_limit": 20,
+                }
+            ]
+        },
+    )
+    plans_fts = HistoryAdapter(store).last_plans(session.session_id)
+    assert len(plans_fts) == 1
+    assert plans_fts[0]["pattern"] == "fts5_search"
+    assert plans_fts[0]["fts_query"] == "đèn led"
+
+    # Pattern 4: json_extract
+    store.add_message(
+        session.session_id,
+        "assistant",
+        "Kết quả Chi tiết",
+        metadata={
+            "plans": [
+                {
+                    "pattern": "json_extract",
+                    "json_filters": {"issue_code": "FB-101"},
+                    "params": {},
+                }
+            ]
+        },
+    )
+    plans_json = HistoryAdapter(store).last_plans(session.session_id)
+    assert len(plans_json) == 1
+    assert plans_json[0]["pattern"] == "json_extract"
+    assert plans_json[0]["json_filters"] == {"issue_code": "FB-101"}
+
+

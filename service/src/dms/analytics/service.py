@@ -100,6 +100,13 @@ class FeedbackAnalyticsService:
                 for row in rows
                 if self._matches(row.get("unit_name"), analytics_filter.unit_name)
             ]
+        if analytics_filter.unit_names:
+            allowed = {u.strip().casefold() for u in analytics_filter.unit_names}
+            rows = [
+                row
+                for row in rows
+                if str(row.get("unit_name") or "").strip().casefold() in allowed
+            ]
         return rows
 
     def filter_options(self, analytics_filter: AnalyticsFilter) -> dict[str, list[str]]:
@@ -107,6 +114,7 @@ class FeedbackAnalyticsService:
         date_scope = AnalyticsFilter(
             date_from=analytics_filter.date_from,
             date_to=analytics_filter.date_to,
+            unit_names=analytics_filter.unit_names,
         )
         province_rows = self._rows(date_scope)
         district_rows = self._rows(
@@ -114,6 +122,7 @@ class FeedbackAnalyticsService:
                 date_from=analytics_filter.date_from,
                 date_to=analytics_filter.date_to,
                 unit_name=analytics_filter.unit_name,
+                unit_names=analytics_filter.unit_names,
             )
         )
         unit_rows = province_rows
@@ -294,6 +303,7 @@ class FeedbackAnalyticsService:
                 province=analytics_filter.province,
                 district=analytics_filter.district,
                 unit_name=analytics_filter.unit_name,
+                unit_names=analytics_filter.unit_names,
             )
         )
         comparison_value = len(self._issue_codes(comparison_rows))
@@ -1060,3 +1070,8 @@ class FeedbackAnalyticsService:
             "invalid_issue_dates": invalid_dates,
             "missing_issue_dates": missing_dates,
         }
+
+    def get_cache_revision(self) -> int:
+        """Lấy revision từ repository."""
+        return self.repository.get_cache_revision()
+

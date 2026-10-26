@@ -61,7 +61,7 @@ MAX_AUDIT_SQL_CHARS = 2000
 FTS_FUNCTION = "fts5_search"
 FTS_FILE_FUNCTION = "fts5_file_lookup"
 CITATION_COLUMNS = ("source_file_name", "source_row_number")
-_ISSUE_CODE = re.compile(r"\b[A-Za-z][A-Za-z0-9]{1,5}-\d{3,}\b")
+_ISSUE_CODE = re.compile(r"\b(?:[A-Za-z][A-Za-z0-9]{1,5}-\d{3,}|\d{5,8})\b")
 _ORDINAL_WORDS = {
     "nhat": 1,
     "dau tien": 1,
@@ -86,8 +86,8 @@ class OrchestratorConfig:
     max_steps: int = MAX_STEPS
     similar_top_terms: int = 8
     fts_max_relax: int = 2
-    # Executor lọc được get_issues theo issue_code (Dev A chưa có ở v1.0 — b08 D6).
-    code_lookup_available: bool = False
+    # Executor lọc được get_issues theo issue_code
+    code_lookup_available: bool = True
     sql_max_repair: int = 2
     # Chế độ báo cáo (b10 D3): nhiều bước hơn và timeout lượt riêng.
     report_max_steps: int = 8
@@ -95,11 +95,14 @@ class OrchestratorConfig:
 
     @classmethod
     def from_settings(cls, settings: Settings) -> OrchestratorConfig:
+        patterns = {p.strip() for p in settings.chat_enabled_patterns.split(",") if p.strip()}
+        code_lookup = "json_extract" in patterns or "sql_template" in patterns
         return cls(
             step_timeout_seconds=settings.chat_step_timeout_seconds,
             turn_timeout_seconds=settings.chat_turn_timeout_seconds,
             similar_top_terms=settings.chat_similar_top_terms,
             fts_max_relax=settings.chat_fts_max_relax,
+            code_lookup_available=code_lookup,
             sql_max_repair=settings.chat_sql_max_repair,
             report_max_steps=int(settings.chat_report_max_steps),
             report_turn_timeout_seconds=float(settings.chat_report_turn_timeout_seconds),
@@ -492,6 +495,135 @@ class ChatOrchestrator:
                     )
                 notices.append(Notice(Reason.SAMPLE_UNAVAILABLE, render(Reason.SAMPLE_UNAVAILABLE)))
 
+        # Multi-step Analytical Enrichment (Milestone 3 / R3.2)
+        analytical_intents = {
+            Intent.OVERVIEW,
+            Intent.DRILL_PRODUCT,
+            Intent.DRILL_UNIT,
+            Intent.DRILL_ISSUE,
+            Intent.TREND,
+            Intent.COMPARISON,
+        }
+        has_quote = (
+            any(s.function_name in ("get_issues", "fts5_search") for s in validated.steps)
+            or any(r.function_name in ("get_issues", "fts5_search") for r in results)
+        )
+        is_sql_template = any(s.pattern == QueryPattern.SQL_TEMPLATE for s in validated.steps)
+        shape = getattr(validated.planner_output, "answer_shape", None)
+        if (
+            validated.intent in analytical_intents
+            and is_sql_template
+            and not has_quote
+            and shape != AnswerShape.NUMBER
+            and results
+            and any(getattr(r.status, "ok", False) for r in results)
+            and len(results) < self.config.max_steps
+        ):
+            sample_index = len(results) + 1
+            step1_params = validated.steps[0].params if validated.steps else {}
+            sample_params: dict[str, Any] = {
+                "page": 1,
+                "page_size": 3,
+            }
+            for k in ("date_from", "date_to", "unit_name", "province", "district"):
+                if step1_params.get(k):
+                    sample_params[k] = step1_params[k]
+
+            def _pick_top_item(raw_items: Any, *keys: str) -> dict[str, Any] | None:
+                if not isinstance(raw_items, list) or not raw_items:
+                    return None
+                first = raw_items[0]
+                candidates = (
+                    first["items"]
+                    if isinstance(first, dict) and isinstance(first.get("items"), list)
+                    else raw_items
+                )
+                ignored = {"chưa xác định", "__unlabeled__", "loại khác", ""}
+                for item in candidates:
+                    if not isinstance(item, dict):
+                        continue
+                    for k in keys:
+                        val = str(item.get(k) or "").strip()
+                        if val and val.casefold() not in ignored:
+                            return item
+                return candidates[0] if candidates and isinstance(candidates[0], dict) else None
+
+            if step1_params.get("product"):
+                sample_params["product"] = step1_params["product"]
+            elif (
+                validated.intent == Intent.DRILL_PRODUCT
+                and results[0].result
+                and results[0].result.data
+            ):
+                top_item = _pick_top_item(results[0].result.data, "product", "label", "name")
+                if isinstance(top_item, dict):
+                    prod = top_item.get("product") or top_item.get("label") or top_item.get("name")
+                    if prod and str(prod).strip().casefold() not in {"chưa xác định", "__unlabeled__"}:
+                        sample_params["product"] = str(prod)
+
+            if step1_params.get("label"):
+                sample_params["label"] = step1_params["label"]
+            elif (
+                validated.intent == Intent.DRILL_ISSUE
+                and results[0].result
+                and results[0].result.data
+            ):
+                top_item = _pick_top_item(results[0].result.data, "label", "issue_type")
+                if isinstance(top_item, dict):
+                    lbl = top_item.get("label") or top_item.get("issue_type")
+                    if lbl and str(lbl).strip().casefold() not in {"chưa xác định", "__unlabeled__"}:
+                        sample_params["label"] = str(lbl)
+
+            if step1_params.get("unit_name"):
+                sample_params["unit_name"] = step1_params["unit_name"]
+            elif (
+                validated.intent == Intent.DRILL_UNIT
+                and results[0].result
+                and results[0].result.data
+            ):
+                top_item = _pick_top_item(results[0].result.data, "unit", "unit_name", "label")
+                if isinstance(top_item, dict):
+                    u = top_item.get("unit") or top_item.get("unit_name") or top_item.get("label")
+                    if u and str(u).strip().casefold() not in {"chưa xác định", "__unlabeled__"}:
+                        sample_params["unit_name"] = str(u)
+
+            sample_step = QueryPlan(
+                pattern=QueryPattern.SQL_TEMPLATE,
+                answer_shape=AnswerShape.NARRATIVE,
+                original_query=query.rewritten_query,
+                function_name="get_issues",
+                params=sample_params,
+            )
+            mark = time.monotonic()
+            timeout_sec = min(3.0, max(0.5, self.config.turn_timeout_seconds - (time.monotonic() - started)))
+            try:
+                sample_result = self._run_step(sample_step, scope, timeout=timeout_sec)
+                duration = _ms_since(mark)
+                timings[f"execute_{sample_index}"] = duration
+                status = self.interpreter.interpret(sample_result, request_id=request_id, step=sample_index)
+                if status.state is StepState.OK or (sample_result and sample_result.data):
+                    results.append(
+                        StepResult(
+                            index=sample_index,
+                            function_name="get_issues",
+                            status=status,
+                            result=sample_result,
+                            duration_ms=duration,
+                            is_sample=True,
+                        )
+                    )
+                    validated = replace(validated, steps=validated.steps + (sample_step,))
+                else:
+                    notices.append(Notice(Reason.SAMPLE_UNAVAILABLE, render(Reason.SAMPLE_UNAVAILABLE)))
+            except Exception as exc:
+                duration = _ms_since(mark)
+                timings[f"execute_{sample_index}"] = duration
+                logger.warning(
+                    "analytical_enrichment_failed",
+                    extra={"request_id": request_id, "error": str(exc)},
+                )
+                notices.append(Notice(Reason.SAMPLE_UNAVAILABLE, render(Reason.SAMPLE_UNAVAILABLE)))
+
         return self._outcome_from(
             request_id, turn, query, validated, step_results=results, notices=notices
         )
@@ -741,7 +873,9 @@ class ChatOrchestrator:
             )
 
         mark = time.monotonic()
-        draft = generator.generate(request, filters, question=query.rewritten_query)
+        draft = generator.generate(
+            request, filters, question=query.rewritten_query, valid_values=context.valid_values
+        )
         while True:
             try:
                 guarded = self.sql_guard.check(draft.sql, context)
@@ -834,18 +968,24 @@ class ChatOrchestrator:
             if not self.config.code_lookup_available:
                 return stop(Decision.NOT_SUPPORTED, Reason.LOOKUP_BY_CODE_UNAVAILABLE)
             lookup = QueryPlan(
-                pattern=QueryPattern.SQL_TEMPLATE,
+                pattern=QueryPattern.JSON_EXTRACT,
                 answer_shape=AnswerShape.LIST,
                 original_query=query.rewritten_query,
-                function_name="get_issues",
-                params={"issue_code": code.group(0).upper()},
+                json_filters={"issue_code": code.group(0).upper()},
             )
             found = self._run_step(
                 lookup,
                 self._execution_scope(turn.scope, validated),
                 self.config.step_timeout_seconds,
             )
-            reference = found.data[0] if found.data else None
+            if found.data:
+                first = found.data[0]
+                if isinstance(first, dict) and "items" in first and isinstance(first["items"], list):
+                    reference = first["items"][0] if first["items"] else None
+                else:
+                    reference = first
+            else:
+                reference = None
         else:
             reference = _quote_by_ordinal(turn.previous_quotes, query.match_text)
             if reference is not None and not _in_scope(reference, turn.scope, validated):
@@ -1082,6 +1222,56 @@ def _plans_to_steps(
     """Dựng lại bước từ ``metadata.plans`` đã lưu; bỏ mục không còn hợp lệ (b10 D7)."""
     steps: list[QueryPlan] = []
     for plan in plans or ():
+        pattern_str = str(plan.get("pattern") or "").lower()
+        if pattern_str == QueryPattern.SEMANTIC_VIEW.value or pattern_str == "semantic_view":
+            sql = str(plan.get("sql") or "")
+            if not sql:
+                continue
+            steps.append(
+                QueryPlan(
+                    pattern=QueryPattern.SEMANTIC_VIEW,
+                    answer_shape=AnswerShape.TABLE,
+                    original_query=original_query or "Xuất dữ liệu",
+                    confidence=1.0,
+                    sql=sql,
+                    params=dict(plan.get("params") or {}),
+                )
+            )
+            continue
+        if pattern_str == QueryPattern.FTS5_SEARCH.value or pattern_str == "fts5_search":
+            fts_query = str(plan.get("fts_query") or "")
+            if not fts_query:
+                continue
+            steps.append(
+                QueryPlan(
+                    pattern=QueryPattern.FTS5_SEARCH,
+                    answer_shape=AnswerShape.LIST,
+                    original_query=original_query or "Xuất dữ liệu",
+                    confidence=1.0,
+                    fts_query=fts_query,
+                    fts_filters=dict(plan.get("fts_filters") or {}),
+                    fts_limit=int(plan.get("fts_limit") or 50),
+                    params=dict(plan.get("params") or {}),
+                )
+            )
+            continue
+        if pattern_str == QueryPattern.JSON_EXTRACT.value or pattern_str == "json_extract":
+            filters = dict(plan.get("json_filters") or {})
+            if not filters:
+                continue
+            steps.append(
+                QueryPlan(
+                    pattern=QueryPattern.JSON_EXTRACT,
+                    answer_shape=AnswerShape.LIST,
+                    original_query=original_query or "Xuất dữ liệu",
+                    confidence=1.0,
+                    json_filters=filters,
+                    json_keys=list(plan.get("json_keys") or []),
+                    params=dict(plan.get("params") or {}),
+                )
+            )
+            continue
+
         name = str(plan.get("function_name") or "")
         if not name or name not in FUNCTION_CATALOG:
             continue

@@ -98,7 +98,7 @@ def create_scoped_views(conn: sqlite3.Connection, scope: UserScope) -> None:
     )
     conn.execute(
         "CREATE TEMP VIEW v_issue_labels_scoped AS "
-        "SELECT l.feedback_id, s.issue_code, l.label, l.major_group "
+        "SELECT l.feedback_id, s.issue_code, s.unit_name, s.issue_date, l.label, l.major_group "
         "FROM main.feedback_labels l JOIN v_issues_current_scoped s ON s.feedback_id = l.feedback_id"
     )
 

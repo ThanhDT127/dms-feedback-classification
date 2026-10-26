@@ -19,7 +19,6 @@ from ...settings import Settings
 from ..ai.semantic_schema import (
     ALIAS_PATTERN,
     DATE_COLUMN,
-    ISSUE_MEASURE_HINT,
     UNIT_COLUMN,
     VIEWS,
     all_forbidden_columns,
@@ -205,6 +204,7 @@ class SqlGuard:
         # 5–6: bảng
         view_aliases: dict[str, str] = {}
         tables: list[str] = []
+        cte_aliases: set[str] = set()
         for table in tree.find_all(exp.Table):
             name = table.name.lower()
             if table.args.get("db") or table.args.get("catalog"):
@@ -214,6 +214,8 @@ class SqlGuard:
             if name.startswith("sqlite_"):
                 raise SqlGuardError(SqlErrorCode.SQL_TABLE_FORBIDDEN, f"bảng hệ thống {name}")
             if name in cte_names:
+                if table.alias:
+                    cte_aliases.add(table.alias.lower())
                 continue
             if name not in VIEWS:
                 raise SqlGuardError(
@@ -228,7 +230,7 @@ class SqlGuard:
         # D9: json_extract(raw_data_json, '$."key"') khi Pattern 4 bật
         self._check_json_extract(tree, ctx)
         # 7: cột
-        columns = self._check_columns(tree, tables, view_aliases, cte_names)
+        columns = self._check_columns(tree, tables, view_aliases, cte_names, cte_aliases)
         self._check_star(tree)
         # 8: hàm
         self._check_functions(tree)
@@ -254,6 +256,7 @@ class SqlGuard:
         tables: Sequence[str],
         view_aliases: Mapping[str, str],
         cte_names: Iterable[str],
+        cte_aliases: Iterable[str] | None = None,
     ) -> list[str]:
         forbidden = all_forbidden_columns()
         view_columns = {name: set(VIEWS[name].columns) for name in set(tables)}
@@ -264,7 +267,7 @@ class SqlGuard:
             if cte_alias is not None:
                 derived_aliases |= {c.name.lower() for c in cte_alias.find_all(exp.Identifier)}
         subquery_aliases = {s.alias.lower() for s in tree.find_all(exp.Subquery) if s.alias}
-        passthrough = {n.lower() for n in cte_names} | subquery_aliases
+        passthrough = {n.lower() for n in cte_names} | {a.lower() for a in (cte_aliases or ())} | subquery_aliases
         used: list[str] = []
         for column in tree.find_all(exp.Column):
             name = column.name.lower()
@@ -413,6 +416,24 @@ class SqlGuard:
                 others = [node.expression]
             if column is None:
                 continue
+
+            # Bỏ qua kiểm tra literal thô nếu column nằm trong hàm biến đổi (STRFTIME, SUBSTR, COALESCE)
+            parent = column.parent
+            is_transformed = False
+            while parent is not None and parent is not node:
+                func_name = (
+                    str(getattr(parent, "name", "")).lower()
+                    or getattr(parent, "sql_name", lambda: "")().lower()
+                )
+                if isinstance(parent, (exp.TimeToStr, exp.Substring, exp.Coalesce)) or (
+                    func_name in ("strftime", "substr", "coalesce")
+                ):
+                    is_transformed = True
+                    break
+                parent = parent.parent
+            if is_transformed:
+                continue
+
             name = column.name.lower()
             literals = [o.this for o in others if isinstance(o, exp.Literal) and o.is_string]
 
@@ -461,7 +482,7 @@ class SqlGuard:
                     SqlErrorCode.SQL_ALIAS_INVALID,
                     f"alias '{name[:40]}' chỉ gồm chữ thường, số và _",
                 )
-            if ISSUE_MEASURE_HINT in name and not _is_distinct_issue_count(alias.this):
+            if name in ("so_van_de", "so_luong_van_de") and not _is_distinct_issue_count(alias.this):
                 raise SqlGuardError(
                     SqlErrorCode.SQL_MEASURE_MISMATCH,
                     f"{name} phải là COUNT(DISTINCT issue_code)",

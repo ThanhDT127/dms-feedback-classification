@@ -284,3 +284,77 @@ def test_json_retry_count_means_retries_not_attempts(
         gateway.generate_json("prompt", call_type="chat_plan", system_instruction="sys")
 
     assert len(calls) == expected_calls
+
+
+def test_chat_llm_settings_syncs_gateway_model(settings):
+    from dms.chat.ai.llm_gateway import chat_llm_settings
+
+    updated = chat_llm_settings(settings, model="custom-gemini-2.5-pro")
+    assert updated.gemini_model == "custom-gemini-2.5-pro"
+    assert updated.gateway_model == "custom-gemini-2.5-pro"
+
+
+def test_gateway_backend_skips_pipeline_usage_tracking(settings):
+    gateway_settings = settings.model_copy(update={"gemini_backend": "gateway"})
+    tracker = FakeTracker()
+    gemini = FakeGemini(GeminiResponse(text='{"ok": true}', usage={"prompt_tokens": 10}))
+    client = GeminiChatGateway(gateway_settings, usage_tracker=tracker, gemini=gemini)
+
+    result = client.generate_json("prompt", call_type="chat_plan")
+    assert result.text == '{"ok": true}'
+    assert len(tracker.records) == 0
+
+
+def test_gateway_stream_sse_parsing(settings):
+    from types import SimpleNamespace
+
+    from dms.gemini_client import GeminiClient
+
+    client = GeminiClient(settings=settings.model_copy(update={"gemini_backend": "gateway"}))
+    fake_response = SimpleNamespace(
+        status_code=200,
+        headers={"Content-Type": "text/event-stream"},
+        iter_lines=lambda decode_unicode=True: iter([
+            'data: {"id":"chatcmpl-1","model":"gpt-4","choices":[{"delta":{"content":"Xin chào"}}]}',
+            'data: {"id":"chatcmpl-1","model":"gpt-4","choices":[{"delta":{"content":" Việt Nam"}}]}',
+            'data: {"id":"chatcmpl-1","model":"gpt-4","choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":4,"total_tokens":9}}',
+            'data: [DONE]',
+        ]),
+    )
+    parsed = client._parse_gateway_sse(fake_response, prompt="test")
+    assert parsed.text == "Xin chào Việt Nam"
+    assert parsed.model_actual == "gpt-4"
+    assert parsed.response_id == "chatcmpl-1"
+    assert parsed.usage == {"prompt_tokens": 5, "completion_tokens": 4, "total_tokens": 9}
+    assert parsed.chunks is not None
+    assert len(parsed.chunks) == 2
+    assert parsed.chunks[0]["text"] == "Xin chào"
+    assert parsed.chunks[1]["text"] == " Việt Nam"
+    assert parsed.chunks[1]["finish_reason"] == "STOP"
+
+
+def test_gateway_stream_sse_raw_bytes_utf8_vietnamese(settings):
+    from types import SimpleNamespace
+
+    from dms.gemini_client import GeminiClient
+
+    client = GeminiClient(settings=settings.model_copy(update={"gemini_backend": "gateway"}))
+    vietnamese_text = "Đoạn test tiếng Việt có dấu: Ống nhựa & Đèn LED"
+    byte_lines = [
+        f'data: {{"id":"chatcmpl-2","model":"gpt-4o","choices":[{{"delta":{{"content":"{vietnamese_text}"}}}}]}}'.encode(),
+        b'data: {"id":"chatcmpl-2","model":"gpt-4o","choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":12,"total_tokens":22}}',
+        b'data: [DONE]',
+    ]
+    fake_response = SimpleNamespace(
+        status_code=200,
+        headers={"Content-Type": "text/event-stream"},
+        encoding=None,
+        iter_lines=lambda: iter(byte_lines),
+    )
+    parsed = client._parse_gateway_sse(fake_response, prompt="test")
+    assert fake_response.encoding == "utf-8"
+    assert parsed.text == vietnamese_text
+    assert parsed.model_actual == "gpt-4o"
+    assert parsed.usage == {"prompt_tokens": 10, "completion_tokens": 12, "total_tokens": 22}
+
+

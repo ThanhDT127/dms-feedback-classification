@@ -120,12 +120,27 @@ async def ws_classify_progress(websocket: WebSocket, job_id: str):
             step_changed = (
                 current_step != last_sent_step or current_step_status != last_sent_step_status
             )
-            terminal = status in ("completed", "error", "cancelled")
+            cancellation_requested = bool(job.get("cancellation_requested"))
+            terminal = status in ("completed", "error", "cancelled") or cancellation_requested
 
             if rows_changed or step_changed or terminal:
                 last_sent_rows = current_rows
                 last_sent_step = current_step
                 last_sent_step_status = current_step_status
+
+                if status == "cancelled" or cancellation_requested:
+                    await websocket.send_json(
+                        {
+                            "type": "cancelled",
+                            "data": {
+                                "job_id": job_id,
+                                "status": "cancelled",
+                                "cancellation_requested": cancellation_requested,
+                            },
+                        }
+                    )
+                    terminal_sent = True
+                    break
 
                 if status == "completed":
                     await websocket.send_json(

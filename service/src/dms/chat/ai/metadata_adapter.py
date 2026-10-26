@@ -21,12 +21,32 @@ class AnalyticsMetadataAdapter:
         everything = AnalyticsFilter()
         geography = self._service.filter_options(everything)
         issue_options = self._service.issue_filter_options(everything)
+        sources: list[str] = []
+        try:
+            with self._service.repository._conn() as conn:
+                rows = conn.execute(
+                    "SELECT DISTINCT source FROM feedback_records "
+                    "WHERE is_active = 1 AND source IS NOT NULL AND trim(source) != '' "
+                    "ORDER BY source"
+                ).fetchall()
+                sources = [str(r[0]).strip() for r in rows if r[0] and str(r[0]).strip()]
+        except Exception:
+            try:
+                src_data = self._service.sources(everything)
+                sources = [
+                    str(item["label"]).strip()
+                    for item in src_data.get("items", [])
+                    if item.get("label")
+                ]
+            except Exception:
+                sources = []
         return {
             "units": list(geography.get("units", [])),
             "provinces": list(geography.get("provinces", [])),
             "districts": list(geography.get("districts", [])),
             "products": list(issue_options.get("products", [])),
             "statuses": list(issue_options.get("statuses", [])),
+            "sources": sources,
         }
 
     def raw_key_catalog(self) -> tuple[str, ...]:

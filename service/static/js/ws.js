@@ -79,6 +79,9 @@ window.WS = (() => {
         case 'complete':
           if (this.handlers.onComplete) this.handlers.onComplete(payload);
           break;
+        case 'cancelled':
+          if (this.handlers.onCancelled) this.handlers.onCancelled(payload);
+          break;
         case 'error':
           if (this.handlers.onError) this.handlers.onError(payload);
           break;

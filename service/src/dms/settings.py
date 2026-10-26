@@ -110,10 +110,13 @@ class Settings(BaseSettings):
     chat_history_turns: int = Field(5, alias="CHAT_HISTORY_TURNS")
     chat_fuzzy_match_threshold: float = Field(0.88, alias="CHAT_FUZZY_MATCH_THRESHOLD")
     # Chatbot (Dev B — Query Planner)
-    chat_enabled_patterns: str = Field("sql_template", alias="CHAT_ENABLED_PATTERNS")
+    chat_enabled_patterns: str = Field(
+        "sql_template,semantic_view,fts5_search,json_extract",
+        alias="CHAT_ENABLED_PATTERNS",
+    )
     chat_planner_max_repair: int = Field(1, alias="CHAT_PLANNER_MAX_REPAIR")
     chat_metadata_ttl_seconds: int = Field(300, alias="CHAT_METADATA_TTL_SECONDS")
-    chat_milestone: str = Field("M1", alias="CHAT_MILESTONE")
+    chat_milestone: str = Field("M5", alias="CHAT_MILESTONE")
     # Chatbot (Dev B — Plan Guard & Orchestrator)
     chat_plan_min_confidence: float = Field(0.6, alias="CHAT_PLAN_MIN_CONFIDENCE")
     chat_fuzzy_ambiguity_margin: float = Field(0.05, alias="CHAT_FUZZY_AMBIGUITY_MARGIN")
@@ -148,7 +151,7 @@ class Settings(BaseSettings):
     chat_sql_max_joins: int = Field(2, alias="CHAT_SQL_MAX_JOINS")
     chat_sql_max_subquery_depth: int = Field(3, alias="CHAT_SQL_MAX_SUBQUERY_DEPTH")
     # Chat WebSocket (b06)
-    chat_enabled: bool = Field(False, alias="CHAT_ENABLED")
+    chat_enabled: bool = Field(True, alias="CHAT_ENABLED")
     chat_max_concurrent_turns: int = Field(4, alias="CHAT_MAX_CONCURRENT_TURNS")
     chat_max_active_turns_per_user: int = Field(1, alias="CHAT_MAX_ACTIVE_TURNS_PER_USER")
     chat_rate_limit_per_minute: int = Field(10, alias="CHAT_RATE_LIMIT_PER_MINUTE")

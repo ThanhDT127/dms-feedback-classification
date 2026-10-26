@@ -66,6 +66,7 @@ def chat_llm_settings(
     }
     if model:
         update["gemini_model"] = model
+        update["gateway_model"] = model
     return settings.model_copy(update=update)
 
 
@@ -276,7 +277,7 @@ class GeminiChatGateway:
         total_tokens = int(usage.get("total_tokens", prompt_tokens + completion_tokens))
         model = model or self.model
         cost = calculate_cost(model, prompt_tokens, completion_tokens, self._pricing)
-        if self._usage is not None:
+        if self._usage is not None and self.settings.gemini_backend != "gateway":
             try:
                 self._usage.record(
                     model=model,

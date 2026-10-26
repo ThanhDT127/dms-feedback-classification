@@ -128,4 +128,5 @@ def test_metadata_adapter_maps_service_options():
         "districts": ["Cam Ranh"],
         "products": ["Đèn LED"],
         "statuses": ["Đã xử lý"],
+        "sources": [],
     }

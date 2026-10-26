@@ -61,6 +61,14 @@ async def get_settings(admin: dict = Depends(get_admin_user)):
         else:
             masked[key] = value
 
+    # Ensure chatbot configuration fields are mapped to canonical lowercase keys
+    for chat_k in ("chat_enabled", "chat_gemini_model", "chat_milestone", "chat_enabled_patterns"):
+        upper_k = chat_k.upper()
+        if chat_k not in masked and upper_k in masked:
+            masked[chat_k] = masked[upper_k]
+    if isinstance(masked.get("chat_enabled"), str):
+        masked["chat_enabled"] = masked["chat_enabled"].lower() in ("true", "1", "yes")
+
     return masked
 
 
@@ -301,10 +309,20 @@ MAP = {
     "notify_on_error": "NOTIFY_ON_ERROR",
     "teams_webhook_url": "TEAMS_WEBHOOK_URL",
     "TEAMS_WEBHOOK_URL": "TEAMS_WEBHOOK_URL",
+    # chatbot tab / copilot
+    "chat_enabled": "CHAT_ENABLED",
+    "chat_gemini_model": "CHAT_GEMINI_MODEL",
+    "chat_milestone": "CHAT_MILESTONE",
+    "chat_enabled_patterns": "CHAT_ENABLED_PATTERNS",
+    "CHAT_ENABLED": "CHAT_ENABLED",
+    "CHAT_GEMINI_MODEL": "CHAT_GEMINI_MODEL",
+    "CHAT_MILESTONE": "CHAT_MILESTONE",
+    "CHAT_ENABLED_PATTERNS": "CHAT_ENABLED_PATTERNS",
 }
 
 
 @router.put("")
+@router.patch("")
 async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
     """Cập nhật cài đặt hệ thống vào file .env một cách an toàn."""
     env_file = SERVICE_DIR / ".env"
@@ -333,15 +351,21 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
                     or value == "******"
                     or not value.strip()
                 ):
-                    # Keep existing value if it was already set
+                    if env_key == "CHAT_GEMINI_MODEL":
+                        updates[env_key] = ""
                     continue
+
+                if isinstance(value, bool):
+                    value = "true" if value else "false"
+                elif isinstance(value, (list, tuple, set)):
+                    value = ",".join(str(v).strip() for v in value if str(v).strip())
 
                 # Normalize Gemini backend values
                 if env_key == "GEMINI_BACKEND" and isinstance(value, str):
                     val_lower = value.lower().strip()
                     if val_lower == "vertex_ai":
                         value = "vertex"
-                    elif val_lower == "api_key" or val_lower == "apikey":
+                    elif val_lower in ("api_key", "apikey"):
                         value = "apikey"
 
                 updates[env_key] = str(value)

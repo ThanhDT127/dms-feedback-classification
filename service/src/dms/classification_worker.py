@@ -132,7 +132,10 @@ class ClassificationWorkerManager:
 
         try:
             if cancellation_check():
+                if self.analytics_repository is not None:
+                    self.analytics_repository.rollback_cancelled_job(job_id)
                 self.job_store.mark_cancelled(job_id, "Job đã được yêu cầu hủy trước khi xử lý.")
+                self._sync_seen_files_status(job, status="cancelled")
                 return
 
             if not input_path.is_file():
@@ -147,9 +150,12 @@ class ClassificationWorkerManager:
                 self._upload_input_to_sharepoint(job, input_path)
 
             if cancellation_check():
+                if self.analytics_repository is not None:
+                    self.analytics_repository.rollback_cancelled_job(job_id)
                 self.job_store.mark_cancelled(
                     job_id, "Job đã được yêu cầu hủy trước khi chạy pipeline."
                 )
+                self._sync_seen_files_status(job, status="cancelled")
                 return
 
             if self.analytics_repository is not None:
@@ -235,20 +241,23 @@ class ClassificationWorkerManager:
 
             if cancellation_check():
                 if self.analytics_repository is not None:
-                    self.analytics_repository.mark_job_unfinished_failed(job_id)
+                    self.analytics_repository.rollback_cancelled_job(job_id)
                 self.job_store.mark_cancelled(job_id, "Job đã được yêu cầu hủy.")
+                self._sync_seen_files_status(job, status="cancelled")
                 return
 
             sp_uploaded, sp_folder, sp_web_url = self._upload_output(job, output_path)
             latest = self.job_store.get_job(job_id, include_results=False)
             if latest and latest.get("status") == JOB_STATUS_CANCELLED:
                 if self.analytics_repository is not None:
-                    self.analytics_repository.mark_job_unfinished_failed(job_id)
+                    self.analytics_repository.rollback_cancelled_job(job_id)
+                self._sync_seen_files_status(job, status="cancelled")
                 return
             if latest and latest.get("cancellation_requested"):
                 if self.analytics_repository is not None:
-                    self.analytics_repository.mark_job_unfinished_failed(job_id)
+                    self.analytics_repository.rollback_cancelled_job(job_id)
                 self.job_store.mark_cancelled(job_id, "Job đã được yêu cầu hủy.")
+                self._sync_seen_files_status(job, status="cancelled")
                 return
 
             self.job_store.complete_job(
@@ -269,15 +278,19 @@ class ClassificationWorkerManager:
             )
         except PipelineCancelled:
             if self.analytics_repository is not None:
-                self.analytics_repository.mark_job_unfinished_failed(job_id)
+                self.analytics_repository.rollback_cancelled_job(job_id)
             self.job_store.mark_cancelled(job_id, "Job đã được hủy ở ranh giới batch an toàn.")
+            self._sync_seen_files_status(job, status="cancelled")
         except Exception as exc:
             logger.error("Classification job %s failed: %s", job_id, exc, exc_info=True)
+            if cancellation_check():
+                if self.analytics_repository is not None:
+                    self.analytics_repository.rollback_cancelled_job(job_id)
+                self.job_store.mark_cancelled(job_id, "Job đã được hủy sau khi worker nhận lỗi.")
+                self._sync_seen_files_status(job, status="cancelled")
+                return
             if self.analytics_repository is not None:
                 self.analytics_repository.mark_job_unfinished_failed(job_id)
-            if cancellation_check():
-                self.job_store.mark_cancelled(job_id, "Job đã được hủy sau khi worker nhận lỗi.")
-                return
             if is_retryable_classification_error(exc):
                 retried = self.job_store.maybe_retry_after_failure(
                     job_id,
@@ -334,7 +347,7 @@ class ClassificationWorkerManager:
             for fid, info in seen_data.items()
             if isinstance(info, dict) and info.get("name") == filename
         ]
-        if not matched_keys and job.get("mode") == "reclassify":
+        if not matched_keys and (job.get("mode") == "reclassify" or status == "cancelled"):
             fallback_id = f"local:{filename}"
             seen_data[fallback_id] = {"name": filename}
             matched_keys = [fallback_id]
@@ -358,6 +371,9 @@ class ClassificationWorkerManager:
                     info["total_rows"] = total_rows
                 if duration_seconds:
                     info["duration_seconds"] = round(duration_seconds, 2)
+                info.pop("last_error", None)
+            elif status == "cancelled":
+                info["cancelled_at"] = now_iso
                 info.pop("last_error", None)
             elif status == "failed":
                 info["failures"] = max(1, prev_failures + 1)
@@ -398,11 +414,34 @@ class ClassificationWorkerManager:
                 return
             # Use the original filename (without UUID prefix) for the remote file
             remote_filename = job.get("filename", "") or input_path.name
-            sp_client.upload_file(
+            uploaded = sp_client.upload_file(
                 input_path,
                 self.settings.sp_input_folder,
                 remote_filename=remote_filename,
             )
+            if isinstance(uploaded, dict) and uploaded.get("id"):
+                try:
+                    import json
+
+                    from .time_utils import utc_now_iso
+                    from .utils import atomic_write_json
+
+                    seen_path = self.settings.work_dir / "seen_files.json"
+                    seen_data: dict[str, Any] = {}
+                    if seen_path.is_file():
+                        loaded = json.loads(seen_path.read_text(encoding="utf-8"))
+                        if isinstance(loaded, dict):
+                            seen_data = loaded
+                    seen_data[str(uploaded["id"])] = {
+                        "name": remote_filename,
+                        "status": "processing",
+                        "failures": 0,
+                        "last_attempt": utc_now_iso(),
+                        "lastModifiedDateTime": uploaded.get("lastModifiedDateTime", ""),
+                    }
+                    atomic_write_json(seen_path, seen_data)
+                except Exception as seen_exc:
+                    logger.debug("Could not record uploaded SharePoint input in seen_files.json: %s", seen_exc)
             logger.info(
                 "Uploaded input file for job %s to SharePoint/%s/%s",
                 job["job_id"],

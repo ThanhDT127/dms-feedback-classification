@@ -94,6 +94,7 @@ window.ChatPage = (() => {
     refs.form.addEventListener('submit', (e) => { e.preventDefault(); send(); });
     refs.input.addEventListener('keydown', onInputKeydown);
     refs.input.addEventListener('input', updateComposer);
+    refs.thread.addEventListener('click', onThreadClick);
 
     answerOrder = [];
     resumeSentAt = new Map();
@@ -397,21 +398,225 @@ window.ChatPage = (() => {
     setStatus('');
   }
 
+  const QUICK_STARTER_CARDS = [
+    {
+      icon: '📊',
+      title: 'Tổng quan phản ánh',
+      desc: 'Bức tranh toàn cảnh số liệu và tình hình phản hồi tháng này',
+      query: 'Tổng quan tình hình phản ánh tháng này',
+    },
+    {
+      icon: '⚠️',
+      title: 'Tiêu cực nổi cộm',
+      desc: 'Các khiếu nại gay gắt cần ưu tiên kiểm tra xử lý ngay',
+      query: 'Các vấn đề tiêu cực nổi cộm cần xử lý ngay',
+    },
+    {
+      icon: '🏢',
+      title: 'So sánh Vùng / Đơn vị',
+      desc: 'Đối chiếu tỷ trọng và số lượng khiếu nại theo đơn vị',
+      query: 'So sánh tỷ lệ phản ánh giữa các Vùng / Đơn vị',
+    },
+    {
+      icon: '🔍',
+      title: 'Chất lượng bao bì',
+      desc: 'Tra cứu các khiếu nại về rách, móp, hỏng tem mác bao bì',
+      query: 'Tra cứu các khiếu nại về chất lượng bao bì',
+    },
+    {
+      icon: '📈',
+      title: 'Xu hướng biến động',
+      desc: 'Biểu đồ diễn biến phản ánh tăng hoặc giảm qua các tháng',
+      query: 'Xu hướng phản ánh biến động qua các tháng',
+    },
+    {
+      icon: '📋',
+      title: 'Chưa được phân loại',
+      desc: 'Danh sách và số lượng phản ánh còn tồn đọng chưa gán nhãn',
+      query: 'Danh sách phản ánh chưa được phân loại',
+    },
+  ];
+
   function showEmptyState() {
     const el = ChatBlocks.el;
     const box = el('div', 'chat-empty');
     box.appendChild(el('div', 'chat-empty-icon', '🤖'));
-    box.appendChild(el('p', 'chat-empty-title', 'Hỏi về số liệu phản hồi khách hàng'));
-    box.appendChild(el('p', 'chat-empty-text', 'Số liệu lấy trực tiếp từ dữ liệu đã phân loại, trong phạm vi đơn vị của bạn.'));
-    const row = el('div', 'chat-chip-row');
-    ['Tổng quan tháng này', 'Sản phẩm nào bị phản hồi nhiều nhất tháng trước?', 'Xu hướng phản hồi 30 ngày qua'].forEach(q => {
-      const chip = el('button', 'chat-chip', q);
-      chip.type = 'button';
-      chip.addEventListener('click', () => ask(q));
-      row.appendChild(chip);
+    box.appendChild(el('h3', 'chat-empty-title', 'Trợ lý phân tích phản hồi tiếp thị DMS'));
+    box.appendChild(el('p', 'chat-empty-text', 'Truy vấn số liệu chính xác trong phạm vi phân quyền của bạn. Chọn gợi ý bên dưới hoặc nhập câu hỏi:'));
+
+    const grid = el('div', 'chat-starter-grid');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:10px;width:100%;max-width:820px;margin-top:14px;text-align:left;';
+
+    QUICK_STARTER_CARDS.forEach(card => {
+      const cardEl = el('button', 'chat-starter-card');
+      cardEl.type = 'button';
+      cardEl.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px 14px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;text-align:left;transition:all 0.15s ease;font:inherit;';
+
+      const head = el('div', 'chat-starter-head');
+      head.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;';
+      head.appendChild(el('span', 'chat-starter-icon', card.icon));
+      const title = el('strong', 'chat-starter-title', card.title);
+      title.style.cssText = 'font-size:13px;color:var(--text-primary);font-weight:600;';
+      head.appendChild(title);
+      cardEl.appendChild(head);
+
+      const desc = el('span', 'chat-starter-desc', card.desc);
+      desc.style.cssText = 'font-size:11px;color:var(--text-muted);line-height:1.4;';
+      cardEl.appendChild(desc);
+
+      const queryBadge = el('span', 'chat-starter-query', `"${card.query}"`);
+      queryBadge.style.cssText = 'font-size:11px;color:var(--accent-blue);margin-top:4px;font-style:italic;';
+      cardEl.appendChild(queryBadge);
+
+      cardEl.addEventListener('mouseenter', () => {
+        cardEl.style.borderColor = 'var(--accent-blue)';
+        cardEl.style.background = 'var(--bg-tertiary)';
+        cardEl.style.transform = 'translateY(-1px)';
+      });
+      cardEl.addEventListener('mouseleave', () => {
+        cardEl.style.borderColor = 'var(--border)';
+        cardEl.style.background = 'var(--bg-secondary)';
+        cardEl.style.transform = 'none';
+      });
+
+      cardEl.addEventListener('click', () => {
+        if (refs.input) {
+          refs.input.value = card.query;
+          updateComposer();
+          refs.input.focus();
+        }
+      });
+      grid.appendChild(cardEl);
     });
-    box.appendChild(row);
+
+    box.appendChild(grid);
     refs.thread.appendChild(box);
+  }
+
+  /* ---- Modal chi tiết phản hồi ---- */
+
+  function showIssueLoadingModal(issueCode) {
+    if (!window.App || typeof App.showModal !== 'function') return;
+    const esc = ChatBlocks.escape;
+    App.showModal(`
+      <div class="analytics-detail-modal chat-issue-modal" style="max-width:650px;">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);">
+          <span class="card-title" style="font-weight:600;font-size:15px;display:flex;align-items:center;gap:8px;">
+            <span>📋 Chi tiết phản hồi</span>
+            <span class="badge badge-blue" style="font-family:monospace;font-size:12px;">${esc(issueCode)}</span>
+          </span>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="App.closeModal()" aria-label="Đóng">✕</button>
+        </div>
+        <div style="padding:32px 16px;text-align:center;color:var(--text-muted);font-size:13px;">
+          <span class="spinner" style="margin-right:8px;"></span> Đang tải thông tin chi tiết phản hồi...
+        </div>
+      </div>
+    `);
+  }
+
+  function showIssueDetailModal(record) {
+    if (!window.App || typeof App.showModal !== 'function') return;
+    const esc = ChatBlocks.escape;
+    const sentiment = record.sentiment || '—';
+    const sentimentColor = sentiment === 'Tích cực' ? 'green' : sentiment === 'Tiêu cực' ? 'red' : 'muted';
+    const labelText = record.label
+      || (Array.isArray(record.labels) ? record.labels.join(', ') : '')
+      || record.major_group
+      || '—';
+    const sourceFile = record.source_file_name || record.source_file || record.source || '—';
+    const rowNumber = record.source_row_number ? ` · dòng ${record.source_row_number}` : '';
+    const content = record.content || record.customer_feedback || '—';
+    const issueDate = record.issue_date || record.display_date || '—';
+
+    App.showModal(`
+      <div class="analytics-detail-modal chat-issue-modal" style="max-width:650px;">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);">
+          <span class="card-title" style="font-weight:600;font-size:15px;display:flex;align-items:center;gap:8px;">
+            <span>📋 Chi tiết phản hồi</span>
+            <span class="badge badge-blue" style="font-family:monospace;font-size:12px;">${esc(record.issue_code || '—')}</span>
+          </span>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="App.closeModal()" aria-label="Đóng">✕</button>
+        </div>
+        <dl class="analytics-detail-list" style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin:0;">
+          <div><dt style="font-size:12px;color:var(--text-muted);margin-bottom:2px;">Mã vấn đề</dt><dd style="font-weight:600;font-family:monospace;margin:0;">${esc(record.issue_code || '—')}</dd></div>
+          <div><dt style="font-size:12px;color:var(--text-muted);margin-bottom:2px;">Đơn vị / Chi nhánh</dt><dd style="font-weight:500;margin:0;">${esc(record.unit_name || '—')}</dd></div>
+          <div><dt style="font-size:12px;color:var(--text-muted);margin-bottom:2px;">Ngày phản ánh</dt><dd style="margin:0;">${esc(issueDate)}</dd></div>
+          <div><dt style="font-size:12px;color:var(--text-muted);margin-bottom:2px;">Cảm xúc (Sentiment)</dt><dd style="margin:0;"><span class="badge badge-${sentimentColor}">${esc(sentiment)}</span></dd></div>
+          <div><dt style="font-size:12px;color:var(--text-muted);margin-bottom:2px;">Nhóm vấn đề / Nhãn</dt><dd style="margin:0;">${esc(labelText)}</dd></div>
+          <div><dt style="font-size:12px;color:var(--text-muted);margin-bottom:2px;">Tệp nguồn (Source)</dt><dd style="font-size:12px;margin:0;word-break:break-all;">${esc(sourceFile)}${esc(rowNumber)}</dd></div>
+          <div style="grid-column:1 / -1;"><dt style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">Nội dung phản ánh của khách hàng</dt><dd style="margin:0;padding:12px;background:var(--bg-tertiary);border-radius:var(--radius-sm);border-left:3px solid var(--accent-blue);white-space:pre-wrap;line-height:1.6;font-size:13px;color:var(--text-primary);">${esc(content)}</dd></div>
+        </dl>
+        <div style="display:flex;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border);background:var(--bg-secondary);">
+          <button class="btn btn-secondary btn-sm" type="button" onclick="App.closeModal()">Đóng</button>
+        </div>
+      </div>
+    `);
+  }
+
+  async function onThreadClick(e) {
+    const badge = e.target.closest('.chat-issue-badge');
+    if (!badge) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const issueCode = badge.dataset.issueCode || badge.textContent.trim();
+    if (!issueCode) return;
+
+    // Check cached quote or badge data attributes first
+    let record = null;
+    if (window._chatQuoteCache && window._chatQuoteCache.has(issueCode)) {
+      record = window._chatQuoteCache.get(issueCode);
+    } else if (badge.dataset.content) {
+      record = {
+        issue_code: issueCode,
+        unit_name: badge.dataset.unitName || '',
+        issue_date: badge.dataset.issueDate || '',
+        sentiment: badge.dataset.sentiment || '',
+        label: badge.dataset.label || '',
+        major_group: badge.dataset.majorGroup || '',
+        source_file_name: badge.dataset.sourceFile || '',
+        source_row_number: badge.dataset.sourceRow || '',
+        content: badge.dataset.content || '',
+      };
+    }
+
+    if (record) {
+      showIssueDetailModal(record);
+      return;
+    }
+
+    // Otherwise show loading modal and fetch from API
+    showIssueLoadingModal(issueCode);
+    try {
+      const res = await API.get('/analytics/issues?page=1&page_size=100', { silent: true });
+      const items = (res && res.items) || [];
+      const found = items.find(item => item.issue_code === issueCode);
+      if (found) {
+        showIssueDetailModal(found);
+      } else {
+        showIssueDetailModal({
+          issue_code: issueCode,
+          unit_name: badge.dataset.unitName || '—',
+          issue_date: badge.dataset.issueDate || '—',
+          sentiment: badge.dataset.sentiment || '—',
+          label: badge.dataset.label || '—',
+          major_group: badge.dataset.majorGroup || '—',
+          source_file_name: badge.dataset.sourceFile || 'DMS Feedback Database',
+          content: badge.dataset.content || `Bản ghi phản hồi ${issueCode} đã được ghi nhận trong cơ sở dữ liệu.`,
+        });
+      }
+    } catch (err) {
+      showIssueDetailModal({
+        issue_code: issueCode,
+        unit_name: badge.dataset.unitName || '—',
+        issue_date: badge.dataset.issueDate || '—',
+        sentiment: badge.dataset.sentiment || '—',
+        label: badge.dataset.label || '—',
+        major_group: badge.dataset.majorGroup || '—',
+        source_file_name: badge.dataset.sourceFile || 'DMS Feedback Database',
+        content: badge.dataset.content || `Bản ghi phản hồi ${issueCode}.`,
+      });
+    }
   }
 
   function clearEmptyState() {
@@ -604,17 +809,25 @@ window.ChatPage = (() => {
       Toast.warning('Tên phải dài từ 1 đến 120 ký tự.');
       return;
     }
+    const previousTitle = session ? session.title : '';
+    // Optimistic UI update
+    ChatState.setSessions(ChatState.getSessions().map(s => (s.session_id === sessionId ? { ...s, title: cleaned } : s)));
+    renderSessionList();
+
     try {
       if (typeof API.patch !== 'function') {
-        // api.js cũ còn trong cache trình duyệt.
         Toast.warning('Vui lòng tải lại trang (Ctrl+F5) để đổi tên cuộc trò chuyện.');
         return;
       }
       const updated = await API.patch(`/chat/sessions/${encodeURIComponent(sessionId)}`, { title: cleaned });
       ChatState.setSessions(ChatState.getSessions().map(s => (s.session_id === sessionId ? { ...s, title: updated.title } : s)));
       renderSessionList();
+      Toast.success('Đã đổi tên cuộc trò chuyện thành công.');
     } catch (err) {
-      /* API client đã hiện toast */
+      // Rollback on error
+      ChatState.setSessions(ChatState.getSessions().map(s => (s.session_id === sessionId ? { ...s, title: previousTitle } : s)));
+      renderSessionList();
+      Toast.error('Không thể đổi tên: ' + (err.message || 'Lỗi kết nối'));
     }
   }
 
@@ -629,17 +842,25 @@ window.ChatPage = (() => {
       danger: true,
     });
     if (!ok) return;
-    try {
-      await API.del(`/chat/sessions/${encodeURIComponent(sessionId)}`);
-    } catch (err) {
-      return;
-    }
+
+    // Optimistic UI update
+    const previousSessions = [...ChatState.getSessions()];
     const wasCurrent = ChatState.getSessionId() === sessionId;
     ChatState.removeSession(sessionId);
     if (wasCurrent) {
       newSession();
     } else {
       renderSessionList();
+    }
+
+    try {
+      await API.del(`/chat/sessions/${encodeURIComponent(sessionId)}`);
+      Toast.success('Đã xoá cuộc trò chuyện thành công.');
+    } catch (err) {
+      // Rollback on error
+      ChatState.setSessions(previousSessions);
+      renderSessionList();
+      Toast.error('Không thể xoá cuộc trò chuyện: ' + (err.message || 'Lỗi kết nối'));
     }
   }
 

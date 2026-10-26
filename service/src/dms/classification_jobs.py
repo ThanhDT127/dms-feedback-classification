@@ -416,7 +416,8 @@ class ClassificationJobStore:
         params.append(job_id)
         with self._lock, self._conn() as conn:
             conn.execute(
-                f"UPDATE classification_jobs SET {', '.join(assignments)} WHERE job_id = ?",
+                f"UPDATE classification_jobs SET {', '.join(assignments)} "
+                "WHERE job_id = ? AND status != 'cancelled' AND COALESCE(cancellation_requested, 0) = 0",
                 params,
             )
             conn.commit()
@@ -426,6 +427,12 @@ class ClassificationJobStore:
             return
         now = utc_now_iso()
         with self._lock, self._conn() as conn:
+            row = conn.execute(
+                "SELECT status, cancellation_requested FROM classification_jobs WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+            if row is None or row["status"] == JOB_STATUS_CANCELLED or bool(row["cancellation_requested"]):
+                return
             conn.executemany(
                 """
                 INSERT INTO classification_job_results (job_id, payload, created_at)
@@ -457,12 +464,22 @@ class ClassificationJobStore:
     ) -> None:
         now = utc_now_iso()
         with self._lock, self._conn() as conn:
+            row = conn.execute(
+                "SELECT status, cancellation_requested FROM classification_jobs WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+            if row is not None and (
+                row["status"] == JOB_STATUS_CANCELLED or bool(row["cancellation_requested"])
+            ):
+                self._finalize_cancelled_locked(conn, job_id, now)
+                conn.commit()
+                return
             conn.execute(
                 """
                 UPDATE classification_jobs
                 SET status = ?, total_rows = ?, rows_done = ?, percent = 100,
                     output_path = ?, duration_seconds = ?, completed_at = ?,
-                    updated_at = ?, error = NULL,
+                    updated_at = ?, error = NULL, cancellation_requested = 0,
                     sp_uploaded = COALESCE(?, sp_uploaded),
                     sp_folder = COALESCE(?, sp_folder),
                     sp_web_url = COALESCE(?, sp_web_url)

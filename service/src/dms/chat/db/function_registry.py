@@ -42,6 +42,8 @@ class FunctionRegistry:
         scoped_params = ScopePolicy.enforce_scope_on_params(params, scope)
 
         # 2. Xây dựng AnalyticsFilter
+        allowed_units = scoped_params.get("_allowed_unit_ids") or scoped_params.get("unit_names")
+        unit_names = tuple(allowed_units) if allowed_units else None
         analytics_filter = AnalyticsFilter(
             date_from=scoped_params.get("date_from"),
             date_to=scoped_params.get("date_to"),
@@ -50,6 +52,7 @@ class FunctionRegistry:
             province=scoped_params.get("province"),
             district=scoped_params.get("district"),
             unit_name=scoped_params.get("unit_name"),
+            unit_names=unit_names,
         )
 
         handler = getattr(self, f"_handle_{function_name}", None)

@@ -802,3 +802,15 @@ def test_analytics_page_renders_processing_status_donut_without_backlog_aging():
     assert "Tình trạng xử lý" in analytics_js
     assert "Charts.destroy('analytics-status-chart')" in analytics_js
     assert "Thời gian tồn đọng" not in analytics_js
+
+
+def test_classify_cancelled_and_watcher_jobs_do_not_hijack_single_file_view():
+    classify_js = _read("js/pages/classify.js")
+    ws_js = _read("js/ws.js")
+
+    assert "case 'cancelled':" in ws_js
+    assert "this.handlers.onCancelled" in ws_js
+    assert "onCancelled:" in classify_js
+    assert "j.mode === 'watcher'" in classify_js
+    assert "j.cancellation_requested || j.status === 'cancelled'" in classify_js
+    assert "!job.cancellation_requested" in classify_js

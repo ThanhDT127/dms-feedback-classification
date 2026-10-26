@@ -71,8 +71,12 @@ def issues_where(
         if value:
             conditions.append("analytics_fold(analytics_geography(r.raw_data_json, ?)) = ?")
             params.extend((field, _fold(value)))
+    if scope.unit_names:
+        placeholders = ", ".join("?" for _ in scope.unit_names)
+        conditions.append(f"analytics_fold(r.unit_name) IN ({placeholders})")
+        params.extend(_fold(u) for u in scope.unit_names)
     for field, value in (
-        ("unit_name", scope.unit_name or None),
+        ("unit_name", scope.unit_name if (scope.unit_name and not scope.unit_names) else None),
         ("source", source),
         ("unit_name", unit_name),
         ("product", product),

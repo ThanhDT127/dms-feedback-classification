@@ -738,6 +738,17 @@ async def list_files(
                         "web_url": item.get("webUrl"),
                     }
                 )
+            if folder_lower == "input":
+                try:
+                    analytics_repo = get_feedback_analytics_repository()
+                    if analytics_repo is not None:
+                        await run_sync_in_threadpool(
+                            analytics_repo.reconcile_remote_input_files,
+                            [f["name"] for f in files if f.get("name")],
+                            seen_filenames=list(seen_name_map.keys()),
+                        )
+                except Exception as reconcile_exc:
+                    logger.debug("Could not reconcile remote input files in list_files: %s", reconcile_exc)
             cache.set(folder_lower, files)
             return files
         except Exception as exc:
@@ -876,10 +887,63 @@ async def get_file_metadata(
     return {"row_count": row_count, "columns": columns, "source": source}
 
 
+def _cleanup_deleted_files_state(
+    deleted_filenames: list[str],
+    analytics_repository: FeedbackAnalyticsRepository | None,
+) -> int:
+    """Purge analytics records, cancel active jobs, and clean seen_files.json for deleted files."""
+    if not deleted_filenames:
+        return 0
+    from ...analytics.repository import _expand_candidate_filenames
+    from ...utils import atomic_write_json
+
+    candidates = _expand_candidate_filenames(deleted_filenames)
+    purged_rows = 0
+    if analytics_repository is not None:
+        try:
+            purged_rows = analytics_repository.purge_file_records(candidates)
+        except Exception as exc:
+            logger.warning("Could not purge analytics records for deleted files %s: %s", candidates, exc)
+
+    try:
+        from .. import deps as _deps
+
+        job_store = _deps.get_classification_job_store()
+        if job_store is not None:
+            for job in job_store.list_jobs(include_all=True, limit=200):
+                if job.get("filename") in candidates and job.get("status") in ("queued", "running"):
+                    job_store.cancel_job(str(job["job_id"]))
+    except Exception as exc:
+        logger.debug("Could not cancel active jobs for deleted files: %s", exc)
+
+    seen_path = _work_dir() / "seen_files.json"
+    if seen_path.is_file():
+        try:
+            seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
+            if isinstance(seen_data, dict):
+                to_remove = [
+                    fid
+                    for fid, info in seen_data.items()
+                    if (isinstance(info, dict) and info.get("name") in candidates)
+                    or str(fid) in {f"local:{c}" for c in candidates}
+                ]
+                if to_remove:
+                    for fid in to_remove:
+                        seen_data.pop(fid, None)
+                    atomic_write_json(seen_path, seen_data)
+        except Exception as exc:
+            logger.debug("Could not clean seen_files.json after file delete: %s", exc)
+
+    return purged_rows
+
+
 @router.post("/bulk-delete")
 async def bulk_delete_files(
     payload: BulkDeleteRequest,
     admin: dict = Depends(get_admin_user),
+    analytics_repository: FeedbackAnalyticsRepository | None = Depends(
+        get_feedback_analytics_repository
+    ),
 ):
     """Xóa hàng loạt file được chọn trong thư mục chỉ định (admin only)."""
     folder = payload.folder.lower()
@@ -895,13 +959,23 @@ async def bulk_delete_files(
 
     for name in filenames:
         file_deleted = False
+        safe_base = Path(name).name
         for dir_path in dirs:
             try:
                 candidate = _validate_safe_path(dir_path, name)
                 if candidate.is_file():
                     candidate.unlink()
-                    deleted.append(name)
                     file_deleted = True
+                if folder in ("input", "output") and dir_path.is_dir() and safe_base:
+                    for item in list(dir_path.iterdir()):
+                        if item.is_file() and (
+                            item.name.endswith(f"_{safe_base}")
+                            or item.name.endswith(f"_output_{safe_base}")
+                        ):
+                            item.unlink(missing_ok=True)
+                            file_deleted = True
+                if file_deleted:
+                    deleted.append(name)
                     break
             except Exception as exc:
                 failed.append({"name": name, "reason": str(exc)})
@@ -910,12 +984,19 @@ async def bulk_delete_files(
         if not file_deleted:
             failed.append({"name": name, "reason": "File không tồn tại"})
 
+    purged_rows = 0
+    if deleted and folder in ("input", "output"):
+        purged_rows = await run_sync_in_threadpool(
+            _cleanup_deleted_files_state, deleted, analytics_repository
+        )
+
     success_count = len(deleted)
     total_count = len(filenames)
     get_sharepoint_list_cache().invalidate(folder)
     return {
         "deleted": deleted,
         "failed": failed,
+        "purged_analytics_rows": purged_rows,
         "delete_scope": "local_cache",
         "message": (
             f"Đã xóa local/cache {success_count}/{total_count} file. "
@@ -928,6 +1009,9 @@ async def bulk_delete_files(
 async def delete_sharepoint_files(
     payload: SharePointDeleteRequest,
     admin: dict = Depends(get_admin_user),
+    analytics_repository: FeedbackAnalyticsRepository | None = Depends(
+        get_feedback_analytics_repository
+    ),
 ):
     """Delete selected files from SharePoint explicitly. Local/cache delete is separate."""
     folder = payload.folder.lower()
@@ -976,11 +1060,18 @@ async def delete_sharepoint_files(
         except Exception as exc:
             failed.append({"name": item.name, "reason": f"Lỗi không xác định: {exc}"})
 
+    purged_rows = 0
+    if remote_deleted and folder in ("input", "output"):
+        purged_rows = await run_sync_in_threadpool(
+            _cleanup_deleted_files_state, remote_deleted, analytics_repository
+        )
+
     get_sharepoint_list_cache().invalidate(folder)
     return {
         "delete_scope": "sharepoint",
         "remote_deleted": remote_deleted,
         "failed": failed,
+        "purged_analytics_rows": purged_rows,
         "message": f"Đã xóa SharePoint {len(remote_deleted)}/{len(requested)} file.",
     }
 

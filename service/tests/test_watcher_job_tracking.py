@@ -252,3 +252,109 @@ def test_process_file_without_job_store_or_analytics_does_not_crash(mock_setting
 
     file_info = {"id": "id-001", "name": "test.xlsx", "lastModifiedDateTime": ""}
     assert watcher._process_file(file_info, {}) is True
+
+
+def test_watcher_cancellation_stops_pipeline_and_rolls_back_analytics(
+    watcher, job_store, analytics_repo
+):
+    from dms.pipeline.runner import PipelineCancelled
+
+    file_info = {
+        "id": "sp-ttpa-2024",
+        "name": "TTPA 2024.xlsx",
+        "lastModifiedDateTime": "2026-10-26T08:00:00Z",
+    }
+    watcher.sharepoint_client.download_file.side_effect = _download_valid_workbook
+
+    def cancel_mid_pipeline(*args, **kwargs):
+        jobs = job_store.list_jobs(owner_username="system_watcher", include_results=False)
+        assert len(jobs) == 1
+        job_id = jobs[0]["job_id"]
+        kwargs["progress_callback"](
+            done=1,
+            total=1,
+            new_results=[_batch_result()],
+            step=2,
+            step_status="running",
+        )
+        active = [r for r in analytics_repo.fetch_current_records() if r["is_active"] == 1]
+        assert len(active) == 1
+        job_store.mark_cancelled(job_id)
+        assert kwargs["cancellation_check"]() is True
+        raise PipelineCancelled("Cancelled by admin")
+
+    watcher.pipeline_runner.run_pipeline.side_effect = cancel_mid_pipeline
+    seen: dict = {}
+
+    assert watcher._process_file(file_info, seen) is False
+
+    jobs = job_store.list_jobs(owner_username="system_watcher", include_results=False)
+    assert len(jobs) == 1
+    assert jobs[0]["status"] == "cancelled"
+    assert seen[file_info["id"]]["status"] == "cancelled"
+    active_after = [r for r in analytics_repo.fetch_current_records() if r["is_active"] == 1]
+    assert len(active_after) == 0
+
+
+def test_watcher_poll_once_skips_cancelled_and_reconciles_deleted_remote_files(
+    watcher, job_store, analytics_repo
+):
+    from dms.analytics import read_feedback_workbook
+
+    # Seed a completed file that was later deleted from SharePoint Input
+    deleted_path = watcher.settings.work_dir / "input" / "deleted_check.xlsx"
+    _download_valid_workbook("sp-deleted", deleted_path)
+    parsed = read_feedback_workbook(deleted_path)
+    job_store.create_job(
+        job_id="job-deleted",
+        owner_username="system_watcher",
+        owner_role="system",
+        filename="deleted_check.xlsx",
+        mode="watcher",
+        input_path=deleted_path,
+        output_path=watcher.settings.work_dir / "output" / "deleted_check_output.xlsx",
+    )
+    job_store.complete_job(
+        "job-deleted",
+        total_rows=1,
+        rows_done=1,
+        output_path=watcher.settings.work_dir / "output" / "deleted_check_output.xlsx",
+        duration_seconds=0.1,
+    )
+    analytics_repo.persist_input_snapshot(
+        job_id="job-deleted",
+        source_file_key="sp-deleted",
+        source_file_name="deleted_check.xlsx",
+        records=parsed.records,
+        deactivate_absent=True,
+    )
+    assert len([r for r in analytics_repo.fetch_current_records() if r["is_active"] == 1]) == 1
+
+    # Seed seen_files.json with the deleted file and a cancelled file
+    seen = {
+        "sp-deleted": {
+            "name": "deleted_check.xlsx",
+            "status": "done",
+            "last_modified": "2026-10-26T07:00:00Z",
+        },
+        "sp-cancelled": {
+            "name": "TTPA 2024.xlsx",
+            "status": "cancelled",
+            "last_modified": "2026-10-26T08:00:00Z",
+        },
+    }
+    watcher._save_seen(seen)
+
+    # SharePoint now only has TTPA 2024.xlsx with the same lastModifiedDateTime
+    watcher.sharepoint_client.list_input_files.return_value = [
+        {
+            "id": "sp-cancelled",
+            "name": "TTPA 2024.xlsx",
+            "lastModifiedDateTime": "2026-10-26T08:00:00Z",
+        }
+    ]
+
+    processed = watcher.poll_once(seen)
+    assert processed == 0
+    watcher.pipeline_runner.run_pipeline.assert_not_called()
+    assert len([r for r in analytics_repo.fetch_current_records() if r["is_active"] == 1]) == 0

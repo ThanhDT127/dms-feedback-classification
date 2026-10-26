@@ -739,8 +739,15 @@ def render_synthesis_prompt(
     lines.append("</du_lieu>")
     if quotes:
         lines.append("<trich_dan>")
-        lines.extend(f"{fact.key} → {sanitize_prompt_data(fact.display, 200)}" for fact in quotes)
+        for fact in quotes:
+            disp = fact.display
+            if fact.raw and str(fact.raw) not in disp:
+                disp = f"{disp} ({fact.raw})"
+            lines.append(f"{fact.key} → {sanitize_prompt_data(disp, 200)}")
         lines.append("</trich_dan>")
+        lines.append(
+            "Hãy tổng hợp các vấn đề phàn nàn của khách hàng từ <trich_dan> và trích dẫn mã dạng (MÃ_VẤN_ĐỀ)."
+        )
     lines.append("Viết nhận định:")
 
     logger.info(

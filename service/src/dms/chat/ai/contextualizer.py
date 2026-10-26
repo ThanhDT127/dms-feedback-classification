@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import Sequence
@@ -80,7 +81,19 @@ class Contextualizer:
         )
         try:
             result = self.llm.generate_json(prompt.text, call_type=CALL_TYPE)
-            parsed = _ContextualizeOutput.model_validate_json(CODE_FENCE.sub("", result.text))
+            cleaned = CODE_FENCE.sub("", result.text).strip()
+            start_idx = cleaned.find("{")
+            if start_idx != -1:
+                try:
+                    raw_obj, _ = json.JSONDecoder().raw_decode(cleaned[start_idx:])
+                    parsed = _ContextualizeOutput.model_validate(raw_obj)
+                except Exception:
+                    end_idx = cleaned.rfind("}")
+                    if end_idx > start_idx:
+                        cleaned = cleaned[start_idx : end_idx + 1]
+                    parsed = _ContextualizeOutput.model_validate_json(cleaned)
+            else:
+                parsed = _ContextualizeOutput.model_validate_json(cleaned)
         except Exception as exc:  # timeout, lỗi SDK hoặc JSON hỏng: không chặn luồng
             logger.warning(
                 "contextualization_failed",

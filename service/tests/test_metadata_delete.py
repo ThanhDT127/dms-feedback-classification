@@ -176,3 +176,64 @@ def test_sharepoint_delete_endpoint_deletes_remote_only(client, monkeypatch):
     assert data["remote_deleted"] == ["direct.xlsx", "cloud.xlsx"]
     assert fake_sp.deleted == ["direct-id", "sp-1"]
     assert [f["name"] for f in data["failed"]] == ["missing.xlsx"]
+
+
+def test_bulk_delete_purges_analytics_records_and_updates_overview(
+    client, tmp_path, settings, monkeypatch
+):
+    from dms.analytics import (
+        AnalyticsFilter,
+        FeedbackAnalyticsRepository,
+        FeedbackAnalyticsService,
+        read_feedback_workbook,
+    )
+    from dms.classification_jobs import ClassificationJobStore
+
+    f_keep = tmp_path / "work" / "input" / "keep.xlsx"
+    f_check = tmp_path / "work" / "input" / "check.xlsx"
+    pd.DataFrame(
+        {"Mã vấn đề": ["K-1", "K-2"], "Nội dung phản hồi": ["Giữ 1", "Giữ 2"]}
+    ).to_excel(f_keep, index=False)
+    pd.DataFrame(
+        {
+            "Mã vấn đề": ["C-1", "C-2", "C-3"],
+            "Nội dung phản hồi": ["Xóa 1", "Xóa 2", "Xóa 3"],
+        }
+    ).to_excel(f_check, index=False)
+
+    job_store = ClassificationJobStore(settings.classification_jobs_db_path)
+    repo = FeedbackAnalyticsRepository(settings.classification_jobs_db_path)
+    from dms.web.deps import get_feedback_analytics_repository
+
+    client.app.dependency_overrides[get_feedback_analytics_repository] = lambda: repo
+    monkeypatch.setattr("dms.web.deps.get_classification_job_store", lambda: job_store)
+
+    for job_id, path in (("job-keep", f_keep), ("job-check", f_check)):
+        job_store.create_job(
+            job_id=job_id,
+            owner_username="adminuser",
+            owner_role="admin",
+            filename=path.name,
+            mode="single",
+            input_path=path,
+            output_path=tmp_path / "work" / "output" / f"{path.stem}_output.xlsx",
+        )
+        parsed = read_feedback_workbook(path)
+        repo.persist_input_snapshot(
+            job_id=job_id,
+            source_file_key=f"sha256:{path.name}",
+            source_file_name=path.name,
+            records=parsed.records,
+            deactivate_absent=False,
+        )
+
+    service = FeedbackAnalyticsService(repo)
+    assert service.overview(AnalyticsFilter())["total_issues"]["value"] == 5
+
+    resp = client.post(
+        "/api/files/bulk-delete",
+        json={"folder": "input", "filenames": ["check.xlsx"]},
+    )
+    assert resp.status_code == 200
+    assert "check.xlsx" in resp.json()["deleted"]
+    assert service.overview(AnalyticsFilter())["total_issues"]["value"] == 2

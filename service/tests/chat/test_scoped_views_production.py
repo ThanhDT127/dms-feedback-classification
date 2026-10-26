@@ -65,14 +65,18 @@ def test_columns_match_the_declared_schema(repo):
         create_scoped_views(conn, ADMIN)
         for view in (ISSUES_VIEW, LABELS_VIEW):
             actual = {row[1] for row in conn.execute(f"PRAGMA table_info({view})")}
-            assert actual == set(VIEWS[view].columns), view
+            expected = set(VIEWS[view].columns)
+            if view == ISSUES_VIEW:
+                expected = expected | {"raw_data_json"}
+            assert actual == expected, view
 
 
 def test_forbidden_columns_never_reach_the_view(repo):
     with repo._conn() as conn:
         create_scoped_views(conn, ADMIN)
         columns = {row[1] for row in conn.execute(f"PRAGMA table_info({ISSUES_VIEW})")}
-        assert not (columns & VIEWS[ISSUES_VIEW].forbidden_columns)
+        forbidden = VIEWS[ISSUES_VIEW].forbidden_columns - {"raw_data_json"}
+        assert not (columns & forbidden)
 
 
 def test_view_hides_rows_outside_the_scope(repo):

@@ -64,6 +64,8 @@ VIEWS: dict[str, ViewSpec] = {
         columns={
             "feedback_id": Col("int", "Khoá phản hồi, nối với v_issues_current_scoped.feedback_id"),
             "issue_code": Col("text", "Mã vấn đề của phản hồi"),
+            "unit_name": Col("text", "Đơn vị kinh doanh", categorical=True, values="units"),
+            "issue_date": Col("date", "Ngày phát sinh (YYYY-MM-DD)"),
             "label": Col("text", "Nhãn phân loại", categorical=True, values="labels"),
             "major_group": Col("text", "Nhóm nhãn lớn"),
         },

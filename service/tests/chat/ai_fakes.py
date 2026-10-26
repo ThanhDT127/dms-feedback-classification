@@ -325,6 +325,12 @@ class SqliteFtsFakeExecutor:
             return self._fts(plan, scope)
         if (
             self.code_lookup
+            and plan.pattern == QueryPattern.JSON_EXTRACT
+            and plan.json_filters.get("issue_code")
+        ):
+            return self._by_code(str(plan.json_filters["issue_code"]), scope)
+        if (
+            self.code_lookup
             and plan.function_name == "get_issues"
             and plan.params.get("issue_code")
         ):

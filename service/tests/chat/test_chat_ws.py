@@ -570,7 +570,7 @@ def test_rest_requires_login(env):
 
 def test_config_when_enabled(env):
     body = env.client.get("/api/chat/config", headers=env.headers()).json()
-    assert body == {"enabled": True, "milestone": "M1", "max_question_chars": 1000}
+    assert body == {"enabled": True, "milestone": "M5", "max_question_chars": 1000}
 
 
 def test_chat_disabled_registers_only_config(tmp_path, monkeypatch):

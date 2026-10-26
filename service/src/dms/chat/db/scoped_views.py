@@ -52,14 +52,18 @@ def create_scoped_views(conn: sqlite3.Connection, scope: UserScope) -> None:
     issue_columns = ", ".join(VIEWS[ISSUES_VIEW].columns)
     conn.execute(f"DROP VIEW IF EXISTS temp.{LABELS_VIEW}")
     conn.execute(f"DROP VIEW IF EXISTS temp.{ISSUES_VIEW}")
+    conn.execute(f"DROP VIEW IF EXISTS temp.{V_ISSUES_CURRENT}")
     conn.execute(
         f"CREATE TEMP VIEW {ISSUES_VIEW} AS "
-        f"SELECT {issue_columns} FROM main.{V_ISSUES_CURRENT}{_scope_where(scope)}"
+        f"SELECT {issue_columns}, raw_data_json FROM main.{V_ISSUES_CURRENT}{_scope_where(scope)}"
+    )
+    conn.execute(
+        f"CREATE TEMP VIEW {V_ISSUES_CURRENT} AS SELECT * FROM temp.{ISSUES_VIEW}"
     )
     # Nhãn thừa hưởng phạm vi qua phép nối: dòng ngoài phạm vi không có bên phải nên tự rụng.
     conn.execute(
         f"CREATE TEMP VIEW {LABELS_VIEW} AS "
-        f"SELECT l.feedback_id, s.issue_code, l.label, l.major_group "
+        f"SELECT l.feedback_id, s.issue_code, s.unit_name, s.issue_date, l.label, l.major_group "
         f"FROM main.{V_FEEDBACK_LABELS} l JOIN {ISSUES_VIEW} s ON s.feedback_id = l.feedback_id"
     )
 

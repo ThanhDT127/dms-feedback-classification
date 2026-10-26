@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -11,10 +12,13 @@ SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "chat_plan_cli.py"
 
 
 def run_cli(*args: str) -> dict:
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
     process = subprocess.run(
         [sys.executable, str(SCRIPT), *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        env=env,
         timeout=120,
     )
     assert process.returncode == 0, process.stderr

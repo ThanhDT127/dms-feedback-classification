@@ -312,8 +312,8 @@ class QueryPlan:
         if self.pattern == QueryPattern.FTS5_SEARCH and not self.fts_query:
             errors.append("Pattern 'fts5_search' bắt buộc có 'fts_query'")
 
-        if self.pattern == QueryPattern.JSON_EXTRACT and not self.json_keys:
-            errors.append("Pattern 'json_extract' bắt buộc có 'json_keys'")
+        if self.pattern == QueryPattern.JSON_EXTRACT and not self.json_keys and not self.json_filters:
+            errors.append("Pattern 'json_extract' bắt buộc có 'json_keys' hoặc 'json_filters'")
 
         if not 0.0 <= self.confidence <= 1.0:
             errors.append(f"'confidence' phải 0.0-1.0, nhận {self.confidence}")

@@ -297,14 +297,40 @@ window.ChatBlocks = (() => {
 
   function renderQuote(card, payload) {
     const list = el('div', 'chat-quotes');
+    window._chatQuoteCache = window._chatQuoteCache || new Map();
     (payload.quotes || []).forEach(q => {
+      if (q.issue_code) {
+        window._chatQuoteCache.set(q.issue_code, q);
+      }
       const item = el('blockquote', 'chat-quote');
       item.appendChild(el('p', 'chat-quote-content', q.content));
-      const meta = [q.issue_code, q.unit_name, q.display_date, q.sentiment, q.status];
-      if (q.source_file_name) {
-        meta.push(q.source_row_number ? `${q.source_file_name} · dòng ${q.source_row_number}` : q.source_file_name);
+
+      const footer = el('footer', 'chat-quote-meta');
+      if (q.issue_code) {
+        const badge = el('button', 'chat-issue-badge', q.issue_code);
+        badge.type = 'button';
+        badge.dataset.issueCode = q.issue_code;
+        if (q.unit_name) badge.dataset.unitName = q.unit_name;
+        if (q.display_date || q.issue_date) badge.dataset.issueDate = q.display_date || q.issue_date;
+        if (q.sentiment) badge.dataset.sentiment = q.sentiment;
+        if (q.content) badge.dataset.content = q.content;
+        if (q.source_file_name) badge.dataset.sourceFile = q.source_file_name;
+        if (q.source_row_number) badge.dataset.sourceRow = String(q.source_row_number);
+        if (q.label) badge.dataset.label = q.label;
+        if (q.major_group) badge.dataset.majorGroup = q.major_group;
+        footer.appendChild(badge);
       }
-      item.appendChild(el('footer', 'chat-quote-meta', meta.filter(Boolean).join(' · ')));
+
+      const otherMeta = [q.unit_name, q.display_date || q.issue_date, q.sentiment, q.status];
+      if (q.source_file_name) {
+        otherMeta.push(q.source_row_number ? `${q.source_file_name} · dòng ${q.source_row_number}` : q.source_file_name);
+      }
+      const rest = otherMeta.filter(Boolean).join(' · ');
+      if (rest) {
+        if (q.issue_code) footer.appendChild(document.createTextNode(' · '));
+        footer.appendChild(document.createTextNode(rest));
+      }
+      item.appendChild(footer);
       list.appendChild(item);
     });
     card.appendChild(list);
@@ -392,17 +418,89 @@ window.ChatBlocks = (() => {
 
   /* ---- Nhận định, từ chối, hỏi lại, gợi ý, lỗi, kết thúc ---- */
 
+  function createIssueBadge(code) {
+    const btn = button('chat-issue-badge', code);
+    btn.dataset.issueCode = code;
+    btn.setAttribute('data-issue-code', code);
+    return btn;
+  }
+
+  function appendInlineMarkdown(parent, text) {
+    if (!text) return;
+    const tokenRegex = /(\*\*[^*]+\*\*|(?:[\(\[])?\bFB[-_][A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*\b(?:[\)\]])?)/g;
+    const issueCodeRegex = /^(?:[\(\[])?\b(FB[-_][A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*)\b(?:[\)\]])?$/;
+    let lastIdx = 0;
+    let match;
+    while ((match = tokenRegex.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        parent.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+      }
+      const token = match[0];
+      const codeMatch = token.match(issueCodeRegex);
+      if (token.startsWith('**') && token.endsWith('**')) {
+        const strongText = token.slice(2, -2);
+        const innerCodeMatch = strongText.match(issueCodeRegex);
+        if (innerCodeMatch) {
+          const strong = el('strong');
+          strong.appendChild(createIssueBadge(innerCodeMatch[1]));
+          parent.appendChild(strong);
+        } else {
+          parent.appendChild(el('strong', null, strongText));
+        }
+      } else if (codeMatch) {
+        parent.appendChild(createIssueBadge(codeMatch[1]));
+      } else {
+        parent.appendChild(document.createTextNode(token));
+      }
+      lastIdx = tokenRegex.lastIndex;
+    }
+    if (lastIdx < text.length) {
+      parent.appendChild(document.createTextNode(text.slice(lastIdx)));
+    }
+  }
+
   function renderCommentary(container, data) {
     if (!data.text) return;
     const box = data.section ? sectionSlot(container, data.section) : slot(container, 'commentary');
     box.hidden = false;
-    let para = box.querySelector(':scope > p.chat-commentary-text');
-    if (!para) {
-      para = el('p', 'chat-commentary-text');
-      box.appendChild(para);
+
+    const rawText = String(data.text);
+    const lines = rawText.split(/\r?\n/);
+
+    let currentList = null;
+    const lastChild = box.lastElementChild;
+    if (lastChild && lastChild.classList && lastChild.classList.contains('chat-commentary-list')) {
+      currentList = lastChild;
     }
-    if (para.childNodes.length) para.appendChild(document.createTextNode(' '));
-    para.appendChild(el('span', 'chat-sentence', data.text));
+
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+
+      const bulletMatch = trimmed.match(/^[-*]\s+(.*)$/);
+      if (bulletMatch) {
+        if (!currentList || currentList.parentNode !== box) {
+          currentList = el('ul', 'chat-commentary-list');
+          box.appendChild(currentList);
+        }
+        const li = el('li', 'chat-commentary-item');
+        appendInlineMarkdown(li, bulletMatch[1]);
+        currentList.appendChild(li);
+      } else {
+        currentList = null;
+        let para = box.querySelector(':scope > p.chat-commentary-text:last-of-type');
+        if (!para || box.lastElementChild !== para) {
+          para = el('p', 'chat-commentary-text');
+          box.appendChild(para);
+        }
+        if (para.childNodes.length) {
+          para.appendChild(document.createTextNode(' '));
+        }
+        const span = el('span', 'chat-sentence');
+        appendInlineMarkdown(span, trimmed);
+        para.appendChild(span);
+      }
+    });
   }
 
   function renderRefusal(data) {
@@ -478,7 +576,7 @@ window.ChatBlocks = (() => {
 
   return {
     MAX_CHART_ANSWERS,
-    escape, el,
+    escape, el, appendInlineMarkdown,
     createAnswerView, renderEvent, renderBlock, renderNote, formatResetTime,
     drawPendingCharts, destroyCharts, enforceChartLimit, chartCount,
   };

@@ -94,7 +94,7 @@ class DocumentFrequencies:
 
 
 class CachedTermStats:
-    """Cache bảng IDF theo TTL; lỗi khi nạp thì trả ``None`` để builder dùng độ dài token."""
+    """Cache bảng IDF theo TTL và revision; lỗi khi nạp thì trả ``None`` để builder dùng độ dài token."""
 
     def __init__(
         self,
@@ -102,28 +102,50 @@ class CachedTermStats:
         *,
         ttl_seconds: float = 300.0,
         now: Callable[[], float] = time.monotonic,
+        revision_getter: Callable[[], int] | None = None,
     ) -> None:
         self._loader = loader
         self._ttl = ttl_seconds
         self._now = now
+        self._revision_getter = revision_getter
         self._cached: TermStats | None = None
         self._loaded_at = 0.0
         self._failed_at: float | None = None
+        self._last_revision: int | None = None
 
     def idf(self, token: str) -> float | None:
         current = self._now()
-        if self._cached is None or current - self._loaded_at >= self._ttl:
-            if self._failed_at is not None and current - self._failed_at < self._ttl:
+        current_rev: int | None = None
+        if self._revision_getter is not None:
+            try:
+                current_rev = self._revision_getter()
+            except Exception:
+                current_rev = None
+
+        rev_changed = (
+            current_rev is not None
+            and self._last_revision is not None
+            and current_rev != self._last_revision
+        )
+
+        if self._cached is None or rev_changed or current - self._loaded_at >= self._ttl:
+            if (
+                not rev_changed
+                and self._failed_at is not None
+                and current - self._failed_at < self._ttl
+            ):
                 return None
             try:
                 self._cached = self._loader()
                 self._loaded_at = current
                 self._failed_at = None
+                self._last_revision = current_rev
             except Exception as exc:
                 logger.warning(
                     "fts_term_stats_unavailable", extra={"error_type": type(exc).__name__}
                 )
                 self._failed_at = current
+                self._last_revision = current_rev
                 return None
         return self._cached.idf(token)
 

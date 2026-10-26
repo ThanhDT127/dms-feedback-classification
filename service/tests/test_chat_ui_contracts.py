@@ -172,6 +172,7 @@ def test_format_reset_time_in_node(tmp_path):
         [NODE, str(script), str(STATIC / "js" / "components" / "chat-blocks.js")],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=30,
         check=True,
     )
@@ -270,6 +271,7 @@ def test_chat_store_behaviour_in_node(tmp_path):
         [NODE, str(script), str(STATIC / "js" / "components" / "chat-store.js")],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=30,
         check=True,
     )

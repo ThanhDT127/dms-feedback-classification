@@ -108,7 +108,13 @@ class HistoryAdapter:
                 dict(plan)
                 for plan in plans
                 if isinstance(plan, dict)
-                and plan.get("function_name")
+                and (
+                    plan.get("function_name")
+                    or plan.get("pattern") in ("semantic_view", "fts5_search", "json_extract")
+                    or plan.get("sql")
+                    or plan.get("fts_query")
+                    or plan.get("json_filters")
+                )
                 and isinstance(plan.get("params", {}), dict)
             ]
             if usable:

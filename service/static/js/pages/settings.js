@@ -197,6 +197,13 @@ window.SettingsPage = (() => {
       ? (s.gateway_model || s.gemini_model || s.model || s.llm_model || '')
       : (s.gemini_model || s.model || s.llm_model || '');
 
+    // Chatbot settings
+    const chatEnabled = s.chat_enabled !== false;
+    const chatModel = s.chat_gemini_model || '';
+    const chatMilestone = String(s.chat_milestone || 'M5').toUpperCase();
+    const rawPatterns = s.chat_enabled_patterns || 'sql_template,semantic_view,fts5_search,json_extract';
+    const enabledPatterns = new Set(rawPatterns.split(',').map(p => p.trim()));
+
     const modelIds = new Set(
       (_models || []).map(m => (typeof m === 'string' ? m : m.id || m.name))
     );
@@ -280,6 +287,99 @@ window.SettingsPage = (() => {
 
         <!-- Test result -->
         <div id="test-result" class="hidden" style="margin-top:16px;"></div>
+      </div>
+
+      <!-- Chatbot Copilot Configuration Card -->
+      <div class="card animate-in" style="max-width:700px;margin-top:24px;">
+        <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+          <span class="card-title"><span class="icon">🤖</span> Cấu hình Trợ lý AI (Chatbot Copilot)</span>
+          <span class="badge ${chatEnabled ? 'badge-green' : 'badge-muted'}" id="chat-enabled-badge">
+            ${chatEnabled ? 'Đang bật' : 'Đang tắt'}
+          </span>
+        </div>
+
+        <!-- Toggle switch: Kích hoạt Chatbot -->
+        <div class="form-group" style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);">
+          <div>
+            <label class="form-label" style="font-weight:600;margin-bottom:2px;">Kích hoạt Chatbot Copilot</label>
+            <span class="form-hint" style="font-size:12px;color:var(--text-muted);">Bật hoặc tắt phân hệ trợ lý đối thoại phân tích dữ liệu trên toàn hệ thống</span>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;">
+            <input type="checkbox" id="set-chat-enabled" ${chatEnabled ? 'checked' : ''} onchange="SettingsPage.onChatEnabledToggle()" style="width:20px;height:20px;cursor:pointer;">
+            <span style="font-size:13px;">Bật Copilot</span>
+          </label>
+        </div>
+
+        <div id="chat-config-body" ${!chatEnabled ? 'style="opacity:0.6;"' : ''}>
+          <!-- Model selection for Chatbot -->
+          <div class="form-group" style="margin-top:16px;">
+            <label class="form-label" style="font-weight:600;">Model LLM cho Chatbot</label>
+            <select class="form-select" id="set-chat-model">
+              <option value="" ${!chatModel ? 'selected' : ''}>Mặc định (Dùng chung model phân loại)</option>
+              <option value="gemini-2.5-flash" ${chatModel === 'gemini-2.5-flash' ? 'selected' : ''}>gemini-2.5-flash (Khuyên dùng: Nhanh, chính xác)</option>
+              <option value="gemini-2.5-pro" ${chatModel === 'gemini-2.5-pro' ? 'selected' : ''}>gemini-2.5-pro (Suy luận phức tạp)</option>
+              <option value="gemini-1.5-flash" ${chatModel === 'gemini-1.5-flash' ? 'selected' : ''}>gemini-1.5-flash</option>
+              <option value="gemini-1.5-pro" ${chatModel === 'gemini-1.5-pro' ? 'selected' : ''}>gemini-1.5-pro</option>
+              ${chatModel && !['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-1.5-flash', 'gemini-1.5-pro'].includes(chatModel) ? `<option value="${esc(chatModel)}" selected>${esc(chatModel)} (Tùy chỉnh)</option>` : ''}
+            </select>
+            <span class="form-hint" style="font-size:11px;color:var(--text-muted);">Nếu để mặc định, Copilot sẽ kế thừa model AI ở khối phía trên</span>
+          </div>
+
+          <!-- Milestone selection -->
+          <div class="form-group" style="margin-top:16px;">
+            <label class="form-label" style="font-weight:600;">Milestone kích hoạt</label>
+            <select class="form-select" id="set-chat-milestone">
+              <option value="M5" ${chatMilestone === 'M5' ? 'selected' : ''}>M5 — Full Features & Analytics Copilot (Khuyên dùng)</option>
+              <option value="M4" ${chatMilestone === 'M4' ? 'selected' : ''}>M4 — Frontend & Admin UI Layer</option>
+              <option value="M3" ${chatMilestone === 'M3' ? 'selected' : ''}>M3 — AI Synthesis & Analytical Enrichment</option>
+              <option value="M2" ${chatMilestone === 'M2' ? 'selected' : ''}>M2 — Semantic Text-to-SQL & Normalizer</option>
+              <option value="M1" ${chatMilestone === 'M1' ? 'selected' : ''}>M1 — Core Access Control & FTS5 Search</option>
+            </select>
+            <span class="form-hint" style="font-size:11px;color:var(--text-muted);">Cấp độ chức năng và chốt chặn an toàn được kích hoạt cho Chatbot</span>
+          </div>
+
+          <!-- Query Patterns selection -->
+          <div class="form-group" style="margin-top:16px;">
+            <label class="form-label" style="font-weight:600;">Query Patterns cho phép (Cơ chế truy vấn)</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+              <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;">
+                <input type="checkbox" class="chat-pattern-cb" value="sql_template" ${enabledPatterns.has('sql_template') ? 'checked' : ''} style="margin-top:2px;">
+                <div>
+                  <strong>sql_template</strong>
+                  <div style="font-size:11px;color:var(--text-muted);">16 mẫu thống kê an toàn có sẵn</div>
+                </div>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;">
+                <input type="checkbox" class="chat-pattern-cb" value="semantic_view" ${enabledPatterns.has('semantic_view') ? 'checked' : ''} style="margin-top:2px;">
+                <div>
+                  <strong>semantic_view</strong>
+                  <div style="font-size:11px;color:var(--text-muted);">Truy vấn Text-to-SQL qua Scoped View</div>
+                </div>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;">
+                <input type="checkbox" class="chat-pattern-cb" value="fts5_search" ${enabledPatterns.has('fts5_search') ? 'checked' : ''} style="margin-top:2px;">
+                <div>
+                  <strong>fts5_search</strong>
+                  <div style="font-size:11px;color:var(--text-muted);">Tìm kiếm toàn văn FTS5 đa thuộc tính</div>
+                </div>
+              </label>
+              <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;">
+                <input type="checkbox" class="chat-pattern-cb" value="json_extract" ${enabledPatterns.has('json_extract') ? 'checked' : ''} style="margin-top:2px;">
+                <div>
+                  <strong>json_extract</strong>
+                  <div style="font-size:11px;color:var(--text-muted);">Trích xuất trường động raw_data_json</div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Save Button -->
+        <div style="display:flex;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
+          <button class="btn btn-primary" id="btn-save-chat-settings" onclick="SettingsPage.saveChatSettings()">
+            💾 Lưu cấu hình Chatbot
+          </button>
+        </div>
       </div>
     `;
   }
@@ -399,6 +499,73 @@ window.SettingsPage = (() => {
       loadSettings();
     } catch (e) {
       Toast.error('Lỗi lưu cấu hình: ' + e.message);
+    }
+  }
+
+  function onChatEnabledToggle() {
+    const cb = document.getElementById('set-chat-enabled');
+    const badge = document.getElementById('chat-enabled-badge');
+    const body = document.getElementById('chat-config-body');
+    if (!cb) return;
+    const enabled = cb.checked;
+    if (badge) {
+      badge.className = `badge ${enabled ? 'badge-green' : 'badge-muted'}`;
+      badge.textContent = enabled ? 'Đang bật' : 'Đang tắt';
+    }
+    if (body) {
+      body.style.opacity = enabled ? '1' : '0.6';
+    }
+  }
+
+  async function saveChatSettings() {
+    const btn = document.getElementById('btn-save-chat-settings');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Đang lưu...';
+    }
+
+    const enabled = document.getElementById('set-chat-enabled')?.checked ?? true;
+    const model = document.getElementById('set-chat-model')?.value ?? '';
+    const milestone = document.getElementById('set-chat-milestone')?.value ?? 'M5';
+    const patterns = Array.from(document.querySelectorAll('.chat-pattern-cb:checked'))
+      .map(cb => cb.value)
+      .filter(Boolean);
+
+    if (patterns.length === 0) {
+      Toast.warning('Phải chọn ít nhất 1 Query Pattern cho phép.');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '💾 Lưu cấu hình Chatbot';
+      }
+      return;
+    }
+
+    const payload = {
+      chat_enabled: enabled,
+      chat_gemini_model: model,
+      chat_milestone: milestone,
+      chat_enabled_patterns: patterns.join(','),
+    };
+
+    try {
+      if (typeof API.patch === 'function') {
+        await API.patch('/settings', payload);
+      } else {
+        await API.putSettings(payload);
+      }
+      Object.assign(_settings, payload);
+      Toast.success('Đã lưu cấu hình Trợ lý AI (Chatbot Copilot) thành công.');
+      if (window.App && typeof App.loadChatConfig === 'function') {
+        App.loadChatConfig();
+      }
+      loadSettings();
+    } catch (err) {
+      Toast.error('Lỗi lưu cấu hình Chatbot: ' + (err.message || 'Không thể kết nối máy chủ'));
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '💾 Lưu cấu hình Chatbot';
+      }
     }
   }
 
@@ -2101,6 +2268,7 @@ window.SettingsPage = (() => {
     _kwAutocomplete, _kwDropdownNav, _kwSelectAc,
     renderLabelsTab, loadLabelHistory, filterLabelHistory, loadMoreLabelHistory,
     createUser, editUser, deleteUser, loadUsers,
-    openPromptAssetEditor, openKeywordAssetEditor, openProductAssetEditor
+    openPromptAssetEditor, openKeywordAssetEditor, openProductAssetEditor,
+    onChatEnabledToggle, saveChatSettings
   };
 })();

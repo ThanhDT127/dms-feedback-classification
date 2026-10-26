@@ -41,6 +41,7 @@ class GeminiResponse:
     route: str | None = None
     response_id: str | None = None
     model_actual: str | None = None
+    chunks: list[dict[str, Any]] | None = None
 
 
 class GeminiClient:
@@ -329,12 +330,8 @@ class GeminiClient:
     def _gateway_stream(
         self, prompt, *, system_instruction, temperature, max_output_tokens, actor, operation
     ) -> GeminiStream:
-        """Adapt a complete Gateway response to the chat iterator, using the same fallback policy.
-
-        The Gateway transport currently returns a complete response rather than SSE. Do not
-        retry at the iterator layer: the audited Gateway operation owns all retries.
-        """
-        options = {}
+        """Adapt a Gateway SSE stream or complete response to the chat iterator, using fallback policy."""
+        options = {"stream": True}
         if system_instruction is not None:
             options["system_instruction"] = system_instruction
         if max_output_tokens is not None:
@@ -349,15 +346,31 @@ class GeminiClient:
                 if response.route == "direct_apikey"
                 else self.settings.gateway_model
             )
-            yield SimpleNamespace(
-                text=response.text,
-                usage_metadata=SimpleNamespace(
-                    prompt_token_count=response.usage.get("prompt_tokens", 0),
-                    candidates_token_count=response.usage.get("completion_tokens", 0),
-                    total_token_count=response.usage.get("total_tokens", 0),
-                ),
-                candidates=[SimpleNamespace(finish_reason="STOP")],
-            )
+            chunks = getattr(response, "chunks", None)
+            if chunks:
+                total_chunks = len(chunks)
+                for i, chunk in enumerate(chunks):
+                    is_last = (i == total_chunks - 1)
+                    fr = chunk.get("finish_reason") or ("STOP" if is_last else None)
+                    yield SimpleNamespace(
+                        text=chunk.get("text", ""),
+                        usage_metadata=SimpleNamespace(
+                            prompt_token_count=response.usage.get("prompt_tokens", 0),
+                            candidates_token_count=response.usage.get("completion_tokens", 0),
+                            total_token_count=response.usage.get("total_tokens", 0),
+                        ) if is_last else None,
+                        candidates=[SimpleNamespace(finish_reason=fr)] if fr else [],
+                    )
+            else:
+                yield SimpleNamespace(
+                    text=response.text,
+                    usage_metadata=SimpleNamespace(
+                        prompt_token_count=response.usage.get("prompt_tokens", 0),
+                        candidates_token_count=response.usage.get("completion_tokens", 0),
+                        total_token_count=response.usage.get("total_tokens", 0),
+                    ),
+                    candidates=[SimpleNamespace(finish_reason="STOP")],
+                )
 
         total_timeout = float(self.settings.chat_stream_total_timeout_seconds)
         stream = GeminiStream(
@@ -551,8 +564,10 @@ class GeminiClient:
         event = dict(
             event, route="direct_apikey", incident_id=incident, attempt_id=uuid.uuid4().hex
         )
+        direct_options = dict(request_options)
+        direct_options.pop("stream", None)
         return self._attempt(
-            config, event, prompt, temperature, json_mode, actor, **request_options
+            config, event, prompt, temperature, json_mode, actor, **direct_options
         )
 
     def _direct_request(
@@ -658,13 +673,16 @@ class GeminiClient:
                 if event["incident_id"] == self._incident_id:
                     self._direct_attempted += 1
         try:
-            response = (
-                self._direct_request(config, prompt, temperature, json_mode, **request_options)
-                if direct
-                else self._gateway_request(
+            if direct:
+                direct_options = dict(request_options)
+                direct_options.pop("stream", None)
+                response = self._direct_request(
+                    config, prompt, temperature, json_mode, **direct_options
+                )
+            else:
+                response = self._gateway_request(
                     config, prompt, temperature, json_mode, actor, **request_options
                 )
-            )
         except Exception as exc:
             if direct:
                 error = (
@@ -778,6 +796,7 @@ class GeminiClient:
         *,
         system_instruction=None,
         max_output_tokens=None,
+        stream=False,
     ):
         messages = []
         if system_instruction is not None:
@@ -794,6 +813,8 @@ class GeminiClient:
             body["response_format"] = {"type": "json_object"}
         if max_output_tokens is not None:
             body["max_tokens"] = max_output_tokens
+        if stream:
+            body["stream"] = True
         with requests.Session() as session:
             # No adapter retries and no redirects on inference POSTs.
             response = session.post(
@@ -802,6 +823,7 @@ class GeminiClient:
                 headers={"Authorization": "Bearer " + config.gateway_api_key, "X-User": actor},
                 allow_redirects=False,
                 timeout=config.gemini_timeout_seconds,
+                stream=stream,
             )
             status = response.status_code
             if status == 429:
@@ -824,6 +846,11 @@ class GeminiClient:
                     else "request"
                 )
                 raise GatewayError(category, outcome_unknown=status >= 500)
+
+            content_type = response.headers.get("Content-Type", "")
+            if "text/event-stream" in content_type:
+                return self._parse_gateway_sse(response, prompt=prompt)
+
             payload = None
             usage = None
             try:
@@ -843,12 +870,92 @@ class GeminiClient:
                     model_actual=_response_token(payload.get("model")),
                 )
             except (AttributeError, KeyError, IndexError, TypeError, ValueError):
+                if stream:
+                    try:
+                        return self._parse_gateway_sse(response, prompt=prompt)
+                    except Exception:
+                        pass
                 error = GatewayError("response", outcome_unknown=True)
                 error.usage = usage
                 if isinstance(payload, dict):
                     error.response_id = _response_token(payload.get("id"))
                     error.model_actual = _response_token(payload.get("model"))
                 raise error from None
+
+    def _parse_gateway_sse(
+        self, response: requests.Response, *, prompt: str = ""
+    ) -> GeminiResponse:
+        response.encoding = "utf-8"
+        chunks: list[dict[str, Any]] = []
+        accumulated_text: list[str] = []
+        model_actual: str | None = None
+        response_id: str | None = None
+        usage: dict[str, int] | None = None
+        last_finish_reason: str = "STOP"
+
+        for raw_line in response.iter_lines():
+            if not raw_line:
+                continue
+            if isinstance(raw_line, bytes):
+                raw_line = raw_line.decode("utf-8", errors="replace")
+            line = raw_line.strip()
+            if not line.startswith("data:"):
+                continue
+            data_str = line[5:].strip()
+            if data_str == "[DONE]":
+                break
+            try:
+                data = json.loads(data_str)
+            except Exception:
+                continue
+            if not response_id and data.get("id"):
+                response_id = _response_token(data.get("id"))
+            if not model_actual and data.get("model"):
+                model_actual = _response_token(data.get("model"))
+            if data.get("usage"):
+                parsed_usage = _gateway_usage(data.get("usage"))
+                if parsed_usage:
+                    usage = parsed_usage
+
+            choices = data.get("choices") or []
+            if choices:
+                choice = choices[0]
+                delta = choice.get("delta") or {}
+                delta_text = delta.get("content") or ""
+                fr = choice.get("finish_reason")
+                if fr:
+                    last_finish_reason = str(fr).upper()
+                if delta_text:
+                    accumulated_text.append(delta_text)
+                    chunks.append({"text": delta_text, "finish_reason": None})
+
+        full_text = "".join(accumulated_text)
+        if not full_text.strip() and not chunks:
+            error = GatewayError("response", outcome_unknown=True)
+            error.response_id = response_id
+            error.model_actual = model_actual
+            raise error
+
+        if chunks:
+            chunks[-1]["finish_reason"] = last_finish_reason
+
+        if usage is None:
+            prompt_estimate = max(1, len(prompt) // 4) if prompt else 1
+            completion_estimate = max(1, len(full_text) // 4) if full_text else 1
+            usage = {
+                "prompt_tokens": prompt_estimate,
+                "completion_tokens": completion_estimate,
+                "total_tokens": prompt_estimate + completion_estimate,
+            }
+
+        return GeminiResponse(
+            text=full_text,
+            usage=usage,
+            route="gateway",
+            response_id=response_id,
+            model_actual=model_actual,
+            chunks=chunks,
+        )
 
     def _call_with_timeout(self, fn, *args, **kwargs) -> Any:  # noqa: ANN001
         """Execute *fn* with a timeout from settings.gemini_timeout_seconds.

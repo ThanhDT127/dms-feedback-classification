@@ -19,6 +19,7 @@ from typing import Any
 from unidecode import unidecode
 
 from ...analytics import FeedbackAnalyticsRepository
+from ...analytics.sql_queries import _fold, register_issue_functions
 from ..auth.scope_policy import ScopePolicy
 from ..contract import (
     QueryPattern,
@@ -128,26 +129,24 @@ class SecureQueryExecutor:
         """Pattern 2: Chạy SQL an toàn trên Semantic View."""
         raw_sql = str(plan.sql or "").strip()
 
-        # Kiểm tra chỉ cho phép câu lệnh SELECT
-        if not raw_sql.lower().startswith("select"):
-            raise PermissionError("Chỉ cho phép câu lệnh truy vấn đọc (SELECT).")
+        # Kiểm tra chỉ cho phép câu lệnh SELECT hoặc WITH
+        clean_lower = raw_sql.lower()
+        if not (clean_lower.startswith("select") or clean_lower.startswith("with")):
+            raise PermissionError("Chỉ cho phép câu lệnh truy vấn đọc (SELECT hoặc WITH).")
 
         if _FORBIDDEN_SQL_PATTERNS.search(raw_sql):
             raise PermissionError("Câu lệnh chứa từ khóa bị cấm sửa đổi cơ sở dữ liệu.")
-
-        # Ép điều kiện phân quyền đơn vị
-        scoped_sql = ScopePolicy.enforce_sql_where(raw_sql, scope, unit_column="unit_name")
 
         with self.repository._conn() as conn:
             conn.row_factory = sqlite3.Row
             # View đã áp phạm vi là TEMP VIEW, sống theo connection nên phải dựng lại mỗi lần.
             create_scoped_views(conn, scope)
             cursor = conn.cursor()
-            rows = cursor.execute(scoped_sql).fetchall()
+            rows = cursor.execute(raw_sql).fetchall()
             return [dict(r) for r in rows]
 
     def _execute_fts5_search(self, plan: QueryPlan, scope: UserScope) -> list[dict[str, Any]]:
-        """Pattern 3: Tìm kiếm toàn văn FTS5 dual-index tiếng Việt."""
+        """Pattern 3: Tìm kiếm toàn văn FTS5 dual-index tiếng Việt kèm bộ lọc."""
         raw_query = str(plan.fts_query or "").strip()
         sanitized_raw = _sanitize_fts_query(raw_query)
         if not sanitized_raw:
@@ -156,41 +155,81 @@ class SecureQueryExecutor:
         limit = min(max(1, plan.fts_limit), 100)
         sanitized_nodau = unidecode(sanitized_raw).lower().strip()
 
+        filter_clauses: list[str] = []
+        filter_params: list[Any] = []
+        fts_filters = plan.fts_filters or {}
+
+        if fts_filters.get("date_from"):
+            filter_clauses.append("r.issue_date >= ?")
+            filter_params.append(str(fts_filters["date_from"]))
+        if fts_filters.get("date_to"):
+            filter_clauses.append("r.issue_date <= ?")
+            filter_params.append(str(fts_filters["date_to"]))
+        if fts_filters.get("unit_name"):
+            filter_clauses.append("analytics_fold(r.unit_name) = ?")
+            filter_params.append(_fold(fts_filters["unit_name"]))
+        if fts_filters.get("product"):
+            filter_clauses.append("analytics_fold(r.product) = ?")
+            filter_params.append(_fold(fts_filters["product"]))
+        if fts_filters.get("sentiment"):
+            filter_clauses.append("analytics_fold(r.sentiment) = ?")
+            filter_params.append(_fold(fts_filters["sentiment"]))
+        if fts_filters.get("source"):
+            filter_clauses.append("analytics_fold(r.source) = ?")
+            filter_params.append(_fold(fts_filters["source"]))
+        if fts_filters.get("label"):
+            lbl = str(fts_filters["label"]).strip()
+            if _fold(lbl) == "__unlabeled__":
+                filter_clauses.append(
+                    "NOT EXISTS (SELECT 1 FROM feedback_labels l WHERE l.feedback_id = r.feedback_id)"
+                )
+            else:
+                filter_clauses.append(
+                    "EXISTS (SELECT 1 FROM feedback_labels l WHERE l.feedback_id = r.feedback_id "
+                    "AND analytics_label_fold(l.label) = ?)"
+                )
+                filter_params.append(_fold(lbl))
+
+        extra_where = (" AND " + " AND ".join(filter_clauses)) if filter_clauses else ""
+
         with self.repository._conn() as conn:
+            register_issue_functions(conn)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
             # Thử tìm kiếm có dấu trước
-            base_sql = """
+            base_sql = f"""
                 SELECT r.feedback_id, r.issue_code, r.content, r.product,
                        r.unit_name, r.source, r.issue_date, r.sentiment,
                        r.business_status, r.raw_data_json,
                        r.source_file_name, r.source_row_number
                 FROM feedback_fts_raw f
                 JOIN feedback_records r ON r.feedback_id = f.feedback_id
-                WHERE f.feedback_fts_raw MATCH ? AND r.is_active = 1
+                WHERE f.feedback_fts_raw MATCH ? AND r.is_active = 1{extra_where}
             """
             scoped_sql = ScopePolicy.enforce_sql_where(base_sql, scope, unit_column="r.unit_name")
             scoped_sql += f" LIMIT {limit}"
 
-            rows = cursor.execute(scoped_sql, (sanitized_raw,)).fetchall()
+            rows = cursor.execute(scoped_sql, [sanitized_raw, *filter_params]).fetchall()
 
             # Nếu không tìm thấy, fallback sang tìm kiếm không dấu
             if not rows and sanitized_nodau:
-                fallback_sql = """
+                fallback_sql = f"""
                     SELECT r.feedback_id, r.issue_code, r.content, r.product,
                            r.unit_name, r.source, r.issue_date, r.sentiment,
                            r.business_status, r.raw_data_json,
                            r.source_file_name, r.source_row_number
                     FROM feedback_fts_nodau f
                     JOIN feedback_records r ON r.feedback_id = f.feedback_id
-                    WHERE f.feedback_fts_nodau MATCH ? AND r.is_active = 1
+                    WHERE f.feedback_fts_nodau MATCH ? AND r.is_active = 1{extra_where}
                 """
                 scoped_fallback_sql = ScopePolicy.enforce_sql_where(
                     fallback_sql, scope, unit_column="r.unit_name"
                 )
                 scoped_fallback_sql += f" LIMIT {limit}"
-                rows = cursor.execute(scoped_fallback_sql, (sanitized_nodau,)).fetchall()
+                rows = cursor.execute(
+                    scoped_fallback_sql, [sanitized_nodau, *filter_params]
+                ).fetchall()
 
             return [dict(r) for r in rows]
 
@@ -209,14 +248,18 @@ class SecureQueryExecutor:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
+            select_cols = (
+                "feedback_id, issue_code, content, product, sentiment, "
+                "issue_date, unit_name, raw_data_json"
+            )
             if feedback_id:
                 row = cursor.execute(
-                    "SELECT feedback_id, unit_name, raw_data_json FROM feedback_records WHERE feedback_id = ? AND is_active = 1",
+                    f"SELECT {select_cols} FROM feedback_records WHERE feedback_id = ? AND is_active = 1",
                     (feedback_id,),
                 ).fetchone()
             else:
                 row = cursor.execute(
-                    "SELECT feedback_id, unit_name, raw_data_json FROM feedback_records WHERE issue_code = ? AND is_active = 1",
+                    f"SELECT {select_cols} FROM feedback_records WHERE issue_code = ? AND is_active = 1",
                     (str(issue_code).strip(),),
                 ).fetchone()
 
@@ -226,7 +269,7 @@ class SecureQueryExecutor:
             # Kiểm tra quyền xem bản ghi này
             if not scope.is_admin:
                 record_unit = str(row["unit_name"] or "").strip()
-                if record_unit not in scope.unit_ids:
+                if _fold(record_unit) not in {_fold(u) for u in scope.unit_ids}:
                     raise PermissionError(
                         f"Bản ghi thuộc đơn vị '{record_unit}' nằm ngoài phạm vi được phân quyền của bạn."
                     )
@@ -240,8 +283,19 @@ class SecureQueryExecutor:
             if plan.json_keys:
                 extracted = {k: raw_data.get(k) for k in plan.json_keys}
             else:
-                extracted = raw_data
+                extracted = dict(raw_data)
 
-            extracted["feedback_id"] = row["feedback_id"]
-            extracted["unit_name"] = row["unit_name"]
+            # Gắn các cột hiển thị cơ bản
+            for col in (
+                "feedback_id",
+                "issue_code",
+                "content",
+                "product",
+                "sentiment",
+                "issue_date",
+                "unit_name",
+                "raw_data_json",
+            ):
+                extracted[col] = row[col]
+
             return [extracted]

@@ -23,7 +23,22 @@ _NUMBER_RUN = re.compile(r"\d[\d.,]*")
 _ISSUE_CODE = re.compile(r"\b[A-Z]{1,6}[-_]\d[\w-]*\b")
 
 MIN_SENTENCE_CHARS = 3
-MAX_SENTENCE_CHARS = 300
+MAX_SENTENCE_CHARS = 400
+
+# Ngoại lệ số thứ tự, số đếm nhỏ (1..10)
+_ORDINAL_RE = re.compile(r"\btop\s+([1-9]|10)\b", re.IGNORECASE)
+_SMALL_COUNT_RE = re.compile(
+    r"\b([1-9]|10)\s+(?:nhóm|vấn\s+đề|sản\s+phẩm|đơn\s+vị|loại|nguyên\s+nhân)\b",
+    re.IGNORECASE,
+)
+
+# Mốc thời gian
+_TIMEFRAME_MONTH_RE = re.compile(r"\btháng\s+([1-9]|1[0-2])\b", re.IGNORECASE)
+_TIMEFRAME_QUARTER_RE = re.compile(r"\bquý\s+([1-4])\b", re.IGNORECASE)
+_TIMEFRAME_YEAR_RE = re.compile(r"\bnăm\s+(20\d{2})\b", re.IGNORECASE)
+
+# Tỷ lệ phần trăm
+_PERCENT_RE = re.compile(r"(\d[\d.,]*)\s*%")
 
 # So khớp trên bản chữ thường của câu.
 LEAK_MARKERS: tuple[str, ...] = (
@@ -149,17 +164,84 @@ class SynthesisGuard:
         self.sheet = sheet
         self.min_chars = min_chars
         self.max_chars = max_chars
-        self.allowed_tokens = self._build_allowed_tokens(sheet, question)
+        self.allowed_codes = self._build_allowed_codes(sheet, question)
+        self.allowed_tokens = self._build_allowed_tokens(sheet, question, self.allowed_codes)
+        self.allowed_percentages = self._build_allowed_percentages(sheet)
         # ``None`` = câu trả lời thường: không có luật phần nào.
         self.sections: frozenset[str] | None = None if sections is None else frozenset(sections)
 
     @staticmethod
-    def _build_allowed_tokens(sheet: FactSheet, question: str) -> frozenset[str]:
-        """Số trong câu hỏi gốc và số nằm trong tên thực thể ("Vùng 1") được phép."""
+    def _build_allowed_codes(sheet: FactSheet, question: str) -> frozenset[str]:
+        """Tập các mã vấn đề hợp lệ trích từ quotes trong FactSheet và từ câu hỏi."""
+        codes: set[str] = set()
+        for fact in sheet:
+            if fact.key.startswith("q.") or ".q." in fact.key:
+                if fact.raw and not isinstance(fact.raw, int | float):
+                    raw_str = str(fact.raw).strip()
+                    if raw_str and not raw_str.isdigit():
+                        codes.add(raw_str)
+                if fact.display:
+                    for m in _ISSUE_CODE.finditer(fact.display):
+                        codes.add(m.group(0))
+        for m in _ISSUE_CODE.finditer(question):
+            codes.add(m.group(0))
+        return frozenset(codes)
+
+    @classmethod
+    def _build_allowed_tokens(
+        cls,
+        sheet: FactSheet,
+        question: str,
+        _allowed_codes: frozenset[str] | None = None,
+    ) -> frozenset[str]:
+        """Số trong câu hỏi gốc, tên thực thể ("Vùng 1") và fact ngày tháng."""
         tokens: set[str] = set(number_tokens(question))
         for name in sheet.entity_names():
             tokens |= number_tokens(name)
+        # Bổ sung token ngày tháng từ fact ngày tháng (range.current, range.compare, *.date)
+        for fact in sheet:
+            if (
+                fact.key in ("range.current", "range.compare")
+                or fact.key.endswith(".date")
+                or ".date." in fact.key
+            ):
+                date_toks = set(number_tokens(fact.display))
+                if fact.raw:
+                    date_toks |= set(number_tokens(str(fact.raw)))
+                for tok in date_toks:
+                    tokens.add(tok)
+                    if tok.isdigit():
+                        tokens.add(str(int(tok)))
+                        tokens.add(f"{int(tok):02d}")
         return frozenset(tokens)
+
+    @staticmethod
+    def _build_allowed_percentages(sheet: FactSheet) -> frozenset[str]:
+        """Tập các giá trị phần trăm hợp lệ từ FactSheet (*.pct, delta.*, fact chứa %)."""
+        pcts: set[str] = set()
+        for fact in sheet:
+            is_pct = (
+                fact.key.endswith(".pct")
+                or ".pct." in fact.key
+                or fact.key.startswith("delta.")
+                or ".delta." in fact.key
+                or "%" in fact.display
+            )
+            if not is_pct:
+                continue
+            for tok in number_tokens(fact.display):
+                pcts.add(tok)
+                pcts.add(tok.replace(",", "."))
+                pcts.add(tok.replace(".", ","))
+            if isinstance(fact.raw, int | float):
+                val_abs = abs(fact.raw)
+                if val_abs == int(val_abs):
+                    pcts.add(str(int(val_abs)))
+                pcts.add(f"{val_abs:g}".replace(".", ","))
+                pcts.add(f"{val_abs:g}")
+                pcts.add(f"{val_abs:.1f}".replace(".", ","))
+                pcts.add(f"{val_abs:.1f}")
+        return frozenset(pcts)
 
     def check(self, sentence: str) -> SentenceCheck:
         text = (sentence or "").strip()
@@ -184,19 +266,57 @@ class SynthesisGuard:
 
         without_placeholders = PLACEHOLDER.sub(" ", text)
 
-        # Chữ số nằm trong một mã vấn đề được để dành cho bước UNGROUNDED_CODE ngay dưới,
-        # nếu không "FB-2026-99999" sẽ bị báo nhầm là số tự viết.
-        code_spans = [match.span() for match in _ISSUE_CODE.finditer(without_placeholders)]
+        # 1. Spans của issue codes:
+        code_matches = list(_ISSUE_CODE.finditer(without_placeholders))
+        code_spans: list[tuple[int, int]] = [match.span() for match in code_matches]
+        for code in self.allowed_codes:
+            if code in without_placeholders:
+                for m in re.finditer(rf"\b{re.escape(code)}\b", without_placeholders):
+                    code_spans.append(m.span())
+
+        # 2. Spans của ordinals và small counts:
+        allowed_context_spans: list[tuple[int, int]] = []
+        for m in _ORDINAL_RE.finditer(without_placeholders):
+            allowed_context_spans.append(m.span(1))
+        for m in _SMALL_COUNT_RE.finditer(without_placeholders):
+            allowed_context_spans.append(m.span(1))
+
+        # 3. Spans của timeframes:
+        for m in _TIMEFRAME_MONTH_RE.finditer(without_placeholders):
+            allowed_context_spans.append(m.span(1))
+        for m in _TIMEFRAME_QUARTER_RE.finditer(without_placeholders):
+            allowed_context_spans.append(m.span(1))
+        for m in _TIMEFRAME_YEAR_RE.finditer(without_placeholders):
+            allowed_context_spans.append(m.span(1))
+
+        # 4. Spans của percentages hợp lệ:
+        for m in _PERCENT_RE.finditer(without_placeholders):
+            num_part = m.group(1).rstrip(".,")
+            if (
+                num_part in self.allowed_percentages
+                or num_part.replace(",", ".") in self.allowed_percentages
+                or num_part.replace(".", ",") in self.allowed_percentages
+            ):
+                allowed_context_spans.append(m.span(1))
+
+        exempt_spans = code_spans + allowed_context_spans
+
         stray_numbers = [
             run.group(0).rstrip(".,")
             for run in _NUMBER_RUN.finditer(without_placeholders)
-            if not _overlaps(run.span(), code_spans)
+            if not _overlaps(run.span(), exempt_spans)
             and run.group(0).rstrip(".,") not in self.allowed_tokens
         ]
         if stray_numbers:
             return self._drop(DropReason.UNGROUNDED_NUMBER)
 
-        if code_spans:
+        # Kiểm tra mã vấn đề không có căn cứ (ungrounded):
+        ungrounded_codes = [
+            match.group(0)
+            for match in code_matches
+            if match.group(0) not in self.allowed_codes
+        ]
+        if ungrounded_codes:
             return self._drop(DropReason.UNGROUNDED_CODE)
 
         # Chỉ soi phần văn xuôi do LLM tự viết. Khoá placeholder là của hệ thống và đã được

@@ -209,8 +209,13 @@ class PlanGuard:
         assert output.intent is not None
         intent = output.intent
 
-        # "Tra phản hồi mã 206501": mã thật là số thuần nên Planner hay chế tham số issue_code.
-        if intent in CODE_LOOKUP_INTENTS and CODE_LOOKUP_PATTERN.search(query.match_text):
+        # "Tra phản hồi mã 206501": cho phép khi json_extract được kích hoạt
+        code_lookup_enabled = "json_extract" in self.config.enabled_patterns
+        if (
+            not code_lookup_enabled
+            and intent in CODE_LOOKUP_INTENTS
+            and CODE_LOOKUP_PATTERN.search(query.match_text)
+        ):
             logger.info("plan_guard_code_lookup_unavailable", extra={"intent": intent.value})
             return self._terminal(
                 output, Decision.NOT_SUPPORTED, Reason.LOOKUP_BY_CODE_UNAVAILABLE, intent=intent
@@ -748,7 +753,15 @@ class PlanGuard:
                 intent = Intent.OVERVIEW
                 flags.add(FLAG_COMPARISON_DISALLOWED)
 
-        steps = self._with_unit(steps, effective[0] if len(effective) == 1 else None)
+        if inside:
+            if len(inside) == 1:
+                steps = self._with_unit(steps, inside[0])
+            else:
+                steps = self._with_units(steps, inside)
+        elif len(allowed) == 1:
+            steps = self._with_unit(steps, allowed[0])
+        else:
+            steps = self._with_unit(steps, None)
         return ValidatedPlan(
             planner_output=output,
             decision=Decision.RUN,
@@ -807,10 +820,22 @@ class PlanGuard:
         rebuilt: list[QueryPlan] = []
         for step in steps:
             params = dict(step.params)
+            params.pop("unit_names", None)
             if unit:
                 params["unit_name"] = unit
             else:
                 params.pop("unit_name", None)
+            rebuilt.append(replace(step, params=params))
+        return tuple(rebuilt)
+
+    @staticmethod
+    def _with_units(steps: Sequence[QueryPlan], units: Sequence[str]) -> tuple[QueryPlan, ...]:
+        """Đặt ``unit_names`` và bỏ ``unit_name`` trên bản sao của từng bước."""
+        rebuilt: list[QueryPlan] = []
+        for step in steps:
+            params = dict(step.params)
+            params.pop("unit_name", None)
+            params["unit_names"] = list(units)
             rebuilt.append(replace(step, params=params))
         return tuple(rebuilt)
 
@@ -828,17 +853,28 @@ class PlanGuard:
         for step in plan.steps:
             if step.pattern is QueryPattern.SEMANTIC_VIEW:
                 for param in step.params:
-                    if param not in SEMANTIC_FILTER_KEYS and param != ANALYSIS_REQUEST_PARAM:
+                    if (
+                        param not in SEMANTIC_FILTER_KEYS
+                        and param != ANALYSIS_REQUEST_PARAM
+                        and param != "unit_names"
+                    ):
                         note(param, step)
                 continue
             if step.pattern is QueryPattern.FTS5_SEARCH:
                 for param in step.params:
-                    if param not in FTS_FILTER_KEYS and param != SEARCH_TERMS_PARAM:
+                    if (
+                        param not in FTS_FILTER_KEYS
+                        and param != SEARCH_TERMS_PARAM
+                        and param != "unit_names"
+                    ):
                         note(param, step)
                 continue
             info = FUNCTION_CATALOG[str(step.function_name)]
+            code_lookup_enabled = "json_extract" in self.config.enabled_patterns
             for param in step.params:
-                if param not in info.supported_params:
+                if param not in info.supported_params and param != "unit_names":
+                    if code_lookup_enabled and param in CODE_PARAMS:
+                        continue
                     note(param, step)
 
         missing = self._missing_required(plan)
@@ -850,7 +886,8 @@ class PlanGuard:
         if not unsupported:
             return plan
 
-        if CODE_PARAMS & set(unsupported):
+        code_lookup_enabled = "json_extract" in self.config.enabled_patterns
+        if not code_lookup_enabled and (CODE_PARAMS & set(unsupported)):
             logger.info("plan_guard_code_lookup_unavailable", extra={"params": list(unsupported)})
             return replace(
                 plan,

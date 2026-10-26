@@ -338,6 +338,37 @@ async def cancel_job(request: Request, job_id: str, user: dict = CURRENT_USER_DE
 
     job_store = _get_job_store_or_503()
     cancelled = job_store.cancel_job(job_id)
+    try:
+        analytics_repo = deps.get_feedback_analytics_repository()
+        if analytics_repo is not None:
+            analytics_repo.rollback_cancelled_job(job_id)
+    except Exception as exc:
+        logger.warning("Could not rollback analytics records for cancelled job %s: %s", job_id, exc)
+
+    try:
+        import json
+
+        from ...sharepoint_cache import get_sharepoint_list_cache
+        from ...time_utils import utc_now_iso
+        from ...utils import atomic_write_json
+
+        filename = job.get("filename")
+        seen_path = WORK_DIR / "seen_files.json"
+        if filename and seen_path.is_file():
+            seen_data = json.loads(seen_path.read_text(encoding="utf-8"))
+            if isinstance(seen_data, dict):
+                changed_seen = False
+                for _fid, info in seen_data.items():
+                    if isinstance(info, dict) and info.get("name") == filename:
+                        info["status"] = "cancelled"
+                        info["cancelled_at"] = utc_now_iso()
+                        changed_seen = True
+                if changed_seen:
+                    atomic_write_json(seen_path, seen_data)
+                    get_sharepoint_list_cache().invalidate("input")
+    except Exception as exc:
+        logger.debug("Could not update seen_files.json on job cancel: %s", exc)
+
     if cancelled and cancelled.get("status") == JOB_STATUS_RUNNING:
         return {
             "message": f"Đã ghi nhận yêu cầu hủy job đang chạy: {job_id}",

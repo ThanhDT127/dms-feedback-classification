@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
+from typing import Any
 
 from ...settings import Settings
 from ..guardrails.input_guard import InputGuard
-from .contextualizer import Contextualizer, merge_slots
+from .contextualizer import ContextualizationResult, Contextualizer, merge_slots
 from .date_resolver import DEFAULT_TIMEZONE, DateResolver
 from .memory.topic_reset import RESET_ASSUMPTION, detect_topic_reset
 from .query_normalizer import QueryNormalizer
@@ -26,6 +28,82 @@ from .types import (
     QueryIssue,
     SessionSlots,
 )
+
+REFERENCE_WORDS: tuple[str, ...] = (
+    "nó",
+    "đó",
+    "này",
+    "kia",
+    "đấy",
+    "trên",
+    "như trên",
+    "thế còn",
+    "còn",
+    "ở đó",
+    "tại đó",
+    "của nó",
+    "chúng",
+    "kỳ này",
+    "kỳ trước",
+    "thì sao",
+    "thế nào",
+    "ra sao",
+    "sao",
+    "nhé",
+    "vậy",
+    "con",
+    "the con",
+    "o do",
+    "tai do",
+)
+_REF_PATTERN = re.compile(
+    r"(?<![\w\u00C0-\u1EF9])(" + "|".join(re.escape(w) for w in sorted(REFERENCE_WORDS, key=len, reverse=True)) + r")(?![\w\u00C0-\u1EF9])",
+    re.IGNORECASE,
+)
+
+_QUESTION_PREDICATES: tuple[str, ...] = (
+    "bao nhiêu",
+    "mấy",
+    "thống kê",
+    "báo cáo",
+    "tổng quan",
+    "chi tiết",
+    "lỗi gì",
+    "danh sách",
+    "top",
+    "xem",
+    "phản hồi nào",
+)
+
+
+def is_self_contained_query(question: str, normalized: Any = None) -> bool:
+    """Kiểm tra câu hỏi có tự đủ nghĩa không cần Contextualizer tham chiếu lịch sử hay không (R3.3).
+
+    Câu tự đủ nghĩa khi:
+    - Không chứa đại từ / từ nối chỉ trỏ ngữ cảnh cũ ("nó", "đó", "này", "kia", "đấy", "còn", "thì sao", v.v.).
+    - Đã chứa cả thực thể xác định (entities) và mốc thời gian rõ ràng (dates),
+      hoặc thực thể kèm từ khóa vị ngữ câu hỏi rõ ràng (vd: "bao nhiêu", "thống kê", "chi tiết", ...).
+    """
+    q = (question or "").strip()
+    if not q:
+        return False
+    if _REF_PATTERN.search(q):
+        return False
+    if normalized is not None:
+        has_entities = bool(getattr(normalized, "entities", None))
+        dates = getattr(normalized, "dates", None)
+        has_dates = bool(
+            dates is not None
+            and (
+                getattr(dates, "date_range", None) is not None
+                or getattr(dates, "compare_range", None) is not None
+            )
+        )
+        q_lower = q.lower()
+        has_predicate = any(kw in q_lower for kw in _QUESTION_PREDICATES)
+        return (has_entities and has_dates) or (has_entities and has_predicate)
+    return True
+
 
 NO_TIME_ASSUMPTION = "Câu hỏi không nêu mốc thời gian nên dùng toàn bộ dữ liệu."
 DROPPED_UNIT_ASSUMPTION = "Bỏ đơn vị {units} khỏi ngữ cảnh vì bạn không còn quyền xem."
@@ -85,15 +163,27 @@ def understand_query(
     # Slot kế thừa chỉ giữ đơn vị user còn quyền xem (b11 D7).
     previous_slots, dropped_units = scope_slots(previous_slots, scope_units)
 
-    context = Contextualizer(llm, max_turns=cfg.history_turns).rewrite(question, session_history)
-    rewritten = context.rewritten_query
-
     normalizer = QueryNormalizer(
         metadata,
         date_resolver=DateResolver(clock, cfg.timezone),
         fuzzy_threshold=cfg.fuzzy_match_threshold,
     )
-    normalized = normalizer.normalize(rewritten)
+
+    # Kiểm tra xem câu hỏi có tự đủ nghĩa để bỏ qua Contextualizer hay không (R3.3).
+    raw_normalized = normalizer.normalize(question)
+    has_history = (
+        isinstance(session_history, HistoryWindow)
+        and (bool(session_history.turns) or bool(session_history.summary))
+    ) or (isinstance(session_history, Sequence) and len(session_history) > 0)
+
+    if has_history and is_self_contained_query(question, raw_normalized):
+        context = ContextualizationResult(rewritten_query=question, is_follow_up=False)
+        rewritten = question
+        normalized = raw_normalized
+    else:
+        context = Contextualizer(llm, max_turns=cfg.history_turns).rewrite(question, session_history)
+        rewritten = context.rewritten_query
+        normalized = raw_normalized if rewritten == question else normalizer.normalize(rewritten)
     if dropped_units:
         # Đơn vị user nhắc thẳng ở lượt này vẫn để Plan Guard xét như cũ; đơn vị chỉ đến từ
         # ngữ cảnh cũ (Contextualizer có thể chép lại) thì bỏ, không sinh refusal (b11 D7).

@@ -75,6 +75,7 @@ class ScopePolicy:
             )
 
         requested_unit = scoped_params.get("unit_name")
+        requested_units = scoped_params.get("unit_names")
         allowed_lookup = {u.casefold(): u for u in scope.unit_ids}
 
         if requested_unit:
@@ -87,6 +88,28 @@ class ScopePolicy:
                 )
             # Chuẩn hóa về tên đơn vị chính thức trong scope
             scoped_params["unit_name"] = matched_canonical
+            scoped_params.pop("unit_names", None)
+            scoped_params.pop("_allowed_unit_ids", None)
+        elif requested_units:
+            validated_units: list[str] = []
+            for u in requested_units:
+                clean_u = str(u).strip()
+                matched = allowed_lookup.get(clean_u.casefold())
+                if matched is None:
+                    raise PermissionError(
+                        f"Bạn không có quyền xem dữ liệu của đơn vị '{clean_u}'. "
+                        f"Các đơn vị được phép: {', '.join(scope.unit_ids)}"
+                    )
+                if matched not in validated_units:
+                    validated_units.append(matched)
+            if len(validated_units) == 1:
+                scoped_params["unit_name"] = validated_units[0]
+                scoped_params.pop("unit_names", None)
+                scoped_params.pop("_allowed_unit_ids", None)
+            else:
+                scoped_params["unit_names"] = validated_units
+                scoped_params["_allowed_unit_ids"] = list(validated_units)
+                scoped_params.pop("unit_name", None)
         else:
             # Nếu user có đúng 1 đơn vị, tự động gán unit_name
             if len(scope.unit_ids) == 1:

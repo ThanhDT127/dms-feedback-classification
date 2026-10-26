@@ -36,9 +36,14 @@ def test_understanding_config_reads_settings(settings):
 
 def test_chat_planner_settings_defaults(settings):
     config = PlannerConfig.from_settings(settings)
-    assert settings.chat_enabled_patterns == "sql_template"
-    assert config.enabled_patterns == frozenset({"sql_template"})
-    assert config.milestone == "M1"
+    assert (
+        settings.chat_enabled_patterns
+        == "sql_template,semantic_view,fts5_search,json_extract"
+    )
+    assert config.enabled_patterns == frozenset(
+        {"sql_template", "semantic_view", "fts5_search", "json_extract"}
+    )
+    assert config.milestone == "M5"
     assert config.max_repair == 1
     assert config.metadata_ttl_seconds == 300
 
@@ -155,7 +160,7 @@ def test_invalid_response_shaper_settings_rejected(override):
 def test_chat_websocket_settings_defaults():
     # Không đọc service/.env: máy dev có thể đang bật CHAT_ENABLED.
     settings = Settings(_env_file=None, **_REQUIRED)
-    assert settings.chat_enabled is False
+    assert settings.chat_enabled is True
     assert settings.chat_max_concurrent_turns == 4
     assert settings.chat_max_active_turns_per_user == 1
     assert settings.chat_rate_limit_per_minute == 10

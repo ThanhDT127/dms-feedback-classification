@@ -120,6 +120,8 @@ def build_fact_sheet(
                 facts,
                 Fact(prefix + fact.key, fact.display, fact.raw, fact.tokens, fact.label),
             )
+            if prefix and fact.key.startswith("q.") and fact.key not in facts:
+                _add(facts, fact)
 
     return FactSheet(facts=facts)
 

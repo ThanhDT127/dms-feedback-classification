@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from typing import NamedTuple
 
 from ..contract import QueryPlan, QueryResult, QueryResultMetadata, UserScope
@@ -18,23 +19,48 @@ class _CacheEntry(NamedTuple):
 
 
 class QueryCache:
-    """Thread-safe LRU/TTL cache for query execution results."""
+    """Thread-safe LRU/TTL cache for query execution results with revision support."""
 
-    def __init__(self, default_ttl_seconds: int = 300, max_entries: int = 1000) -> None:
+    def __init__(
+        self,
+        default_ttl_seconds: int = 300,
+        max_entries: int = 1000,
+        revision_getter: Callable[[], int] | None = None,
+    ) -> None:
         self.default_ttl_seconds = default_ttl_seconds
         self.max_entries = max_entries
+        self.revision_getter = revision_getter
         self._lock = threading.RLock()
         self._cache: dict[str, _CacheEntry] = {}
         self._hits = 0
         self._misses = 0
+        self._last_revision: int | None = None
 
-    def get(self, plan: QueryPlan, scope: UserScope) -> QueryResult | None:
-        """Lấy kết quả từ cache nếu còn hạn (TTL)."""
+    def get(
+        self,
+        plan: QueryPlan,
+        scope: UserScope,
+        *,
+        revision: int | None = None,
+    ) -> QueryResult | None:
+        """Lấy kết quả từ cache nếu còn hạn (TTL) và revision không đổi."""
         dummy_result = QueryResult.ok(data=[])
         cache_key = dummy_result.cache_key(plan, scope)
 
         now = time.monotonic()
         with self._lock:
+            curr_rev = revision
+            if curr_rev is None and self.revision_getter is not None:
+                try:
+                    curr_rev = self.revision_getter()
+                except Exception:
+                    curr_rev = None
+
+            if curr_rev is not None:
+                if self._last_revision is not None and curr_rev != self._last_revision:
+                    self._cache.clear()
+                self._last_revision = curr_rev
+
             entry = self._cache.get(cache_key)
             if entry is None:
                 self._misses += 1
@@ -67,6 +93,8 @@ class QueryCache:
         scope: UserScope,
         result: QueryResult,
         ttl_seconds: int | None = None,
+        *,
+        revision: int | None = None,
     ) -> None:
         """Lưu kết quả vào cache."""
         dummy = QueryResult.ok(data=[])
@@ -75,12 +103,33 @@ class QueryCache:
         expires_at = time.monotonic() + ttl
 
         with self._lock:
+            curr_rev = revision
+            if curr_rev is None and self.revision_getter is not None:
+                try:
+                    curr_rev = self.revision_getter()
+                except Exception:
+                    curr_rev = None
+            if curr_rev is not None:
+                if self._last_revision is not None and curr_rev != self._last_revision:
+                    self._cache.clear()
+                self._last_revision = curr_rev
+
             if len(self._cache) >= self.max_entries:
                 # Xóa phần tử cũ nhất nếu đầy
                 oldest_key = next(iter(self._cache))
                 del self._cache[oldest_key]
 
             self._cache[cache_key] = _CacheEntry(result=result, expires_at=expires_at)
+
+    def invalidate_if_revision_changed(self, current_revision: int) -> bool:
+        """Xóa cache nếu revision SQLite đã thay đổi."""
+        with self._lock:
+            if self._last_revision is not None and current_revision != self._last_revision:
+                self._cache.clear()
+                self._last_revision = current_revision
+                return True
+            self._last_revision = current_revision
+            return False
 
     def invalidate_all(self) -> None:
         """Xóa toàn bộ cache."""

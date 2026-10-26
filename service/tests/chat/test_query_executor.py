@@ -256,3 +256,21 @@ class TestSecureQueryExecutorPatterns:
         res = executor.execute(plan, user_mb)
         assert res.status == QueryStatus.ERROR
         assert "nằm ngoài phạm vi được phân quyền" in res.error_message
+
+    def test_pattern_4_json_extract_case_insensitive_unit_allowed(self, test_db_repo):
+        executor = SecureQueryExecutor(test_db_repo)
+        # User unit_ids with lower-cased "cn miền nam" accessing record with "CN Miền Nam"
+        user_mn = UserScope(username="user_mn", role="user", unit_ids=["cn miền nam"])
+
+        plan = QueryPlan(
+            pattern=QueryPattern.JSON_EXTRACT,
+            answer_shape=AnswerShape.NARRATIVE,
+            original_query="Chi tiết FB-101",
+            json_keys=["Tên khách hàng"],
+            json_filters={"feedback_id": 101},
+        )
+        res = executor.execute(plan, user_mn)
+        assert res.status == QueryStatus.OK
+        assert len(res.data) == 1
+        assert res.data[0]["Tên khách hàng"] == "Nguyễn Văn A"
+
