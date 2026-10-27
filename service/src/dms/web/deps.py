@@ -342,6 +342,29 @@ def get_sharepoint_client():
     return _get_or_create("sharepoint_client", _factory)
 
 
+def get_notification_service():
+    """Return a NotificationService, or None if settings are missing."""
+
+    def _factory():
+        settings = get_settings()
+        if settings is None:
+            return None
+        try:
+            from ..auth import AuthProvider
+            from ..http_client import create_session
+            from ..notification import NotificationService
+
+            session = create_session(default_timeout=settings.http_timeout_seconds)
+            return NotificationService(
+                auth=AuthProvider(settings), settings=settings, session=session
+            )
+        except Exception as exc:
+            logger.warning("Khong the khoi tao NotificationService: %s", exc)
+            return None
+
+    return _get_or_create("notification_service", _factory)
+
+
 def get_sharepoint_sync_service():
     """Return a SharePointSyncService, or None if SharePoint or analytics repo is unavailable."""
 

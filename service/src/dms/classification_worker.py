@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import threading
 import time
 import uuid
@@ -25,6 +26,7 @@ logger = logging.getLogger("dms-web")
 
 RunnerFactory = Callable[[], Any]
 SharePointFactory = Callable[[], Any]
+NotificationFactory = Callable[[], Any]
 
 
 def is_retryable_classification_error(exc: BaseException) -> bool:
@@ -59,18 +61,21 @@ class ClassificationWorkerManager:
         runner_factory: RunnerFactory,
         sharepoint_factory: SharePointFactory,
         analytics_repository: FeedbackAnalyticsRepository | None = None,
+        notification_factory: NotificationFactory | None = None,
     ) -> None:
         self.settings = settings
         self.job_store = job_store
         self.runner_factory = runner_factory
         self.sharepoint_factory = sharepoint_factory
         self.analytics_repository = analytics_repository
+        self.notification_factory = notification_factory
         self.worker_id = f"classify-worker-{uuid.uuid4().hex[:8]}"
         self._stop_event = threading.Event()
         self._threads: list[threading.Thread] = []
 
     def start(self) -> None:
-        if self._threads:
+        self._threads = [thread for thread in self._threads if thread.is_alive()]
+        if len(self._threads) >= self.settings.classification_worker_concurrency:
             return
         recovered = self.job_store.recover_stale_running_jobs(
             stale_after_seconds=self.settings.classification_stale_running_timeout_seconds,
@@ -79,7 +84,7 @@ class ClassificationWorkerManager:
         if recovered:
             logger.info("Recovered %d stale running classification jobs", recovered)
 
-        for idx in range(self.settings.classification_worker_concurrency):
+        for idx in range(len(self._threads), self.settings.classification_worker_concurrency):
             thread = threading.Thread(
                 target=self._run_loop,
                 name=f"{self.worker_id}-{idx + 1}",
@@ -98,13 +103,37 @@ class ClassificationWorkerManager:
         self._threads.clear()
 
     def _run_loop(self) -> None:
+        last_sweep = time.monotonic()
         while not self._stop_event.is_set():
-            job = self.job_store.claim_next_job(
-                worker_id=self.worker_id,
-                global_running_limit=self.settings.classification_worker_concurrency,
-                per_user_running_limit=self.settings.classification_per_user_running_limit,
-            )
+            try:
+                job = self.job_store.claim_next_job(
+                    worker_id=self.worker_id,
+                    global_running_limit=self.settings.classification_worker_concurrency,
+                    per_user_running_limit=self.settings.classification_per_user_running_limit,
+                )
+            except sqlite3.OperationalError as exc:
+                if getattr(exc, "sqlite_errorcode", 0) & 0xFF not in (
+                    sqlite3.SQLITE_BUSY,
+                    sqlite3.SQLITE_LOCKED,
+                ):
+                    raise
+                logger.warning(
+                    "Classification queue is busy; retrying after poll interval: %s", exc
+                )
+                self._stop_event.wait(self.settings.classification_worker_poll_interval_seconds)
+                continue
             if job is None:
+                if time.monotonic() - last_sweep >= 60.0:
+                    last_sweep = time.monotonic()
+                    try:
+                        recovered = self.job_store.recover_stale_running_jobs(
+                            stale_after_seconds=self.settings.classification_stale_running_timeout_seconds,
+                            max_retries=self.settings.classification_retry_count,
+                        )
+                        if recovered:
+                            logger.info("Recovered %d stale running classification jobs", recovered)
+                    except Exception as exc:  # janitor khong duoc giet worker loop
+                        logger.warning("Stale job sweep skipped: %s", exc)
                 self._stop_event.wait(self.settings.classification_worker_poll_interval_seconds)
                 continue
             self._process_job(job)
@@ -143,6 +172,7 @@ class ClassificationWorkerManager:
                 self._sync_seen_files_status(
                     job, status="failed", error="Input file does not exist"
                 )
+                self._notify("error", job, error="Input file does not exist")
                 return
 
             # Auto-upload input file to SharePoint if enabled (skip for reclassify to avoid SP timestamp bump)
@@ -276,6 +306,14 @@ class ClassificationWorkerManager:
                 total_rows=int(result.get("total_rows", 0) or 0),
                 duration_seconds=float(result.get("duration_seconds", 0) or 0.0),
             )
+            self._notify(
+                "success",
+                job,
+                result={
+                    "total_rows": int(result.get("total_rows", 0) or 0),
+                    "duration_seconds": float(result.get("duration_seconds", 0) or 0.0),
+                },
+            )
         except PipelineCancelled:
             if self.analytics_repository is not None:
                 self.analytics_repository.rollback_cancelled_job(job_id)
@@ -306,9 +344,46 @@ class ClassificationWorkerManager:
                     )
                     return
                 self._sync_seen_files_status(job, status="failed", error=str(exc))
+                self._notify(
+                    "error", job, error=str(exc), retry_count=int(job.get("retry_count") or 0)
+                )
                 return
             self.job_store.fail_job(job_id, str(exc))
             self._sync_seen_files_status(job, status="failed", error=str(exc))
+            self._notify(
+                "error", job, error=str(exc), retry_count=int(job.get("retry_count") or 0)
+            )
+
+    def _notify(
+        self,
+        kind: str,
+        job: dict,
+        *,
+        result: dict | None = None,
+        error: str = "",
+        retry_count: int = 0,
+    ) -> None:
+        """Gui mail/Teams cho job cua web (watcher.py chi bao cho luong SharePoint)."""
+        if self.notification_factory is None:
+            return
+        if not getattr(self.settings, f"notify_on_{kind}", True):
+            return
+        file_name = job.get("filename") or Path(job.get("input_path", "")).name
+        try:
+            service = self.notification_factory()
+            if service is None:
+                return
+            if kind == "success":
+                service.send_success(file_name, result or {})
+            else:
+                service.send_error(
+                    file_name,
+                    error,
+                    retry_count=retry_count,
+                    max_retries=self.settings.classification_retry_count,
+                )
+        except Exception as exc:  # thong bao khong duoc lam chet job
+            logger.warning("Notification (%s) failed for %s: %s", kind, file_name, exc)
 
     def _sync_seen_files_status(
         self,
@@ -472,6 +547,7 @@ def build_default_worker_manager() -> ClassificationWorkerManager | None:
         runner_factory=deps.get_pipeline_runner,
         sharepoint_factory=deps.get_sharepoint_client,
         analytics_repository=analytics_repository,
+        notification_factory=deps.get_notification_service,
     )
 
 
