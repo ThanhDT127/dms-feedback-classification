@@ -262,7 +262,7 @@ class UsageTracker:
         job_id: str | None = None,
     ) -> None:
         """Insert a single usage record."""
-        with self._lock:
+        with self._lock, self._conn:
             self._conn.execute(
                 """
                 INSERT INTO gemini_usage_log
@@ -402,7 +402,7 @@ class UsageTracker:
         pricing = pricing_config or DEFAULT_MODEL_PRICING
         if not pricing:
             return 0
-        with self._lock:
+        with self._lock, self._conn:
             rows = self._conn.execute(
                 """
                 SELECT id, event_kind, model, model_actual, model_requested,
@@ -634,7 +634,7 @@ class UsageTracker:
     def cleanup(self, retention_days: int = 90) -> int:
         """Delete usage records older than *retention_days*. Returns rows deleted."""
         cutoff = (utc_now() - timedelta(days=retention_days)).isoformat(timespec="seconds")
-        with self._lock:
+        with self._lock, self._conn:
             cur = self._conn.execute(
                 "DELETE FROM gemini_usage_log WHERE timestamp < ?",
                 (cutoff,),

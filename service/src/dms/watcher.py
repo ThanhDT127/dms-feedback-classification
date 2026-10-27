@@ -649,7 +649,7 @@ class Watcher:
         cancelled_job_filenames: set[str] = set()
         if self.job_store is not None:
             try:
-                recent_jobs = self.job_store.list_jobs(include_all=True, limit=200)
+                recent_jobs = self.job_store.list_jobs(limit=200)
                 completed_job_filenames = {
                     str(j.get("filename"))
                     for j in recent_jobs

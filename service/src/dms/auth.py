@@ -27,6 +27,7 @@ class AuthProvider:
                 client_id=self.settings.azure_client_id,
                 client_credential=self.settings.azure_client_secret,
                 authority=authority,
+                timeout=30.0,
             )
             logger.info(
                 "MSAL ConfidentialClientApplication initialized (tenant=%s)",

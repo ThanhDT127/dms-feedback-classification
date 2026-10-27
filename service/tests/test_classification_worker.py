@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sqlite3
+import threading
 import time
 from pathlib import Path
 
@@ -200,6 +202,77 @@ def test_worker_processes_upload_queue_to_completion(tmp_path: Path):
     assert job["rows_done"] == 1
     assert job["total_rows"] == 1
     assert job["results"][0]["text"] == "done"
+
+
+def test_worker_survives_sqlite_writer_lock(tmp_path: Path, monkeypatch):
+    settings = _settings(tmp_path)
+    store = ClassificationJobStore(tmp_path / "jobs.db")
+    _create_job(store, tmp_path, "locked")
+    manager = _manager(settings, store, SuccessfulRunner())
+    original_conn = store._conn
+    original_claim = store.claim_next_job
+    attempts = 0
+    errors = []
+
+    def short_timeout_conn():
+        conn = original_conn()
+        conn.execute("PRAGMA busy_timeout=1")
+        return conn
+
+    def observe_claim(**kwargs):
+        nonlocal attempts
+        attempts += 1
+        try:
+            return original_claim(**kwargs)
+        except sqlite3.OperationalError as exc:
+            errors.append(exc)
+            raise
+
+    monkeypatch.setattr(store, "_conn", short_timeout_conn)
+    monkeypatch.setattr(store, "claim_next_job", observe_claim)
+    writer = sqlite3.connect(store.db_path)
+    try:
+        writer.execute("BEGIN IMMEDIATE")
+        monkeypatch.setattr(store, "recover_stale_running_jobs", lambda **kwargs: 0)
+        manager.start()
+        deadline = time.monotonic() + 2
+        while not errors and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert errors and str(errors[0]) == "database is locked"
+        deadline = time.monotonic() + 2
+        while attempts < 2 and manager._threads[0].is_alive() and time.monotonic() < deadline:
+            time.sleep(0.005)
+        assert manager._threads[0].is_alive(), "SQLite contention killed the queue worker"
+        writer.rollback()
+        job = _wait_for_status(store, "locked", JOB_STATUS_COMPLETED)
+    finally:
+        writer.rollback()
+        writer.close()
+        manager.stop()
+
+    assert job["rows_done"] == 1
+    assert job["retry_count"] == 0
+
+
+def test_worker_start_replaces_dead_thread(tmp_path: Path):
+    settings = _settings(tmp_path)
+    store = ClassificationJobStore(tmp_path / "jobs.db")
+    _create_job(store, tmp_path, "restart-dead")
+    manager = _manager(settings, store, SuccessfulRunner())
+    dead_thread = threading.Thread(target=lambda: None)
+    dead_thread.start()
+    dead_thread.join()
+    manager._threads.append(dead_thread)
+
+    manager.start()
+    try:
+        job = _wait_for_status(store, "restart-dead", JOB_STATUS_COMPLETED)
+        assert len(manager._threads) == 1
+        assert manager._threads[0].is_alive()
+    finally:
+        manager.stop()
+
+    assert job["rows_done"] == 1
 
 
 def test_worker_persists_input_then_batch_results(tmp_path: Path):

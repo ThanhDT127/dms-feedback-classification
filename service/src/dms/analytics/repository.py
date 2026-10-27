@@ -55,15 +55,23 @@ class FeedbackAnalyticsRepository:
         self._cached_analytics_rows: list[dict] | None = None
         self._cache_timestamp: float = 0.0
         self._cache_source_version: tuple[str, int] | None = None
+        self._conn_cached: sqlite3.Connection | None = None
         self._init_db()
 
     def _conn(self) -> sqlite3.Connection:
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self.db_path), timeout=30, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA busy_timeout=30000")
-        conn.execute("PRAGMA foreign_keys=ON")
-        return conn
+        # ponytail: one connection per repository, serialised by self._lock (16 of 19 call sites
+        # hold it; the other 3 are single-statement reads). The old per-call connection was never
+        # closed -> fd growth on every request and read locks that blocked WAL checkpointing
+        # behind the writer. Connection pool only if this lock shows up in profiles.
+        with self._lock:
+            if self._conn_cached is None:
+                self.db_path.parent.mkdir(parents=True, exist_ok=True)
+                conn = sqlite3.connect(str(self.db_path), timeout=30, check_same_thread=False)
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA busy_timeout=30000")
+                conn.execute("PRAGMA foreign_keys=ON")
+                self._conn_cached = conn
+            return self._conn_cached
 
     def _init_db(self) -> None:
         with self._lock, self._conn() as conn:

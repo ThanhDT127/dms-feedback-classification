@@ -440,7 +440,7 @@ async def _reclassify_input_items(
     # Check currently active (queued/running) jobs to avoid duplicate queueing for same file
     active_by_filename: dict[str, str] = {}
     try:
-        for active_job in job_store.list_jobs(include_all=True, limit=200):
+        for active_job in job_store.list_jobs(limit=200):
             if active_job.get("status") in ("queued", "running") and active_job.get("filename"):
                 active_by_filename[active_job["filename"]] = active_job["job_id"]
     except Exception:
@@ -694,7 +694,7 @@ async def list_files(
 
             job_store = _deps.get_classification_job_store()
             if job_store is not None:
-                for j in job_store.list_jobs(include_all=True, limit=100):
+                for j in job_store.list_jobs(limit=100):
                     j_name = j.get("filename")
                     j_status = j.get("status")
                     if j_name and j_status in ("queued", "running"):
@@ -910,7 +910,7 @@ def _cleanup_deleted_files_state(
 
         job_store = _deps.get_classification_job_store()
         if job_store is not None:
-            for job in job_store.list_jobs(include_all=True, limit=200):
+            for job in job_store.list_jobs(limit=200):
                 if job.get("filename") in candidates and job.get("status") in ("queued", "running"):
                     job_store.cancel_job(str(job["job_id"]))
     except Exception as exc:

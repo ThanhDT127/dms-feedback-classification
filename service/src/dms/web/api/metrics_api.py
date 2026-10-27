@@ -325,7 +325,7 @@ async def reset_failed_files(
             target_jids = list(job_ids_to_retry)
             if file_ids is None:
                 try:
-                    for j in job_store.list_jobs(include_all=True, limit=200):
+                    for j in job_store.list_jobs(limit=200):
                         if j.get("status") == "error" and j.get("mode") != "watcher":
                             target_jids.append(j["job_id"])
                 except Exception:

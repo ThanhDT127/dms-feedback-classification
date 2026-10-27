@@ -44,9 +44,11 @@ def _parse_iso(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(value)
     except ValueError:
         return None
+    # SQLite datetime('now') / du lieu cu co the khong co timezone -> coi la UTC
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 def _seconds_between(start: str | None, end: str | None) -> float | None:
@@ -57,25 +59,45 @@ def _seconds_between(start: str | None, end: str | None) -> float | None:
     return max(0.0, round((ended - started).total_seconds(), 1))
 
 
+def _open_jobs_db(db_path: Path) -> sqlite3.Connection:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path), timeout=30, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.create_function(
+        "dms_file_reporting_date",
+        4,
+        resolve_file_reporting_date,
+        deterministic=True,
+    )
+    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA journal_mode=WAL")
+    return conn
+
+
 class ClassificationJobStore:
     """SQLite-backed persistent job store for user-uploaded classification jobs."""
 
+    # ponytail: one lock + one connection per db path, per process. Call sites build throwaway
+    # stores per request / per sync cycle (web/deps.py, analytics/ingest.py, sharepoint_sync.py),
+    # and the old per-call connections were never closed -> leaked fds + stale writer locks ->
+    # "database is locked" 500s. Per-thread pooling only if this shared lock shows up in profiles.
+    _shared: dict[str, tuple[threading.RLock, sqlite3.Connection]] = {}
+    _shared_guard = threading.Lock()
+
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
-        self._lock = threading.RLock()
+        key = str(db_path)
+        with ClassificationJobStore._shared_guard:
+            entry = ClassificationJobStore._shared.get(key)
+            if entry is None:
+                entry = (threading.RLock(), _open_jobs_db(db_path))
+                ClassificationJobStore._shared[key] = entry
+        self._lock, self._conn_cached = entry
         self._init_db()
 
     def _conn(self) -> sqlite3.Connection:
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(str(self.db_path), timeout=30, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.create_function(
-            "dms_file_reporting_date",
-            4,
-            resolve_file_reporting_date,
-            deterministic=True,
-        )
-        return conn
+        return self._conn_cached
 
     def _init_db(self) -> None:
         with self._lock, self._conn() as conn:
