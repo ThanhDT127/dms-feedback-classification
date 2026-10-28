@@ -514,3 +514,55 @@ def test_worker_retry_preserves_watcher_sharepoint_source_key(tmp_path: Path):
     assert versions[0]["source_file_key"] == "sharepoint-original-item-id"
     assert versions[0]["classification_state"] == "completed"
     assert len(repo.fetch_current_records()) == 1
+
+
+def test_notification_sends_email_alongside_teams_and_refreshes_from_env(
+    tmp_path: Path, monkeypatch
+):
+    from unittest.mock import MagicMock
+
+    from dms.notification import NotificationService
+
+    monkeypatch.setattr("dms.settings.SERVICE_DIR", tmp_path)
+    monkeypatch.setattr("dms.notification.SERVICE_DIR", tmp_path, raising=False)
+    settings = _settings(
+        tmp_path,
+        teams_webhook_url="https://outlook.office.com/webhook/test",
+        notification_sender_email="sender@example.com",
+        notification_recipients_raw="old@example.com",
+        notify_on_success=False,
+    )
+    (tmp_path / ".env").write_text(
+        "NOTIFICATION_SENDER_EMAIL=new-sender@example.com\n"
+        "NOTIFICATION_RECIPIENTS=new1@example.com,new2@example.com\n"
+        "NOTIFY_ON_SUCCESS=true\n",
+        encoding="utf-8",
+    )
+    auth = MagicMock()
+    auth.get_headers.return_value = {"Authorization": "Bearer token"}
+    session = MagicMock()
+    session.post.return_value = MagicMock(status_code=200, text="ok")
+    service = NotificationService(auth=auth, settings=settings, session=session)
+
+    store = ClassificationJobStore(tmp_path / "jobs.db")
+    manager = ClassificationWorkerManager(
+        settings=settings,
+        job_store=store,
+        runner_factory=lambda: SuccessfulRunner(),
+        sharepoint_factory=lambda: None,
+        notification_factory=lambda: service,
+    )
+    manager._notify(
+        "success",
+        {"filename": "report.xlsx"},
+        result={"total_rows": 10, "duration_seconds": 3.0},
+    )
+
+    assert session.post.call_count == 2
+    email_call = session.post.call_args_list[1]
+    assert "new-sender@example.com/sendMail" in email_call.args[0]
+    recipients = [
+        r["emailAddress"]["address"]
+        for r in email_call.kwargs["json"]["message"]["toRecipients"]
+    ]
+    assert recipients == ["new1@example.com", "new2@example.com"]

@@ -201,3 +201,36 @@ def test_chat_timeout_uses_fallback_on_first_attempt(tmp_path, monkeypatch, stre
     starts = [e for e in audit.events if e["event_kind"] == "attempt_started"]
     assert [e["route"] for e in starts] == ["gateway", "direct_apikey"]
     assert {e["actor"] for e in starts} == {"alice"}
+
+
+@pytest.mark.parametrize("streaming", [False, True])
+def test_chat_default_retry_with_fallback_enabled_falls_back_on_refusal(
+    tmp_path, monkeypatch, streaming
+):
+    """Default CHAT_LLM_MAX_RETRY=1 (max_retry=2) with FALLBACK_FAIL_THRESHOLD=3 must clamp threshold and fallback."""
+    client, audit = chat_client(
+        tmp_path,
+        "http://127.0.0.1:1/chat",
+        fallback_enabled=True,
+        fallback_fail_threshold=3,
+    )
+    client._gemini.settings.base_wait = 0
+    monkeypatch.setattr(
+        client._gemini,
+        "_direct_request",
+        lambda *args, **kwargs: GeminiResponse(
+            "Fallback answer",
+            usage={"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5},
+            route="direct_apikey",
+            model_actual="direct-model",
+        ),
+    )
+    with use_context(ChatRequestContext(username="alice", request_id="default-retry-turn")):
+        if streaming:
+            with client.stream("Question", call_type="chat_synthesis") as stream:
+                assert "".join(stream) == "Fallback answer"
+        else:
+            result = client.generate_json("Question", call_type="chat_plan")
+            assert result.text == "Fallback answer"
+    starts = [e for e in audit.events if e["event_kind"] == "attempt_started"]
+    assert [e["route"] for e in starts] == ["gateway", "gateway", "direct_apikey"]

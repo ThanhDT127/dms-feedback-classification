@@ -302,6 +302,8 @@ MAP = {
     "root_folder_id": "SHAREPOINT_ROOT_FOLDER_ID",
     "upload_input_to_sharepoint": "UPLOAD_INPUT_TO_SHAREPOINT",
     # notify tab
+    "sender_email": "NOTIFICATION_SENDER_EMAIL",
+    "notification_sender_email": "NOTIFICATION_SENDER_EMAIL",
     "email": "NOTIFICATION_RECIPIENTS",
     "notification_recipients": "NOTIFICATION_RECIPIENTS",
     "notification_recipients_raw": "NOTIFICATION_RECIPIENTS",
@@ -370,6 +372,13 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
 
                 updates[env_key] = str(value)
 
+        if (
+            updates.get("GEMINI_BACKEND") == "gateway"
+            and "GATEWAY_MODEL" in updates
+            and "gemini_model" not in payload
+        ):
+            updates.pop("GEMINI_MODEL", None)
+
         if not updates:
             return {"success": True, "message": "Không có thay đổi nào được áp dụng."}
 
@@ -379,8 +388,18 @@ async def update_settings(payload: dict, admin: dict = Depends(get_admin_user)):
             os.environ[env_key] = env_val
 
         # 3. Validate by trying to load Settings
+        prev_worker = deps._cache.get("classification_worker_manager")
+        was_worker_running = bool(
+            prev_worker is not None
+            and getattr(prev_worker, "_thread", None) is not None
+            and prev_worker._thread.is_alive()
+        )
         deps.reset()
         settings = get_settings_provider().reload()
+        if was_worker_running:
+            new_worker = deps.get_classification_worker_manager()
+            if new_worker is not None:
+                new_worker.start()
 
         # Test connection to Gemini if credentials exist
         has_creds = False

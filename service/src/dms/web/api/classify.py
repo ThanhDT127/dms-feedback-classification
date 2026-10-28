@@ -58,14 +58,16 @@ async def classify_text(body: TextClassifyRequest, user: dict = CURRENT_USER_DEP
         product_result: dict = {}
         if rag is not None:
             try:
-                rag_results = rag.retrieve_batch([body.text])
+                actor = (user.get('username') or '').strip() or None
+                rag_results = rag.retrieve_batch([body.text], actor=actor)
                 if rag_results:
                     rag_results = rag.enrich_with_keyword_fallbacks(rag_results, [body.text])
                     product_result = rag_results[0]
             except Exception as exc:
                 logger.warning("RAG matching failed: %s", exc)
 
-        issue_result = classifier.classify_one(body.text)
+        actor = (user.get('username') or '').strip() or None
+        issue_result = classifier.classify_one(body.text, actor=actor)
 
         # Record usage for single-text classification
         usage = getattr(classifier, "_last_usage", {})
@@ -74,7 +76,7 @@ async def classify_text(body: TextClassifyRequest, user: dict = CURRENT_USER_DEP
 
             settings = deps.get_settings()
             usage_tracker = deps.get_usage_tracker()
-            if settings and usage_tracker:
+            if settings and usage_tracker and settings.gemini_backend != 'gateway':
                 import json as _json
 
                 try:

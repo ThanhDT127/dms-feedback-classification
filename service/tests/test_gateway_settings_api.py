@@ -61,3 +61,27 @@ def test_available_models_include_gemini_3_5_and_3_8_and_pricing():
     ):
         assert expected in model_ids
         assert calculate_cost(expected, 1000, 500, DEFAULT_MODEL_PRICING) > 0
+
+
+def test_gateway_save_preserves_direct_fallback_gemini_model(tmp_path, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(settings_api, "SERVICE_DIR", tmp_path)
+    monkeypatch.setattr(settings_api, "update_env_file", lambda updates: captured.update(updates))
+    monkeypatch.setattr(settings_api.deps, "reset", lambda: None)
+    monkeypatch.setattr(
+        settings_api,
+        "get_settings_provider",
+        lambda: SimpleNamespace(reload=lambda: SimpleNamespace(gemini_backend="gateway")),
+    )
+    asyncio.run(
+        settings_api.update_settings(
+            {
+                "backend": "gateway",
+                "model": "gemini-flash-lite",
+                "gateway_model": "gemini-flash-lite",
+            },
+            admin={"role": "admin"},
+        )
+    )
+    assert captured.get("GATEWAY_MODEL") == "gemini-flash-lite"
+    assert "GEMINI_MODEL" not in captured

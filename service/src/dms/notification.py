@@ -7,12 +7,59 @@ import logging
 from typing import Any
 
 import requests
+from dotenv import dotenv_values
 
+from . import settings as settings_module
 from .auth import AuthProvider
 from .settings import Settings
 from .time_utils import utc_now
 
 logger = logging.getLogger("dms-watcher")
+
+
+def refresh_notification_settings_from_env(settings: Settings) -> Settings:
+    """Sync notification fields from .env on disk so multi-process/Docker reloads take effect immediately."""
+    try:
+        env_path = settings_module.SERVICE_DIR / ".env"
+        if not env_path.is_file():
+            return settings
+        values = dotenv_values(env_path)
+    except Exception:
+        return settings
+
+    str_mappings = (
+        ("NOTIFICATION_SENDER_EMAIL", "notification_sender_email"),
+        ("NOTIFICATION_RECIPIENTS", "notification_recipients_raw"),
+        ("NOTIFICATION_EMAIL", "notification_email"),
+        ("TEAMS_WEBHOOK_URL", "teams_webhook_url"),
+    )
+    for env_key, attr in str_mappings:
+        raw = values.get(env_key)
+        if raw is not None:
+            try:
+                setattr(settings, attr, str(raw).strip())
+            except Exception:
+                pass
+
+    bool_mappings = (
+        ("NOTIFY_ON_SUCCESS", "notify_on_success"),
+        ("NOTIFY_ON_ERROR", "notify_on_error"),
+    )
+    for env_key, attr in bool_mappings:
+        raw = values.get(env_key)
+        if raw is not None:
+            norm = str(raw).strip().lower()
+            if norm in ("true", "1", "yes", "on"):
+                try:
+                    setattr(settings, attr, True)
+                except Exception:
+                    pass
+            elif norm in ("false", "0", "no", "off"):
+                try:
+                    setattr(settings, attr, False)
+                except Exception:
+                    pass
+    return settings
 
 
 class NotificationService:
@@ -144,6 +191,7 @@ class NotificationService:
         """
 
     def send_success(self, file_name: str, result: dict) -> None:
+        refresh_notification_settings_from_env(self.settings)
         total_rows = result.get("total_rows", 0)
         duration = result.get("duration_seconds", 0)
         teams_payload = {
@@ -176,10 +224,10 @@ class NotificationService:
                 }
             ],
         }
-        if not self._send_teams_webhook(teams_payload):
-            subject = f"[DMS] Hoan tat phan loai: {file_name}"
-            body = self._build_success_html(file_name, result)
-            self._send_email(subject, body)
+        self._send_teams_webhook(teams_payload)
+        subject = f"[DMS] Hoan tat phan loai: {file_name}"
+        body = self._build_success_html(file_name, result)
+        self._send_email(subject, body)
 
     def send_error(
         self,
@@ -188,6 +236,7 @@ class NotificationService:
         retry_count: int = 0,
         max_retries: int = 3,
     ) -> None:
+        refresh_notification_settings_from_env(self.settings)
         teams_payload = {
             "type": "message",
             "attachments": [
@@ -218,12 +267,12 @@ class NotificationService:
                 }
             ],
         }
-        if not self._send_teams_webhook(teams_payload):
-            subject = f"[DMS] Loi phan loai: {file_name}"
-            body = self._build_error_html(
-                file_name,
-                error_msg,
-                retry_count=retry_count,
-                max_retries=max_retries,
-            )
-            self._send_email(subject, body)
+        self._send_teams_webhook(teams_payload)
+        subject = f"[DMS] Loi phan loai: {file_name}"
+        body = self._build_error_html(
+            file_name,
+            error_msg,
+            retry_count=retry_count,
+            max_retries=max_retries,
+        )
+        self._send_email(subject, body)

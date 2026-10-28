@@ -334,3 +334,45 @@ def test_gateway_asset_refresh_does_not_restore_stale_factory_client(pipeline, s
     assert watcher.pipeline_runner.gemini is not runner.gemini
     assert watcher.pipeline_runner.gemini.settings.gateway_model == "refreshed-alias"
     assert watcher.pipeline_runner.settings is not snapshot
+
+
+def test_classify_text_passes_authenticated_actor_in_gateway_mode(pipeline, settings, monkeypatch):
+    import asyncio
+
+    from dms.web.api import classify as classify_api
+
+    client = RecordingClient(
+        [
+            "1. AT10 8W",
+            json.dumps([{"row_index": 0, "labels": {"Báo lỗi": True}, "sentiment": "Tiêu cực"}]),
+        ]
+    )
+    runner, _ = pipeline(client)
+    usage_tracker = Mock()
+    monkeypatch.setattr(classify_api.deps, "get_gemini", lambda: client)
+    monkeypatch.setattr(classify_api.deps, "get_rag", lambda: runner.rag)
+    monkeypatch.setattr(classify_api.deps, "get_issue_classifier", lambda: runner.issue_classifier)
+    monkeypatch.setattr(classify_api.deps, "get_settings", lambda: settings)
+    monkeypatch.setattr(classify_api.deps, "get_usage_tracker", lambda: usage_tracker)
+
+    result = asyncio.run(
+        classify_api.classify_text(
+            classify_api.TextClassifyRequest(text="Đèn AT10 8W bị nhấp nháy"),
+            user={"username": "alice"},
+        )
+    )
+
+    assert result["labels"]["Báo lỗi"] is True
+    assert client.calls == [
+        ("text", {"actor": "alice", "job_id": None, "operation": "rag_extract"}),
+        (
+            "json",
+            {
+                "temperature": 0.0,
+                "actor": "alice",
+                "job_id": None,
+                "operation": "classify_batch",
+            },
+        ),
+    ]
+    usage_tracker.record.assert_not_called()

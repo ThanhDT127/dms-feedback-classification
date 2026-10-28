@@ -366,6 +366,9 @@ class ClassificationWorkerManager:
         """Gui mail/Teams cho job cua web (watcher.py chi bao cho luong SharePoint)."""
         if self.notification_factory is None:
             return
+        from .notification import refresh_notification_settings_from_env
+
+        refresh_notification_settings_from_env(self.settings)
         if not getattr(self.settings, f"notify_on_{kind}", True):
             return
         file_name = job.get("filename") or Path(job.get("input_path", "")).name

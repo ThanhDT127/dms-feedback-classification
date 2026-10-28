@@ -572,6 +572,9 @@ class Watcher:
                     self.pipeline_runner = self._build_gateway_runner(snapshot)
                     logger.info("Watcher replaced LLM client after configuration change")
                 # Never mutate settings retained by an old runner/client snapshot.
+                from .notification import refresh_notification_settings_from_env
+
+                refresh_notification_settings_from_env(new_settings)
                 self.settings = new_settings
                 self.sharepoint_client.settings = new_settings
                 self.notification_service.settings = new_settings
@@ -617,6 +620,11 @@ class Watcher:
                     )
 
             # 3. Synchronize other modules that references settings
+            from .notification import refresh_notification_settings_from_env
+
+            refresh_notification_settings_from_env(self.settings)
+            self.sharepoint_client.settings = self.settings
+            self.notification_service.settings = self.settings
             self.cleanup.settings = self.settings
             logger.info("Watcher settings hot-reloaded successfully")
 

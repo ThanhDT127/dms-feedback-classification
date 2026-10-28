@@ -760,5 +760,12 @@ class IssueClassifier:
         # Legacy compatibility method: behaves identical to refine_batch
         return self.classify_batch(texts, debug=debug)
 
-    def classify_one(self, text: str, debug: bool = False) -> dict:
-        return self.classify_batch([text], debug=debug)[0]
+    def classify_one(
+        self,
+        text: str,
+        debug: bool = False,
+        *,
+        actor: str | None = None,
+        job_id: str | None = None,
+    ) -> dict:
+        return self.classify_batch([text], debug=debug, actor=actor, job_id=job_id)[0]

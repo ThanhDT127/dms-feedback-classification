@@ -57,16 +57,25 @@ def chat_llm_settings(
     model: str | None = None,
 ) -> Settings:
     """Bản sao settings cho chat; không đổi settings mà pipeline phân loại đang dùng."""
+    effective_max_retry = max(0, int(max_retry)) + 1
+    raw_threshold = getattr(settings, "fallback_fail_threshold", 1)
+    effective_threshold = (
+        min(max(1, raw_threshold), effective_max_retry)
+        if type(raw_threshold) is int
+        else raw_threshold
+    )
     update: dict[str, Any] = {
         # ``Settings.max_retry`` của pipeline là **tổng số lần gọi**, còn ``max_retry`` của chat
         # là số lần **thử lại** (như ``GeminiStream``): 0 vẫn phải gọi một lần.
-        "max_retry": max(0, int(max_retry)) + 1,
+        "max_retry": effective_max_retry,
+        "fallback_fail_threshold": effective_threshold,
         "base_wait": base_wait,
         "gemini_timeout_seconds": min(float(settings.gemini_timeout_seconds), timeout_seconds),
     }
     if model:
         update["gemini_model"] = model
-        update["gateway_model"] = model
+        if getattr(settings, "gemini_backend", None) != "gateway":
+            update["gateway_model"] = model
     return settings.model_copy(update=update)
 
 

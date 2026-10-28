@@ -440,7 +440,6 @@ window.SettingsPage = (() => {
     const selectedModel = document.getElementById('set-model')?.value;
     const data = {
       backend,
-      model: selectedModel,
     };
     if (backend === 'gateway') {
       data.gateway_model = selectedModel;
@@ -452,6 +451,8 @@ window.SettingsPage = (() => {
       if (gwKeyEl && gwKeyEl.value) {
         data.gateway_api_key = gwKeyEl.value;
       }
+    } else {
+      data.model = selectedModel;
     }
     const apiKeyEl = document.getElementById('set-apikey');
     if (apiKeyEl) {
