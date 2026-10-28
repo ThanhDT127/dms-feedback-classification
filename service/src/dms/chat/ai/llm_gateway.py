@@ -177,7 +177,7 @@ class GeminiChatGateway:
             settings,
             max_retry=int(retry),
             timeout_seconds=timeout_seconds,
-            model=chat_model or None,
+            model=chat_model if chat_model and settings.gemini_backend != "gateway" else None,
         )
         self._gemini: Any = gemini if gemini is not None else GeminiClient(self.settings)
         self._usage = usage_tracker

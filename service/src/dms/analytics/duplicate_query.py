@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-from contextlib import closing
 from typing import Any
 
 from .models import AnalyticsFilter
@@ -33,7 +32,7 @@ def duplicate_details(
     """
     items: dict[str, dict[str, Any]] = {}
     total = 0
-    with closing(repository._conn()) as conn, conn:
+    with repository._conn() as conn:
         register_issue_functions(conn)
         # SQLite trim only removes ASCII spaces; preserve Python Unicode semantics.
         conn.create_function(
