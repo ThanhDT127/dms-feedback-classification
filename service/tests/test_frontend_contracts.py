@@ -142,11 +142,15 @@ def test_analytics_distinguishes_ingested_rows_without_ai_classification():
 def test_managed_file_analytics_assets_have_updated_cache_versions():
     index_html = _read("index.html")
 
-    assert "css/style.css?v=1.0.19" in index_html
-    assert "js/api.js?v=1.0.10" in index_html
+    assert "css/style.css?v=1.0.20" in index_html
+    assert "js/api.js?v=1.0.11" in index_html
     assert "js/pages/analytics.js?v=1.0.22" in index_html
-    assert "js/components/charts.js?v=1.0.8" in index_html
+    assert "js/components/charts.js?v=1.0.9" in index_html
+    assert "js/components/sidebar.js?v=1.0.4" in index_html
     assert "js/pages/files.js?v=1.0.4" in index_html
+    assert "js/pages/metrics.js?v=1.0.3" in index_html
+    assert "js/pages/login.js?v=1.0.2" in index_html
+    assert "js/app.js?v=1.0.5" in index_html
 
 
 def test_password_controls_contract():
@@ -168,13 +172,19 @@ def test_password_controls_contract():
 
 def test_sidebar_theme_switch_contract():
     sidebar_js = _read("js/components/sidebar.js")
+    login_js = _read("js/pages/login.js")
+    app_js = _read("js/app.js")
+    index_html = _read("index.html")
 
     assert "Phân quyền theo vai trò" not in sidebar_js
-    assert "theme-switch" in sidebar_js
-    assert 'role="switch"' in sidebar_js
+    assert "theme-segmented" in sidebar_js
+    assert "theme-segmented" in login_js
+    assert 'role="radiogroup"' in sidebar_js
+    assert 'role="radio"' in sidebar_js
     assert "aria-checked" in sidebar_js
-    assert "Chế độ sáng" in sidebar_js
-    assert "Chế độ tối" in sidebar_js
+    assert "['dark', 'soft', 'light']" in index_html
+    assert "['dark', 'soft', 'light']" in app_js
+    assert "setTheme" in _page_exports(app_js)
 
 
 def test_file_manager_delete_and_sync_copy_contract():
@@ -251,12 +261,15 @@ def test_keyword_editor_does_not_render_duplicate_noise():
 
 def test_theme_switch_has_icon_and_label_contract():
     sidebar_js = _read("js/components/sidebar.js")
+    charts_js = _read("js/components/charts.js")
+    style_css = _read("css/style.css")
 
-    assert "theme-switch-icon" in sidebar_js
-    assert "isLight ? '☀️' : '🌙'" in sidebar_js
-    assert "Chế độ sáng" in sidebar_js
-    assert "Chế độ tối" in sidebar_js
-    assert "aria-checked" in sidebar_js
+    for expected in ["🌙", "🌿", "☀️", "Tối", "Dịu", "Sáng", "aria-checked"]:
+        assert expected in sidebar_js
+    assert '[data-theme="soft"]' in style_css
+    assert "--chart-grid-color" in style_css
+    assert "--chart-grid-color" in charts_js
+    assert "=== 'light'" not in charts_js
 
 
 def test_file_manager_omits_folder_tree_and_keeps_bulk_actions_near_table():
@@ -521,7 +534,7 @@ def test_analytics_p0_matches_prototype_structure_without_restoring_removed_scop
         ".analytics-matrix thead th {",
     ]:
         assert expected_css in style_css
-    assert "css/style.css?v=1.0.19" in index_html
+    assert "css/style.css?v=1.0.20" in index_html
     assert "js/pages/analytics.js?v=1.0.22" in index_html
 
     for removed in [

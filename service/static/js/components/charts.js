@@ -10,6 +10,17 @@ window.Charts = (() => {
     return val || fallback;
   }
 
+  function getGridColor() {
+    return getThemeColor('--chart-grid-color', 'rgba(255, 255, 255, 0.06)');
+  }
+
+  function register(canvasId, chart) {
+    if (canvasId && chart) {
+      _instances[canvasId] = chart;
+    }
+    return chart;
+  }
+
   // Global Chart.js defaults — reads CSS variables for theme awareness
   function applyDefaults() {
     if (!window.Chart) return;
@@ -17,8 +28,6 @@ window.Charts = (() => {
     const textPrimary = getThemeColor('--text-primary', '#ffffff');
     const borderColor = getThemeColor('--border', 'rgba(255,255,255,0.08)');
     const bgSecondary = getThemeColor('--bg-secondary', '#071330');
-    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-    const gridColor = isLight ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.06)';
 
     Chart.defaults.color = textSecondary;
     Chart.defaults.borderColor = borderColor;
@@ -96,7 +105,7 @@ window.Charts = (() => {
           y: {
             beginAtZero: true,
             grid: {
-              color: document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
+              color: getGridColor(),
               drawBorder: false
             },
             ticks: {
@@ -210,7 +219,7 @@ window.Charts = (() => {
           x: { grid: { display: false } },
           y: {
             beginAtZero: true,
-            grid: { color: document.documentElement.getAttribute('data-theme') === 'light' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)', drawBorder: false },
+            grid: { color: getGridColor(), drawBorder: false },
             ticks: { precision: 0 }
           }
         },
@@ -297,8 +306,7 @@ window.Charts = (() => {
             stacked: true,
             beginAtZero: true,
             grid: {
-              color: document.documentElement.getAttribute('data-theme') === 'light'
-                ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)',
+              color: getGridColor(),
               drawBorder: false
             },
             ticks: { precision: 0 }
@@ -319,8 +327,7 @@ window.Charts = (() => {
     if (!ctx) return null;
 
     const isHorizontal = options.indexAxis === 'y';
-    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-    const gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
+    const gridColor = getGridColor();
 
     const chart = new Chart(ctx, {
       type: 'bar',
@@ -363,8 +370,7 @@ window.Charts = (() => {
     if (!ctx) return null;
 
     const isHorizontal = options.indexAxis === 'y';
-    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-    const gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
+    const gridColor = getGridColor();
 
     const chart = new Chart(ctx, {
       type: 'bar',
@@ -407,30 +413,45 @@ window.Charts = (() => {
 
   function applyThemeColors() {
     applyDefaults();
+    const textSecondary = getThemeColor('--text-secondary', '#cbd5e1');
+    const textPrimary = getThemeColor('--text-primary', '#ffffff');
+    const borderColor = getThemeColor('--border', 'rgba(255,255,255,0.08)');
+    const bgSecondary = getThemeColor('--bg-secondary', '#071330');
+    const gridColor = getGridColor();
+
     Object.keys(_instances).forEach(id => {
       const chart = _instances[id];
       if (!chart) return;
       // Update doughnut border colors
       if (chart.config.type === 'doughnut') {
         chart.data.datasets.forEach(ds => {
-          ds.borderColor = getThemeColor('--bg-secondary', '#071330');
+          ds.borderColor = bgSecondary;
         });
       }
-      // Update grid colors for bar/line charts
-      const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-      const gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
+      // Update grid and tick colors for bar/line charts
       if (chart.options.scales) {
         Object.values(chart.options.scales).forEach(scale => {
-          if (scale.grid) scale.grid.color = gridColor;
+          if (scale.grid && scale.grid.color !== 'transparent' && scale.grid.display !== false) {
+            scale.grid.color = gridColor;
+          }
+          if (scale.ticks) {
+            scale.ticks.color = textSecondary;
+          }
         });
       }
-      // Update legend label colors
-      if (chart.config.type === 'doughnut' && chart.options.plugins?.legend?.labels?.generateLabels) {
-        // generateLabels will re-read getThemeColor on next render
+      // Update legend and tooltip colors on open instances
+      if (chart.options.plugins?.legend?.labels) {
+        chart.options.plugins.legend.labels.color = textSecondary;
+      }
+      if (chart.options.plugins?.tooltip) {
+        chart.options.plugins.tooltip.backgroundColor = bgSecondary;
+        chart.options.plugins.tooltip.titleColor = textPrimary;
+        chart.options.plugins.tooltip.bodyColor = textSecondary;
+        chart.options.plugins.tooltip.borderColor = borderColor;
       }
       chart.update('none');
     });
   }
 
-  return { createBarChart, createStackedBarChart, createStackedDatasetChart, createGroupedBarChart, createDoughnutChart, createLineChart, destroy, applyThemeColors };
+  return { createBarChart, createStackedBarChart, createStackedDatasetChart, createGroupedBarChart, createDoughnutChart, createLineChart, destroy, register, getThemeColor, getGridColor, applyThemeColors };
 })();

@@ -14,7 +14,7 @@ window.QAPage = (() => {
       title: 'Tổng quan hệ thống',
       content: `
         <div class="hdsd-content">
-          <p><strong>Phân loại phản hồi tiếp thị</strong> là hệ thống tự động phân loại phản hồi khách hàng, giúp phân tích và xử lý dữ liệu tiếp thị nhanh chóng, chính xác.</p>
+          <p><strong>Hệ thống phân loại phản hồi Rạng Đông</strong> là hệ thống tự động phân loại phản hồi khách hàng, giúp phân tích và xử lý dữ liệu tiếp thị nhanh chóng, chính xác.</p>
           <p>Hệ thống hoạt động theo 4 bước xử lý chính:</p>
           <div class="hdsd-step">
             <span class="hdsd-step-num">1</span>
@@ -197,7 +197,7 @@ window.QAPage = (() => {
     app.innerHTML = `
       <div class="page-header animate-in">
         <h2>📖 Hướng dẫn sử dụng</h2>
-        <p>Tài liệu hướng dẫn sử dụng hệ thống Phân loại phản hồi tiếp thị</p>
+        <p>Tài liệu hướng dẫn sử dụng Hệ thống phân loại phản hồi Rạng Đông</p>
       </div>
 
       <!-- Search bar -->

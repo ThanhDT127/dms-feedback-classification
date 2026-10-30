@@ -502,3 +502,117 @@ def test_reset_failed_retries_web_upload_job_id(settings, monkeypatch):
     assert body["reset_count"] == 1
     assert job_id in body["retried_jobs"]
     assert store.get_job(job_id)["status"] == "queued"
+
+
+# ---------- Canonical version & Health endpoints ----------
+
+
+def test_canonical_version_matches_pyproject_toml(settings, monkeypatch):
+    """Canonical version from get_version() matches pyproject.toml across backend layers."""
+    import tomllib
+    from importlib.metadata import PackageNotFoundError
+    from pathlib import Path
+
+    import dms
+    from dms import get_version
+    from dms.metrics import MetricsCollector
+
+    pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    expected_version = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))["project"][
+        "version"
+    ]
+
+    get_version.cache_clear()
+    assert get_version() == expected_version
+    assert create_app().version == expected_version
+
+    collector = MetricsCollector(settings.work_dir / "metrics.json")
+    health_payload = collector.get_health_data(cycle=1, queue_size=0)
+    assert health_payload["version"] == expected_version
+
+    # Verify tomllib fallback when package metadata is not installed
+    get_version.cache_clear()
+    monkeypatch.setattr(
+        dms,
+        "_package_version",
+        lambda _name: (_ for _ in ()).throw(PackageNotFoundError("dms-feedback-classifier")),
+    )
+    assert get_version() == expected_version
+    get_version.cache_clear()
+
+
+def test_health_endpoint_includes_canonical_version_with_and_without_health_file(
+    settings, api_client
+):
+    """Authenticated GET /api/health always returns canonical version."""
+    from dms import get_version
+
+    # 1. Without health.json on disk
+    resp_missing = api_client.get("/api/health")
+    assert resp_missing.status_code == 200
+    body_missing = resp_missing.json()
+    assert body_missing["status"] == "unknown"
+    assert body_missing["version"] == get_version()
+
+    # 2. With health.json on disk lacking version field
+    (settings.work_dir / "health.json").write_text(
+        json.dumps({"status": "ok", "uptime": "3h 10m"}),
+        encoding="utf-8",
+    )
+    resp_present = api_client.get("/api/health")
+    assert resp_present.status_code == 200
+    body_present = resp_present.json()
+    assert body_present["status"] == "ok"
+    assert body_present["version"] == get_version()
+
+
+def test_public_health_endpoint_works_unauthenticated_and_filters_sensitive_fields(
+    settings, monkeypatch
+):
+    """GET /api/health/public works without JWT and exposes strictly {status, version}."""
+    from dms import get_version
+
+    settings.ensure_runtime_dirs()
+    monkeypatch.setattr("dms.web.api.metrics_api._work_dir", lambda: settings.work_dir)
+    app = create_app()
+    unauth_client = TestClient(app)
+
+    # Authenticated /api/health must still reject unauthenticated requests
+    assert unauth_client.get("/api/health").status_code == 401
+
+    # 1. Missing health.json -> web-only ready ("ok") + canonical version
+    r_fresh = unauth_client.get("/api/health/public")
+    assert r_fresh.status_code == 200
+    assert r_fresh.json() == {"status": "ok", "version": get_version()}
+    assert "X-RateLimit-Limit" in r_fresh.headers
+
+    # 2. health.json with internal operational details -> zero info leak
+    (settings.work_dir / "health.json").write_text(
+        json.dumps(
+            {
+                "status": "degraded",
+                "last_success": "Confidential_Customer_Q3.xlsx (120 rows, 4.1s)",
+                "last_error": "GatewayError: upstream secret host timeout",
+                "model": "gemini-2.5-flash-lite",
+                "metrics_summary": {"processed_24h": 12, "failed_24h": 3, "success_rate": "80%"},
+                "config_assets": {"status": "error", "errors": ["internal path"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    r_degraded = unauth_client.get("/api/health/public")
+    assert r_degraded.status_code == 200
+    payload = r_degraded.json()
+    assert set(payload.keys()) == {"status", "version"}
+    assert payload == {"status": "degraded", "version": get_version()}
+    for forbidden in ("last_success", "last_error", "model", "metrics_summary", "config_assets"):
+        assert forbidden not in payload
+
+    # 3. health.json with error status
+    (settings.work_dir / "health.json").write_text(
+        json.dumps({"status": "error"}),
+        encoding="utf-8",
+    )
+    r_error = unauth_client.get("/api/health/public")
+    assert r_error.status_code == 200
+    assert r_error.json() == {"status": "error", "version": get_version()}

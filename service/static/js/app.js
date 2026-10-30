@@ -3,6 +3,13 @@
    ============================================================ */
 
 window.App = (() => {
+  const VALID_THEMES = ['dark', 'soft', 'light'];
+  const THEME_META_COLORS = {
+    dark: '#0f1117',
+    soft: '#f2efe6',
+    light: '#f8fafc',
+  };
+
   /* ---- State ---- */
   const state = {
     currentPage: null,
@@ -92,7 +99,7 @@ window.App = (() => {
 
     // Update document title
     const def = PAGES[pageName];
-    document.title = `Phân loại phản hồi tiếp thị — ${def.title}`;
+    document.title = `Hệ thống phân loại phản hồi Rạng Đông — ${def.title}`;
 
     // Update sidebar active
     if (window.Sidebar) {
@@ -138,45 +145,61 @@ window.App = (() => {
   }
 
   /* ---- Theme ---- */
-  function initTheme() {
-    let theme = localStorage.getItem('dms-theme');
-    const hasManualPref = !!theme;
-    if (!theme) {
-      theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  function syncThemeControls() {
+    if (window.Sidebar && typeof window.Sidebar.updateToggleIcon === 'function') {
+      window.Sidebar.updateToggleIcon();
     }
-    state.theme = theme;
-    applyTheme(theme, true);
-
-    // Listen for system preference changes (only when no manual pref)
-    if (!hasManualPref) {
-      window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
-        if (!localStorage.getItem('dms-theme')) {
-          const newTheme = e.matches ? 'light' : 'dark';
-          state.theme = newTheme;
-          applyTheme(newTheme);
-          if (window.Sidebar) window.Sidebar.updateToggleIcon();
-          if (window.Charts && typeof window.Charts.applyThemeColors === 'function') window.Charts.applyThemeColors();
-        }
-      });
+    if (window.LoginPage && typeof window.LoginPage.updateThemeControl === 'function') {
+      window.LoginPage.updateThemeControl();
     }
-  }
-
-  function toggleTheme() {
-    const newTheme = state.theme === 'dark' ? 'light' : 'dark';
-    state.theme = newTheme;
-    localStorage.setItem('dms-theme', newTheme);
-    applyTheme(newTheme);
-    if (window.Sidebar) window.Sidebar.updateToggleIcon();
     if (window.Charts && typeof window.Charts.applyThemeColors === 'function') {
       requestAnimationFrame(() => window.Charts.applyThemeColors());
     }
   }
 
+  function initTheme() {
+    const saved = localStorage.getItem('dms-theme');
+    const hasManualPref = VALID_THEMES.includes(saved);
+    const theme = hasManualPref
+      ? saved
+      : (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    state.theme = theme;
+    applyTheme(theme, true);
+
+    // Listen for system preference changes (only when no valid manual pref)
+    if (!hasManualPref && window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
+        const currentSaved = localStorage.getItem('dms-theme');
+        if (!VALID_THEMES.includes(currentSaved)) {
+          const newTheme = e.matches ? 'light' : 'dark';
+          state.theme = newTheme;
+          applyTheme(newTheme);
+          syncThemeControls();
+        }
+      });
+    }
+  }
+
+  function setTheme(mode) {
+    if (!VALID_THEMES.includes(mode)) return;
+    state.theme = mode;
+    localStorage.setItem('dms-theme', mode);
+    applyTheme(mode);
+    syncThemeControls();
+  }
+
+  function toggleTheme() {
+    const idx = VALID_THEMES.indexOf(state.theme);
+    const nextTheme = VALID_THEMES[(idx + 1) % VALID_THEMES.length];
+    setTheme(nextTheme);
+  }
+
   function applyTheme(theme, isInitial) {
+    const resolved = VALID_THEMES.includes(theme) ? theme : 'dark';
     if (isInitial) document.documentElement.classList.add('no-transition');
-    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-theme', resolved);
     const meta = document.getElementById('meta-theme-color');
-    if (meta) meta.content = theme === 'light' ? '#f8fafc' : '#0f1117';
+    if (meta) meta.content = THEME_META_COLORS[resolved] || '#0f1117';
     if (isInitial) {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -305,7 +328,7 @@ window.App = (() => {
     state, navigate, renderPage,
     toggleSidebar, closeSidebar,
     showModal, closeModal,
-    toggleTheme,
+    setTheme, toggleTheme,
     setUser, logout, loadChatConfig
   };
 })();

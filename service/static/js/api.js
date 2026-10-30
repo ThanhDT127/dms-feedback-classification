@@ -187,6 +187,26 @@ window.API = (() => {
 
   /* convenience methods */
   function getHealth(opts = {})  { return get('/health', opts); }
+  async function getPublicHealth(opts = { silent: true }) {
+    const { silent = true } = opts || {};
+    try {
+      const res = await fetch(`${BASE}/health/public`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) {
+        const error = new Error(`Lỗi ${res.status}: ${res.statusText}`);
+        error.status = res.status;
+        throw error;
+      }
+      return await res.json();
+    } catch (err) {
+      if (!silent && window.Toast) {
+        window.Toast.show(err.message, 'error');
+      }
+      throw err;
+    }
+  }
   function getMetrics()          { return get('/metrics'); }
   function getMetricsDaily()     { return get('/metrics/daily'); }
   function getFiles(folder)      { return get(`/files/${folder}`); }
@@ -314,7 +334,7 @@ window.API = (() => {
     get, post, put, patch, del, upload, download, uploadWithProgress,
     onLoading, offLoading, isLoading,
     setTokens, getAccessToken, clearTokens, refreshToken,
-    getHealth, getMetrics, getMetricsDaily,
+    getHealth, getPublicHealth, getMetrics, getMetricsDaily,
     getFiles, getFilePreview, getFileTree, getFilesSeen,
     uploadFile, ingestInputFile, reclassifyInputFile, reclassifyInputFiles, classifyText, classifyFile, getJobs, getJobMetrics, cancelJob, retryJob,
     getSettings, putSettings, getSecret, getPrompt, getModels, testConnection,

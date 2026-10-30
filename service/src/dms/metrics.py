@@ -8,6 +8,7 @@ import threading
 from collections import defaultdict
 from pathlib import Path
 
+from . import get_version
 from .time_utils import parse_utc_datetime, utc_now, utc_now_iso
 
 logger = logging.getLogger("dms-watcher")
@@ -333,6 +334,7 @@ class MetricsCollector:
 
         return {
             "status": self.health_status,
+            "version": get_version(),
             "last_poll": utc_now_iso(),
             "uptime": uptime_str,
             "current_cycle": cycle,

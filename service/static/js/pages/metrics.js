@@ -433,10 +433,11 @@ window.MetricsPage = (() => {
     const ctx = document.getElementById('usage-token-chart')?.getContext('2d');
     if (!ctx) return;
 
-    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-    const gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
+    const gridColor = (window.Charts && typeof Charts.getGridColor === 'function')
+      ? Charts.getGridColor()
+      : (getComputedStyle(document.documentElement).getPropertyValue('--chart-grid-color').trim() || 'rgba(255,255,255,0.06)');
 
-    new Chart(ctx, {
+    const chart = new Chart(ctx, {
       type: 'bar',
       data: {
         labels,
@@ -472,6 +473,9 @@ window.MetricsPage = (() => {
         }
       }
     });
+    if (window.Charts && typeof Charts.register === 'function') {
+      Charts.register('usage-token-chart', chart);
+    }
   }
 
   function renderUsageTopJobs(data) {

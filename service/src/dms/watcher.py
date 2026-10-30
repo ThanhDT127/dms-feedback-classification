@@ -9,6 +9,7 @@ import traceback
 import uuid
 from pathlib import Path
 
+from . import get_version
 from .analytics import (
     BatchClassificationResult,
     FeedbackAnalyticsRepository,
@@ -188,6 +189,7 @@ class Watcher:
 
     def _update_health(self, cycle: int = 0, queue_size: int = 0) -> None:
         payload = self.metrics.get_health_data(cycle=cycle, queue_size=queue_size)
+        payload["version"] = get_version()
         payload["model"] = self.settings.gemini_model
         payload["poll_interval"] = self.settings.poll_interval_seconds
         payload["pending_retry_files"] = self.metrics.get_pending_retry_count()

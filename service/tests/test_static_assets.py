@@ -74,13 +74,14 @@ def test_representative_vietnamese_ui_text_is_present():
     )
 
     for expected in [
-        "Phân loại phản hồi tiếp thị",
+        "Hệ thống phân loại phản hồi Rạng Đông",
         "Đăng nhập",
         "Quản lý file",
         "Từ khóa",
         "Hướng dẫn",
     ]:
         assert expected in combined
+    assert "Phân loại phản hồi tiếp thị" not in combined
 
 
 def test_background_asset_is_used_in_dark_light_and_login_contexts():
@@ -88,10 +89,43 @@ def test_background_asset_is_used_in_dark_light_and_login_contexts():
     css = (static_dir / "css/style.css").read_text(encoding="utf-8")
 
     assert (static_dir / "assets/Nen-chatbot.png").is_file()
-    assert css.count("Nen-chatbot.png") >= 3
+    assert css.count("Nen-chatbot.png") >= 5
     assert re.search(r"body\s*{[^}]*Nen-chatbot\.png", css, re.S)
+    assert re.search(r'\[data-theme="soft"\]\s+body\s*{[^}]*Nen-chatbot\.png', css, re.S)
     assert re.search(r'\[data-theme="light"\]\s+body\s*{[^}]*Nen-chatbot\.png', css, re.S)
     assert re.search(r"\.login-container\s*{[^}]*Nen-chatbot\.png", css, re.S)
+    assert re.search(
+        r'\[data-theme="soft"\]\s+\.login-container\s*{[^}]*Nen-chatbot\.png', css, re.S
+    )
+
+
+def test_brand_status_pill_and_compact_sidebar_bottom():
+    static_dir = Path(__file__).resolve().parents[1] / "static"
+    html = (static_dir / "index.html").read_text(encoding="utf-8")
+    login_js = (static_dir / "js/pages/login.js").read_text(encoding="utf-8")
+    sidebar_js = (static_dir / "js/components/sidebar.js").read_text(encoding="utf-8")
+    css = (static_dir / "css/style.css").read_text(encoding="utf-8")
+
+    assert "<title>Hệ thống phân loại phản hồi Rạng Đông</title>" in html
+    assert '<span class="topbar-title">Hệ thống phân loại phản hồi Rạng Đông</span>' in html
+    assert "DMS" not in re.search(r"<title>.*?</title>", html).group(0)
+
+    assert "brand-status-pill" in login_js
+    assert "API.getPublicHealth" in login_js
+    assert "brand-status-pill" in sidebar_js
+    assert ".brand-status-pill" in css
+
+    bottom_match = re.search(
+        r'<div class="sidebar-status" id="sidebar-status">(.*?)</div>\s*<div style=',
+        sidebar_js,
+        re.S,
+    )
+    assert bottom_match is not None
+    bottom_html = bottom_match.group(1)
+    assert "Uptime" in bottom_html
+    assert "Cấu hình" in bottom_html
+    assert "Phiên bản" not in bottom_html
+    assert "Trạng thái" not in bottom_html
 
 
 def test_every_script_in_index_html_exists():

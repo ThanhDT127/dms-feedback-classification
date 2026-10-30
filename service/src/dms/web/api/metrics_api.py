@@ -7,12 +7,14 @@ import logging
 import re
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel
 
+from ... import get_version
 from ...settings import get_settings
 from ...time_utils import utc_now_iso
 from ..deps import get_admin_user, get_current_user, run_sync_in_threadpool
+from ..rate_limit import limiter
 
 logger = logging.getLogger("dms-web")
 
@@ -43,6 +45,7 @@ async def get_health(user: dict = Depends(get_current_user)):
     if health_path.is_file():
         try:
             data = json.loads(health_path.read_text(encoding="utf-8"))
+            data["version"] = get_version()
             if "model" not in data:
                 data["model"] = get_settings().gemini_model
             return data
@@ -52,6 +55,7 @@ async def get_health(user: dict = Depends(get_current_user)):
     # Generate basic health if file doesn't exist
     return {
         "status": "unknown",
+        "version": get_version(),
         "last_poll": None,
         "uptime": "N/A",
         "current_cycle": 0,
@@ -67,6 +71,26 @@ async def get_health(user: dict = Depends(get_current_user)):
         "model": get_settings().gemini_model,
         "web_api": True,
         "timestamp": utc_now_iso(),
+    }
+
+
+@router.get("/health/public")
+@limiter.limit("60/minute")
+async def get_public_health(request: Request, response: Response):
+    """Trả về trạng thái công khai tối giản cho màn hình Đăng nhập (không yêu cầu xác thực)."""
+    health_path = _work_dir() / "health.json"
+    status_val = "ok"
+    if health_path.is_file():
+        try:
+            data = json.loads(health_path.read_text(encoding="utf-8"))
+            raw_status = str(data.get("status", "ok")).strip().lower()
+            if raw_status in ("ok", "degraded", "error"):
+                status_val = raw_status
+        except Exception as exc:
+            logger.warning("Lỗi đọc health.json tại /health/public: %s", exc)
+    return {
+        "status": status_val,
+        "version": get_version(),
     }
 
 

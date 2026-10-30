@@ -15,6 +15,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
+from .. import get_version
 from ..settings import SERVICE_DIR
 from .api.analytics_api import router as analytics_router
 from .api.auth_api import router as auth_router
@@ -306,9 +307,9 @@ def create_app() -> FastAPI:
                 logger.warning("Classification worker shutdown failed: %s", exc)
 
     app = FastAPI(
-        title="DMS PhÃ¢n loáº¡i pháº£n há»“i",
-        description="Giao diá»‡n quáº£n lÃ½ há»‡ thá»‘ng phÃ¢n loáº¡i pháº£n há»“i DMS Ráº¡ng ÄÃ´ng",
-        version="1.0.0",
+        title="Hệ thống phân loại phản hồi Rạng Đông",
+        description="Giao diện quản lý Hệ thống phân loại phản hồi Rạng Đông",
+        version=get_version(),
         lifespan=lifespan,
     )
 
@@ -366,7 +367,7 @@ def create_app() -> FastAPI:
         index_path = STATIC_DIR / "index.html"
         if index_path.is_file():
             return FileResponse(str(index_path), media_type="text/html")
-        return {"message": "DMS PhÃ¢n loáº¡i pháº£n há»“i - API Ä‘ang hoáº¡t Ä‘á»™ng"}
+        return {"message": "Hệ thống phân loại phản hồi Rạng Đông - API đang hoạt động"}
 
     # --- Static files (separate mounts for css/js to avoid overriding API) ---
     if STATIC_DIR.is_dir():
